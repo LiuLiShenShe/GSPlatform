@@ -1,0 +1,3 @@
+# synced build-time assets (populated by scripts/sync-assets.mjs)
+public/viewer/
+public/local-scenes/

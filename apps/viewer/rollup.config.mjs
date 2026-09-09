@@ -39,10 +39,14 @@ const outputHeader = () => {
 outputHeader();
 
 const application = {
-    input: 'src/index.ts',
+    input: {
+        index: 'src/index.ts',
+        embed: 'src/embed.ts'
+    },
     output: {
         dir: 'dist',
         format: 'esm',
+        entryFileNames: '[name].js',
         sourcemap: true
     },
     plugins: [
@@ -53,6 +57,9 @@ const application = {
                     transform: (contents, filename) => {
                         return contents.toString().replace('__BASE_HREF__', HREF);
                     }
+                },
+                {
+                    src: 'src/embed.html'
                 },
                 { src: 'src/manifest.json' },
                 { src: 'static/images', dest: 'static' },

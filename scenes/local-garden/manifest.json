@@ -1,0 +1,13 @@
+{
+  "id": "local-garden",
+  "title": "示例庭院",
+  "format": "sog",
+  "assetUrl": "/local-scenes/local-garden/scene.sog",
+  "posterUrl": "/local-scenes/local-garden/poster.webp",
+  "sha256": "f6d87e67dc76e7af93f9ec899a98ef2b4d01cbb633e15cf325ce7be503e5fb29",
+  "camera": {
+    "position": [0, 1.2, 3.5],
+    "target": [0, 0.8, 0],
+    "fov": 55
+  }
+}

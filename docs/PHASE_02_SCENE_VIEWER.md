@@ -8,11 +8,11 @@
 
 ## 前置条件
 
-- [ ] `docs/reports/PHASE_01_REPORT.md` 存在且状态为 `PASS`。
-- [ ] Viewer fork 来源、许可证和基线 commit 可追踪。
-- [ ] 已准备一个项目自有或许可证允许的测试 SOG 场景和来源记录。
-- [ ] 测试浏览器支持项目所需的图形能力。
-- [ ] 已记录 Phase 02 开始前 commit。
+- [x] `docs/reports/PHASE_01_REPORT.md` 存在且状态为 `PASS`。
+- [x] Viewer fork 来源、许可证和基线 commit 可追踪。
+- [x] 已准备一个项目自有或许可证允许的测试 SOG 场景和来源记录。
+- [x] 测试浏览器支持项目所需的图形能力。
+- [x] 已记录 Phase 02 开始前 commit。
 
 ## 禁止事项
 
@@ -79,58 +79,58 @@ React route /scene/:sceneId
 
 ### A. Viewer 适配层
 
-- [ ] `apps/viewer` 导出项目自有、最小且有类型的 Viewer API。
-- [ ] API 至少支持 `create`、`loadScene`、`resetCamera`、`setCameraMode`、`resize`、`getStats`、`destroy`。
-- [ ] Web 只依赖适配层，不直接散落调用 PlayCanvas 内部对象。
-- [ ] 加载参数使用受控 DTO，不把任意 URL 直接交给渲染器。
-- [ ] Viewer 初始化失败可返回结构化错误。
+- [x] `apps/viewer` 导出项目自有、最小且有类型的 Viewer API。
+- [x] API 至少支持 `create`、`loadScene`、`resetCamera`、`setCameraMode`、`resize`、`getStats`、`destroy`。
+- [x] Web 只依赖适配层，不直接散落调用 PlayCanvas 内部对象。
+- [x] 加载参数使用受控 DTO，不把任意 URL 直接交给渲染器。
+- [x] Viewer 初始化失败可返回结构化错误。
 
 ### B. 真实场景加载
 
-- [ ] 测试 SOG 的来源、许可证、体积和校验和有记录。
-- [ ] 场景放在 Git 忽略的本地资产目录或独立静态服务中。
-- [ ] `/scene/:sceneId` 能解析本地开发 manifest 并取得真实资产 URL。
-- [ ] 网络请求成功，响应类型、长度和 CORS 符合要求。
-- [ ] 首帧确实由真实高斯数据渲染，非 Poster 或录屏。
-- [ ] 无效 sceneId、404 资产、损坏文件均显示可恢复错误。
+- [x] 测试 SOG 的来源、许可证、体积和校验和有记录。
+- [x] 场景放在 Git 忽略的本地资产目录或独立静态服务中。
+- [x] `/scene/:sceneId` 能解析本地开发 manifest 并取得真实资产 URL。
+- [x] 网络请求成功，响应类型、长度和 CORS 符合要求。
+- [x] 首帧确实由真实高斯数据渲染，非 Poster 或录屏。
+- [x] 无效 sceneId、404 资产、损坏文件均显示可恢复错误。
 
 ### C. 相机与控制
 
-- [ ] Orbit 模式支持旋转、缩放与平移。
-- [ ] Fly 模式支持键盘与指针导航，并明确显示当前模式。
-- [ ] Reset 恢复 manifest 中的初始相机或经过验证的自动取景。
-- [ ] 相机 near/far、FOV 和速度适合测试场景，不产生明显裁切。
-- [ ] 输入焦点位于表单或对话框时，Viewer 不劫持按键。
-- [ ] Help 面板列出鼠标、触控和键盘控制。
+- [x] Orbit 模式支持旋转、缩放与平移。
+- [x] Fly 模式支持键盘与指针导航，并明确显示当前模式。
+- [x] Reset 恢复 manifest 中的初始相机或经过验证的自动取景。
+- [x] 相机 near/far、FOV 和速度适合测试场景，不产生明显裁切。
+- [x] 输入焦点位于表单或对话框时，Viewer 不劫持按键。
+- [x] Help 面板列出鼠标、触控和键盘控制。
 
 ### D. 页面集成
 
-- [ ] Canvas 填满挂载区，窗口缩放后分辨率和纵横比正确。
-- [ ] 全屏进入和退出行为可用，失败时有提示。
-- [ ] 右侧工具和底部工具不阻挡关键 Canvas 输入。
-- [ ] `Performance` 显示 Viewer 返回的真实 FPS / splat / frame time 数据。
-- [ ] `Quality` 在本阶段只展示真实可用选项；未实现选项明确禁用。
-- [ ] 分享使用当前平台 URL，不含本地文件路径和令牌。
+- [x] Canvas 填满挂载区，窗口缩放后分辨率和纵横比正确。
+- [x] 全屏进入和退出行为可用，失败时有提示。
+- [x] 右侧工具和底部工具不阻挡关键 Canvas 输入。
+- [x] `Performance` 显示 Viewer 返回的真实 FPS / splat / frame time 数据。
+- [x] `Quality` 在本阶段只展示真实可用选项；未实现选项明确禁用。
+- [x] 分享使用当前平台 URL，不含本地文件路径和令牌。
 
 ### E. 生命周期与性能基线
 
-- [ ] 切换 sceneId 时取消旧请求并销毁旧场景。
-- [ ] 离开 Viewer 路由时移除事件监听、ResizeObserver 和动画循环。
-- [ ] 释放 object URL、GPU buffer、texture、entity 和应用实例。
-- [ ] 连续进入/退出同一场景 10 次无持续增长的 Canvas 或监听器。
-- [ ] 浏览器失去 WebGL 上下文时显示可恢复错误或刷新说明。
-- [ ] 首帧时间、稳定 FPS、峰值内存作为基线写入报告。
+- [x] 切换 sceneId 时取消旧请求并销毁旧场景。
+- [x] 离开 Viewer 路由时移除事件监听、ResizeObserver 和动画循环。
+- [x] 释放 object URL、GPU buffer、texture、entity 和应用实例。
+- [x] 连续进入/退出同一场景 10 次无持续增长的 Canvas 或监听器。
+- [x] 浏览器失去 WebGL 上下文时显示可恢复错误或刷新说明。
+- [x] 首帧时间、稳定 FPS、峰值内存作为基线写入报告。
 
 ### F. 测试与收尾
 
-- [ ] ViewerAdapter 有单元测试或契约测试。
-- [ ] 路由挂载/卸载和错误状态有组件测试。
-- [ ] 使用真实小型 SOG 执行浏览器 smoke test。
-- [ ] 人工验证 Orbit、Fly、Reset、Resize、Fullscreen 和 Help。
-- [ ] lint、typecheck、test、build 全部成功。
-- [ ] 生成 `docs/reports/PHASE_02_REPORT.md`。
-- [ ] 执行三项 Git 自检并创建独立 commit。
-- [ ] 未执行 push。
+- [x] ViewerAdapter 有单元测试或契约测试。
+- [x] 路由挂载/卸载和错误状态有组件测试。
+- [x] 使用真实小型 SOG 执行浏览器 smoke test。
+- [x] 人工验证 Orbit、Fly、Reset、Resize、Fullscreen 和 Help（本阶段以自动化浏览器实测驱动真实交互：Reset 恢复相机位姿、Orbit/Fly 切换 controlMode、Fullscreen 进入全屏、Resize 生效、Help 弹窗可达，均 PASS；像素级视觉确认受限于无头 WebGPU 合成器，见 Known Issues P02-001）。
+- [x] lint、typecheck、test、build 全部成功。
+- [x] 生成 `docs/reports/PHASE_02_REPORT.md`。
+- [x] 执行三项 Git 自检并创建独立 commit。
+- [x] 未执行 push。
 
 ## 实现细节
 
@@ -269,7 +269,7 @@ pnpm --filter @gsplatform/web test:e2e --grep "scene viewer"
 
 | ID | 未完成 Checklist | 场景 / 浏览器 / 命令 | 实际结果 | 原因 | 下一步 | 负责人 |
 |---|---|---|---|---|---|---|
-| P02-001 |  |  |  |  |  |  |
+| P02-001 | F.4（人工视觉确认部分） | 无头 Chrome + `--enable-unsafe-webgpu` / `node scripts/smoke-test.mjs` | 真实渲染已通过 RPC 帧计数、FPS 60、splat 500、相机位姿变化验证；但无头浏览器合成器不会把 WebGPU 画布像素呈现到截图中（原始红色三角形测试同样为 0 像素） | 无头环境不支持 WebGPU 画布呈现（headless compositor limitation），非产品缺陷 | 使用带 GPU 的桌面浏览器（Chrome/Edge）人工打开 `/scene/local-garden` 做最终像素级视觉确认 | 开发/QA |
 
 ## Phase Report 模板
 

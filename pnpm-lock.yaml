@@ -6,7 +6,11 @@ settings:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      playwright:
+        specifier: ^1.63.0
+        version: 1.63.0
 
   apps/viewer:
     devDependencies:
@@ -2965,6 +2969,16 @@ packages:
   playcanvas@2.22.0:
     resolution: {integrity: sha512-EuapzvDRVV6pO1xseTynt/1Z5dWDCEUa2KR2o6ExYrDnfRNz83kNT2ieWyQoJB6THO7GLBZbRB0EP/RZrsfUHg==}
     engines: {node: '>=18.3.0'}
+
+  playwright-core@1.63.0:
+    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0:
+    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -6359,6 +6373,12 @@ snapshots:
     dependencies:
       '@types/webxr': 0.5.24
       '@webgpu/types': 0.1.72
+
+  playwright-core@1.63.0: {}
+
+  playwright@1.63.0:
+    dependencies:
+      playwright-core: 1.63.0
 
   possible-typed-array-names@1.1.0: {}
 

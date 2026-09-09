@@ -7,14 +7,19 @@
     "types": ["vite/client"],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+
+    "paths": {
+      "@gsplatform/viewer": ["../viewer/src/platform/index.ts"],
+      "@gsplatform/viewer/*": ["../viewer/src/platform/*"]
+    },
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
 
     /* Linting */
     "noUnusedLocals": true,
@@ -22,5 +27,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src", "../viewer/src/platform"]
 }

@@ -26,5 +26,8 @@
     "build": "pnpm run build:web && pnpm run build:viewer",
     "api:check": "cd apps/api && .venv/bin/python -m ruff check . && .venv/bin/python -m mypy app && .venv/bin/python -m pytest -q",
     "api:dev": "cd apps/api && .venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port ${GS_API_PORT:-8001}"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
   }
 }
