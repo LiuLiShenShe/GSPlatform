@@ -1,0 +1,74 @@
+# --- Node / pnpm ---
+node_modules/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# --- Build outputs ---
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- IDE / editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# --- System ---
+Thumbs.db
+Desktop.ini
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Model / scene assets (large files never in git) ---
+scenes/**/*.ply
+scenes/**/*.sog
+scenes/**/*.splat
+scenes/**/*.mp4
+scenes/**/*.jpg
+scenes/**/*.jpeg
+scenes/**/*.png
+scenes/**/*.webp
+scenes/**/*.avi
+scenes/**/*.mov
+scenes/**/*.mkv
+scenes/**/*.zip
+!scenes/.gitkeep
+
+# --- Uploads / user data ---
+uploads/
+storage/
+backups/
+*.db
+*.sqlite
+*.sqlite3
+
+# --- Misc ---
+tmp/
+temp/
+*.tmp

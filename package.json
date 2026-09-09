@@ -1,0 +1,30 @@
+{
+  "name": "gsplatform",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GSPlatform - 3D Gaussian Splatting scene platform monorepo",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @gsplatform/web dev",
+    "dev:viewer": "pnpm --filter @gsplatform/viewer dev",
+    "dev": "pnpm run dev:web & pnpm run dev:viewer & wait",
+    "lint:web": "pnpm --filter @gsplatform/web lint",
+    "lint:viewer": "pnpm --filter @gsplatform/viewer lint",
+    "lint": "pnpm run lint:web && pnpm run lint:viewer",
+    "typecheck:web": "pnpm --filter @gsplatform/web typecheck",
+    "typecheck:viewer": "pnpm --filter @gsplatform/viewer typecheck",
+    "typecheck": "pnpm run typecheck:web && pnpm run typecheck:viewer",
+    "test:web": "pnpm --filter @gsplatform/web test",
+    "test:viewer": "pnpm --filter @gsplatform/viewer test",
+    "test": "pnpm run test:web && pnpm run test:viewer",
+    "build:web": "pnpm --filter @gsplatform/web build",
+    "build:viewer": "pnpm --filter @gsplatform/viewer build",
+    "build": "pnpm run build:web && pnpm run build:viewer",
+    "api:check": "cd apps/api && .venv/bin/python -m ruff check . && .venv/bin/python -m mypy app && .venv/bin/python -m pytest -q",
+    "api:dev": "cd apps/api && .venv/bin/python -m uvicorn app.main:app --reload --host 0.0.0.0 --port ${GS_API_PORT:-8001}"
+  }
+}

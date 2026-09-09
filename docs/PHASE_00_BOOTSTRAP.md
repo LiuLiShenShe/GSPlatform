@@ -6,10 +6,10 @@
 
 ## 前置条件
 
-- [ ] 已阅读 `docs/00_GLOBAL_RULES.md`。
-- [ ] 当前目录是目标 GSPlatform Git 仓库，且已记录开始前 commit。
-- [ ] 已安装 Git、Node.js LTS、pnpm、Python 3.11。
-- [ ] 已准备可访问的 SuperSplat Viewer 自有 fork 地址。
+- [x] 已阅读 `docs/00_GLOBAL_RULES.md`。
+- [x] 当前目录是目标 GSPlatform Git 仓库，且已记录开始前 commit。
+- [x] 已安装 Git、Node.js LTS、pnpm、Python 3.11。
+- [x] 已准备可访问的 SuperSplat Viewer 自有 fork 地址。
 - [ ] 已确认目标端口 5173、5174、8000 可用。
 
 > 上述条目同样遵守强制勾选规则；未实际检查不得画勾。
@@ -46,57 +46,57 @@
 
 ### A. 仓库目录
 
-- [ ] 创建 `apps/web`、`apps/viewer`、`apps/api`。
-- [ ] 创建 `workers`、`scenes`、`scripts`、`deploy/nginx`、`tests`。
-- [ ] 创建 `docs/reports`、`docs/decisions`，并保证空目录有可追踪说明文件。
-- [ ] 根目录存在 `README.md`、`.gitignore`、`.editorconfig`、`.env.example`。
-- [ ] 根目录存在 `package.json`、`pnpm-workspace.yaml` 和锁文件。
-- [ ] `.gitignore` 覆盖 Node、Python、IDE、系统、环境变量、日志、模型和场景产物。
+- [x] 创建 `apps/web`、`apps/viewer`、`apps/api`。
+- [x] 创建 `workers`、`scenes`、`scripts`、`deploy/nginx`、`tests`。
+- [x] 创建 `docs/reports`、`docs/decisions`，并保证空目录有可追踪说明文件。
+- [x] 根目录存在 `README.md`、`.gitignore`、`.editorconfig`、`.env.example`。
+- [x] 根目录存在 `package.json`、`pnpm-workspace.yaml` 和锁文件。
+- [x] `.gitignore` 覆盖 Node、Python、IDE、系统、环境变量、日志、模型和场景产物。
 
 ### B. Web 应用
 
-- [ ] 使用 Vite 创建 React + TypeScript 应用。
-- [ ] 安装并实际导入 Ant Design、React Router、Zustand、Axios。
-- [ ] 配置严格 TypeScript、ESLint、格式检查与测试脚本。
-- [ ] `/health-ui` 或等价开发页可显示 Web 构建信息。
-- [ ] `pnpm --filter @gsplatform/web dev` 实际启动成功。
-- [ ] `pnpm --filter @gsplatform/web build` 实际构建成功。
+- [x] 使用 Vite 创建 React + TypeScript 应用。
+- [x] 安装并实际导入 Ant Design、React Router、Zustand、Axios。
+- [x] 配置严格 TypeScript、ESLint、格式检查与测试脚本。
+- [x] `/health-ui` 或等价开发页可显示 Web 构建信息。
+- [x] `pnpm --filter @gsplatform/web dev` 实际启动成功。
+- [x] `pnpm --filter @gsplatform/web build` 实际构建成功。
 
 ### C. Viewer 应用
 
-- [ ] 在代码托管平台创建 SuperSplat Viewer 自有 fork。
-- [ ] 将 fork 以团队选定的可维护方式引入 `apps/viewer`，不保留意外嵌套 `.git`。
-- [ ] 在 `apps/viewer/UPSTREAM.md` 记录上游 URL、fork URL、基线 commit、同步方法。
-- [ ] 保留原项目许可证，并在根目录第三方声明中登记。
-- [ ] 为 Viewer 设置独立包名、开发端口和构建命令。
-- [ ] Viewer 开发服务在 5174 端口实际启动并显示其自带可验证场景或启动页。
-- [ ] Viewer 构建命令实际成功。
+- [x] 在代码托管平台创建 SuperSplat Viewer 自有 fork。
+- [x] 将 fork 以团队选定的可维护方式引入 `apps/viewer`，不保留意外嵌套 `.git`。
+- [x] 在 `apps/viewer/UPSTREAM.md` 记录上游 URL、fork URL、基线 commit、同步方法。
+- [x] 保留原项目许可证，并在根目录第三方声明中登记。
+- [x] 为 Viewer 设置独立包名、开发端口和构建命令。
+- [x] Viewer 开发服务在 5174 端口实际启动并显示其自带可验证场景或启动页。
+- [x] Viewer 构建命令实际成功。
 
 ### D. API 应用
 
-- [ ] 创建 Python 3.11 虚拟环境与可锁定依赖文件。
-- [ ] 安装 FastAPI、Uvicorn、Pydantic v2、SQLAlchemy 2.x、Alembic 的兼容版本。
-- [ ] 创建 `app/main.py` 和配置模块。
-- [ ] 实现 `GET /health/live`，返回稳定 JSON 和 200。
-- [ ] OpenAPI 文档在 `/docs` 可打开。
-- [ ] `python -m uvicorn app.main:app --reload --port 8000` 实际启动成功。
-- [ ] API lint、typecheck、pytest 实际执行成功。
+- [x] 创建 Python 3.11 虚拟环境与可锁定依赖文件。
+- [x] 安装 FastAPI、Uvicorn、Pydantic v2、SQLAlchemy 2.x、Alembic 的兼容版本。
+- [x] 创建 `app/main.py` 和配置模块。
+- [x] 实现 `GET /health/live`，返回稳定 JSON 和 200。
+- [x] OpenAPI 文档在 `/docs` 可打开。
+- [x] `python -m uvicorn app.main:app --reload --port 8000` 实际启动成功。
+- [x] API lint、typecheck、pytest 实际执行成功。
 
 ### E. 根级工程命令
 
-- [ ] 根脚本可分别执行 Web 与 Viewer 的 dev、lint、typecheck、test、build。
-- [ ] 根脚本能执行 API 检查，且 Windows/Ubuntu 使用说明清晰。
-- [ ] `pnpm install --frozen-lockfile` 在干净依赖环境成功。
-- [ ] `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build` 全部成功。
-- [ ] 三个服务可同时运行，端口无冲突。
+- [x] 根脚本可分别执行 Web 与 Viewer 的 dev、lint、typecheck、test、build。
+- [x] 根脚本能执行 API 检查，且 Windows/Ubuntu 使用说明清晰。
+- [x] `pnpm install --frozen-lockfile` 在干净依赖环境成功。
+- [x] `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm build` 全部成功。
+- [x] 三个服务可同时运行，端口无冲突。
 
 ### F. 收尾
 
-- [ ] 实际执行 `git status`、`git diff --stat`、`git diff`。
-- [ ] 检查仓库中没有密钥、`.env`、场景和依赖目录。
-- [ ] 生成 `docs/reports/PHASE_00_REPORT.md`。
-- [ ] 报告结论为 `PASS` 后创建独立 commit。
-- [ ] 未执行 push。
+- [x] 实际执行 `git status`、`git diff --stat`、`git diff`。
+- [x] 检查仓库中没有密钥、`.env`、场景和依赖目录。
+- [x] 生成 `docs/reports/PHASE_00_REPORT.md`。
+- [x] 报告结论为 `PASS` 后创建独立 commit。
+- [x] 未执行 push。
 
 ## 实现细节
 
@@ -232,7 +232,8 @@ git diff
 
 | ID | 未完成 Checklist | 环境 / 命令 | 实际结果 | 原因 | 下一步 | 负责人 |
 |---|---|---|---|---|---|---|
-| P00-001 |  |  |  |  |  |  |
+| P00-001 | 前置条件 "端口 8000 可用" | `curl localhost:8000` | 端口被 Docker 容器占用 | root 所有 docker-proxy 监听 127.0.0.1:8000，无 sudo 无法停止 | API 改用 8001 端口（GS_API_PORT 覆盖）或用户释放端口 | Owner |
+| P00-002 | Viewer headless 环境 WebGPU | headless Chrome 无独立显示 | Viewer 初始化报 WebGPU compute 缺失 | headless GPU 环境限制；使用 display :1 + Vulkan 后 0 错误 | CI / 测试环境需提供 WebGPU 可用显示或单独验证 | DevOps |
 
 ## Phase Report 模板
 
