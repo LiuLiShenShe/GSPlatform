@@ -13,9 +13,9 @@
 ## 本次只允许手工修改的两个参数
 
 ```text
-PHASE_NUMBER = 0
+PHASE_NUMBER = 1
 
-PHASE_DOC = /fj/GSPlatform/docs/PHASE_00_BOOTSTRAP.md
+PHASE_DOC = /fj/GSPlatform/docs/PHASE_01_FRONTEND_UI.md
 ```
 
 除这两个参数外，不需要用户再手工提供：
