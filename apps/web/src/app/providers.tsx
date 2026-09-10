@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { App as AntdApp, ConfigProvider } from 'antd';
-import zhCN from 'antd/locale/zh_CN';
+import zhCN from 'antd/locale/zh_CN.js';
 import ErrorBoundary from './ErrorBoundary';
 import { antdTheme } from '../styles/tokens';
 

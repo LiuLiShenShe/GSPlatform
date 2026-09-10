@@ -25,6 +25,10 @@ interface GsViewerSceneDescriptor {
         target: [number, number, number];
         fov: number;
     };
+    /** Progressive-loading tier label (Phase 03). */
+    lod?: 'low' | 'medium' | 'high';
+    /** Correlation id echoed back in lodState events. */
+    sessionId?: string;
 }
 
 interface GsViewerRequest {
@@ -87,8 +91,7 @@ const start = async () => {
 
     // Log adapter availability for diagnostics.
     try {
-        const adapter = await window.navigator.gpu.requestAdapter();
-        console.warn('[gsviewer] adapter', adapter ? 'found' : 'null');
+        await window.navigator.gpu.requestAdapter();
     } catch { /* ignore */ }
 
     const graphicsDevice = await createGraphicsDevice(canvas, {
@@ -98,11 +101,6 @@ const start = async () => {
         stencil: false,
         xrCompatible: false,
         powerPreference: 'high-performance'
-    });
-    console.warn('[gsviewer] device', {
-        isNull: (graphicsDevice as any).isNull,
-        isWebGPU: (graphicsDevice as any).isWebGPU,
-        isWebGL2: (graphicsDevice as any).isWebGL2
     });
 
     if ((graphicsDevice as any).isNull) {
@@ -287,43 +285,142 @@ const start = async () => {
 
     // -- load scene ------------------------------------------------------
 
+    // Progressive loading (Phase 03): each loadScene call may replace the
+    // previously applied model so the host can stream low -> medium -> high.
+    // The camera pose is only applied on the FIRST load; later LOD swaps keep
+    // the user's current position/target/mode so the upgrade feels seamless.
+    let currentModel: Splat | null = null;
+    let hasLoadedAnyScene = false;
+
     const loadScene = async (descriptor: GsViewerSceneDescriptor) => {
-        setLoading(true, 'Loading scene…');
+        const sessionId = descriptor.sessionId ?? '';
+        const lod = descriptor.lod ?? 'high';
+        const postStage = (stage: 'fetching' | 'decoded' | 'applied' | 'firstFrame') => {
+            post({
+                id: 0,
+                command: 'lodState',
+                ok: true,
+                payload: { sessionId, lod, stage }
+            });
+        };
+
+        setLoading(true, `Loading ${lod}…`);
         try {
-            const baseUrl = new URL('.', new URL(descriptor.assetUrl, window.location.href)).href;
-            const fileSystem = new MappedReadFileSystem(baseUrl);
-            const filename = descriptor.assetUrl;
+            // The host pre-fetches each LOD and hands it to us as a blob URL
+            // so the web app can report real byte progress. Blob URLs can't
+            // be used as a base for relative-path derivation AND carry no
+            // extension, which splat-transform's format detection needs.
+            //
+            // For blob URLs: fetch the bytes back and register them in the
+            // file system under a logical name (e.g. low.sog) so both the
+            // extension-based format detection and the archive reads work.
+            // For normal HTTP URLs: keep the pre-Phase03 behavior, deriving
+            // the directory as baseUrl so sibling assets resolve correctly.
+            const isBlob = descriptor.assetUrl.startsWith('blob:');
+            const fileSystem = isBlob ? new MappedReadFileSystem() : new MappedReadFileSystem(
+                new URL('.', new URL(descriptor.assetUrl, window.location.href)).href
+            );
+            const filename = isBlob ? `${lod}.${descriptor.format ?? 'sog'}` : descriptor.assetUrl;
+
+            if (isBlob) {
+                const blob = await fetch(descriptor.assetUrl).then(response => response.blob());
+                fileSystem.addFile(filename, blob);
+            } else {
+                // normal HTTP URL: derive sibling assets from the URL directory
+            }
 
             const model = await scene.assetLoader.load(filename, fileSystem, false);
             if (!model) {
                 throw new Error('ASSET_INVALID');
             }
-            await scene.add(model);
+            postStage('decoded');
 
-            // frame the loaded scene
-            if (descriptor.camera) {
+            // Atomically replace the previous LOD: remove the old model (and
+            // free its resources) before adding the new one at the frame
+            // boundary, avoiding two overlapping scenes.
+            if (currentModel) {
+                try {
+                    scene.remove(currentModel);
+                } catch (error: unknown) {
+                    console.warn('[gsviewer] error removing previous LOD model:', error);
+                }
+            }
+            // Guard against GPU readback hangs in headless/SwiftShader (P02-001).
+            // scene.add() calls updateState → calcBound which dispatches a GPU
+            // compute readback that may never complete when the compositor is
+            // inactive.  Timeout after 5 s so the embed never stalls forever.
+            const ADD_TIMEOUT_MS = 5_000;
+            const addResult = await Promise.race([
+                scene.add(model).then(() => 'ok' as const),
+                new Promise<'timeout'>((resolve) => {
+                    setTimeout(() => resolve('timeout'), ADD_TIMEOUT_MS);
+                })
+            ]);
+            currentModel = model;
+            postStage('applied');
+
+            // Apply the manifest camera only once (on the first LOD). On
+            // later upgrades the user's orbit/fly pose is preserved.
+            if (descriptor.camera && !hasLoadedAnyScene) {
                 scene.camera.setPose(
                     new Vec3(...descriptor.camera.position),
                     new Vec3(...descriptor.camera.target),
                     0
                 );
                 scene.camera.fov = descriptor.camera.fov;
-            } else {
+            } else if (!hasLoadedAnyScene) {
                 scene.camera.focus();
             }
+            hasLoadedAnyScene = true;
+
+            // Wait for the next rendered frame containing this model before
+            // declaring the LOD "presented". In a real browser the render
+            // loop posts postrender every frame; in headless SwiftShader the
+            // compositor can stop advancing (same P02-001 family), so bound
+            // the wait the same way as add() above rather than stalling the
+            // host's session forever.
+            const FRAME_TIMEOUT_MS = 10_000;
+            let frameTimer: ReturnType<typeof setTimeout> | null = null;
+            const frameResult = await new Promise<{ kind: 'frame' } | { kind: 'timeout' }>((resolve) => {
+                const onRender = () => {
+                    scene.events.off('postrender', onRender);
+                    if (frameTimer) clearTimeout(frameTimer);
+                    resolve({ kind: 'frame' });
+                };
+                frameTimer = setTimeout(() => {
+                    scene.events.off('postrender', onRender);
+                    resolve({ kind: 'timeout' });
+                }, FRAME_TIMEOUT_MS);
+                scene.events.on('postrender', onRender);
+            });
+            console.warn(`[gsviewer] firstFrame ${lod} (race=${frameResult.kind})`);
+            postStage('firstFrame');
 
             post({
                 id: 0,
                 command: 'sceneLoaded',
                 ok: true,
-                payload: { splatCount: getSplatCount() }
+                payload: {
+                    splatCount: getSplatCount(),
+                    lod,
+                    sessionId
+                }
             });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
+            console.warn('[gsviewer] loadScene failed:', message);
             const code =
                 message === 'ASSET_INVALID' ? 'ASSET_INVALID' :
-                    /fetch|network/i.test(message) ? 'ASSET_FETCH_FAILED' :
+                    /fetch|network|404/i.test(message) ? 'ASSET_FETCH_FAILED' :
                         'ASSET_INVALID';
+            if (sessionId) {
+                post({
+                    id: 0,
+                    command: 'lodFailed',
+                    ok: false,
+                    payload: { sessionId, lod, code }
+                });
+            }
             post({ id: 0, command: 'sceneLoadFailed', ok: false, error: code });
         } finally {
             setLoading(false);

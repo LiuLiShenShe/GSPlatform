@@ -37,6 +37,17 @@ export interface ViewerEventMap {
     viewerFailed: (payload: { code: ViewerErrorCode }) => void;
     sceneLoaded: (payload: { splatCount: number }) => void;
     sceneLoadFailed: (payload: { code: ViewerErrorCode }) => void;
+    /**
+     * Progressive-loading stage report (Phase 03): the embed posts one of
+     * these for each LOD a session sends it. The host uses them to settle the
+     * corresponding part of its progress aggregation.
+     */
+    lodState: (payload: { sessionId?: string; lod?: string; stage?: string }) => void;
+    /**
+     * A single LOD tier failed inside the embed. The host keeps the last
+     * interactive LOD and can offer a per-tier retry.
+     */
+    lodFailed: (payload: { sessionId?: string; lod?: string; code?: string }) => void;
     cameraMode: (payload: { mode: ViewerCameraMode }) => void;
 }
 
@@ -175,6 +186,14 @@ export const createViewer = (
         }
         if (data.command === 'cameraMode') {
             emit('cameraMode', data.payload);
+            return;
+        }
+        if (data.command === 'lodState') {
+            emit('lodState', data.payload);
+            return;
+        }
+        if (data.command === 'lodFailed') {
+            emit('lodFailed', data.payload);
             return;
         }
 

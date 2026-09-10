@@ -13,7 +13,7 @@ import {
   RestOutlined,
   SlidersOutlined,
 } from '@ant-design/icons';
-import type { ViewerCameraMode } from '@gsplatform/viewer';
+import type { ViewerCameraMode, LODLevel } from '@gsplatform/viewer';
 import type { ViewerLifecycleState } from './useViewerLifecycle';
 import { ViewerStats } from './ViewerStats';
 
@@ -26,7 +26,16 @@ interface ViewerToolbarProps {
  * 所有能力都真实接线到 ViewerAdapter；未实现的能力明确禁用并解释。
  */
 export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
-  const { stats, cameraMode, setCameraMode, resetCamera } = lifecycle;
+  const {
+    stats,
+    cameraMode,
+    setCameraMode,
+    resetCamera,
+    phase,
+    currentLod,
+    loadedBytes,
+    totalBytes,
+  } = lifecycle;
   const [perfVisible, setPerfVisible] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [qualityOpen, setQualityOpen] = useState(false);
@@ -78,7 +87,13 @@ export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
       </footer>
 
       {perfVisible && (
-        <ViewerStats stats={stats} onClose={() => setPerfVisible(false)} />
+        <ViewerStats
+          stats={stats}
+          currentLod={currentLod}
+          loadedBytes={loadedBytes}
+          totalBytes={totalBytes}
+          onClose={() => setPerfVisible(false)}
+        />
       )}
 
       <Modal
@@ -93,6 +108,7 @@ export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
           <Alert type="info" showIcon message="Fly（飞行）模式" description="WASD 移动，Q/E 上下，滚轮前进/后退，Ctrl+拖动旋转视角。" />
           <Alert type="info" showIcon message="移动端触控" description="单指旋转，双指缩放 / 平移；双击聚焦。" />
           <Alert type="warning" showIcon message="真实渲染" description="本页显示的 3D 场景由 SuperSplat Viewer fork 实时渲染，非静态封面或录屏。" />
+          <Alert type="info" showIcon message="渐进加载" description="场景先以低清点云形态快速可交互，然后自动提升到更高清晰度。" />
         </Space>
       </Modal>
 
@@ -117,13 +133,43 @@ export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
             description={stats ? `${stats.splatCount.toLocaleString()} splats` : '尚未加载'}
           />
           <Alert
-            type="warning"
+            type={phase === 'READY' ? 'success' : 'info'}
             showIcon
-            message="渐近加载 / Streamed SOG（Phase 04 可用）"
-            description="当前为一次性完整加载；自适应细节与分片策略将在 Phase 04 提供。"
+            message={`渐进加载阶段：${lodLabel(currentLod)}`}
+            description={
+              phase === 'READY'
+                ? '高质量版本已完整呈现'
+                : currentLod
+                    ? `已就绪的 LOD：${lodLabel(currentLod)}${totalBytes != null ? `，共 ${formatBytes(totalBytes)}` : ''}`
+                    : '正在准备场景'
+            }
           />
+          {phase !== 'READY' && loadedBytes > 0 && (
+            <Alert
+              type="info"
+              showIcon
+              message="已传输字节数"
+              description={formatBytes(loadedBytes)}
+            />
+          )}
         </Space>
       </Modal>
     </>
   );
+}
+
+function lodLabel(level: LODLevel | null): string {
+  if (level === null) return '未加载';
+  switch (level) {
+    case 'low': return '低清（点云级）';
+    case 'medium': return '中等质量';
+    case 'high': return '高质量';
+  }
+}
+
+function formatBytes(n: number): string {
+  if (n < 1_048_576) {
+    return `${(n / 1024).toFixed(1)} KB`;
+  }
+  return `${(n / 1_048_576).toFixed(1)} MB`;
 }

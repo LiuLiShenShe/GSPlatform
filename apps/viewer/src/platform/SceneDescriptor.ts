@@ -22,4 +22,12 @@ export interface SceneDescriptor {
     target: [number, number, number];
     fov: number;
   };
+  /**
+   * Progressive-loading metadata (Phase 03).
+   * `lod` names which quality tier this descriptor represents and `sessionId`
+   * lets the embed correlation events back to the load session that issued
+   * the load. Both are optional so pre-existing callers keep working.
+   */
+  lod?: 'low' | 'medium' | 'high';
+  sessionId?: string;
 }

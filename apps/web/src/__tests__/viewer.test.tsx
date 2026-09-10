@@ -185,7 +185,7 @@ describe('Phase 02: Scene Viewer 集成', () => {
     renderApp({ route: '/scene/local-garden' });
     await userEvent.click(screen.getByRole('button', { name: /Quality/ }));
     expect(await screen.findByText(/渲染后端/)).toBeInTheDocument();
-    expect(screen.getByText(/渐近加载/)).toBeInTheDocument();
+    expect(screen.getByText(/渐进加载/)).toBeInTheDocument();
   });
 
   it('场景标题显示 sceneId，关闭按钮回首页', async () => {

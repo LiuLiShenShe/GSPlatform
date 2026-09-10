@@ -18,5 +18,11 @@ export default defineConfig({
     css: true,
     testTimeout: 15000,
     hookTimeout: 15000,
+    exclude: [
+      // Playwright e2e specs use @playwright/test's test() — never run by vitest
+      'e2e/**',
+      '**/node_modules/**',
+      '**/dist/**',
+    ],
   },
 });

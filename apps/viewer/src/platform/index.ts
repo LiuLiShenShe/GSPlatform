@@ -18,3 +18,24 @@ export type {
 export type { SceneDescriptor } from './SceneDescriptor';
 export { codeToUserMessage, ViewerError } from './ViewerError';
 export type { ViewerErrorCode, ViewerErrorDetail } from './ViewerError';
+
+// Progressive loading (Phase 03) — types only; the host page uses these to
+// drive multi-LOD sessions through the viewer.
+export {
+    LoadSession,
+    phaseLabel,
+    fetchArrayBufferWithProgress
+} from './loading/LoadSession';
+export type { LoadSessionCallbacks, LoadSessionResult, ProgressiveManifest } from './loading/LoadSession';
+export {
+    ProgressAggregator
+} from './loading/ProgressAggregator';
+export { LodSwitcher } from './loading/LodSwitcher';
+export type {
+    LODAssetRef,
+    LODLevel,
+    LoadPhase,
+    LoadProgress,
+    LODStage
+} from './loading/LoadEvents';
+export { LOD_LEVELS } from './loading/LoadEvents';

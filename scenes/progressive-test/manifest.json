@@ -1,0 +1,48 @@
+{
+  "id": "progressive-test",
+  "title": "渐进加载测试场景",
+  "format": "sog",
+  "sha256": "f68200c27c6346cf9e617954cdd6c4cbdf554126f80911125511078293940223",
+  "sourceSize": 14732730,
+  "sourceGaussians": 59400,
+  "lod": [
+    {
+      "level": "low",
+      "assetUrl": "low.sog",
+      "gaussians": 5940,
+      "size": 75460,
+      "sha256": "1e255bf74c472bd30d169126e52794d78edbb26afd786b00e8ad4cc9ea3e61f3"
+    },
+    {
+      "level": "medium",
+      "assetUrl": "medium.sog",
+      "gaussians": 20800,
+      "size": 207414,
+      "sha256": "47c69af6127a0811c8deb5ae40dedd497fcfcee55f2a5868d0b7c027d0bd9c36"
+    },
+    {
+      "level": "high",
+      "assetUrl": "high.sog",
+      "gaussians": 59400,
+      "size": 292618,
+      "sha256": "393bb062f2bf45fcf8ecb66316f99759ffe05d9a70d8e831699829e79cc49962"
+    }
+  ],
+  "poster": {
+    "url": null,
+    "placeholderColor": "#1a2a3a"
+  },
+  "camera": {
+    "position": [
+      0,
+      1.2,
+      3.5
+    ],
+    "target": [
+      0,
+      0.8,
+      0
+    ],
+    "fov": 55
+  }
+}
