@@ -4,15 +4,19 @@ import {
   ViewerError,
   codeToUserMessage,
   LoadSession,
+  StreamedSogLoader,
   type ViewerCameraMode,
   type ViewerErrorCode,
   type ViewerHandle,
   type ViewerStats,
   type LoadPhase,
   type LODLevel,
+  type QualityMode,
+  type StreamingMetricsSnapshot,
 } from '@gsplatform/viewer';
 import {
   resolveProgressiveScene,
+  resolveStreamedScene,
   LocalSceneError,
 } from '../../services/scenes.local';
 
@@ -50,6 +54,16 @@ export interface ViewerLifecycleState {
   retry: () => void;
   /** Cancel the in-flight progressive load (leaves best LOD interactive). */
   cancelLoad: () => void;
+
+  // Phase 04 — streamed-SOG fields
+  /** Whether the current scene is streamed-SOG format. */
+  isStreamed: boolean;
+  /** Current quality mode (eco / balanced / quality). */
+  qualityMode: QualityMode;
+  /** Switch quality mode at runtime. */
+  setQualityMode: (mode: QualityMode) => void;
+  /** Latest streaming metrics snapshot (null until streaming is active). */
+  streamingMetrics: StreamingMetricsSnapshot | null;
 }
 
 const STATS_POLL_MS = 1000;
@@ -89,6 +103,12 @@ export function useViewerLifecycle(sceneId: string): ViewerLifecycleState {
   const [currentLod, setCurrentLod] = useState<LODLevel | null>(null);
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [placeholderColor, setPlaceholderColor] = useState<string | undefined>(undefined);
+
+  // Phase 04 — streamed-SOG state
+  const [isStreamed, setIsStreamed] = useState(false);
+  const [qualityMode, setQualityModeState] = useState<QualityMode>('balanced');
+  const [streamingMetrics, setStreamingMetrics] = useState<StreamingMetricsSnapshot | null>(null);
+  const streamedLoaderRef = useRef<StreamedSogLoader | null>(null);
 
   /** True while the loading overlay should stay mounted. */
   const [overlayVisible, setOverlayVisible] = useState(true);
@@ -146,17 +166,89 @@ export function useViewerLifecycle(sceneId: string): ViewerLifecycleState {
       });
 
       try {
+        // Phase 04: try the streamed-SOG manifest path first. If the manifest
+        // format is 'streamed-sog', drive the StreamedSogLoader instead of
+        // the Phase 03 progressive LoadSession (blob-per-LOD).
+        const sessionId = `s${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+        let streamedResolution;
+        try {
+          streamedResolution = await resolveStreamedScene(sceneIdRef.current);
+        } catch (err) {
+          // Not a streamed-SOG manifest (older scene) — fall through to the
+          // progressive path. Only treat it as an error if the manifest was
+          // actually streamed-sog but malformed.
+          streamedResolution = null;
+          if (err instanceof LocalSceneError && err.code === 'ASSET_FETCH_FAILED') {
+            // re-throw only fatal fetch failures; format mismatches are fine
+            throw err;
+          }
+        }
+
+        if (streamedResolution) {
+          if (aborted) return;
+          setStatus('loading');
+          setIsStreamed(true);
+          setPosterUrl(streamedResolution.manifest.posterUrl ?? null);
+
+          const loader = new StreamedSogLoader(streamedResolution.manifest);
+          streamedLoaderRef.current = loader;
+          loadController = new AbortController();
+          loadControllerRef.current = loadController;
+
+          // feed streaming metrics to the UI on a low-frequency timer
+          const metricsTimer = window.setInterval(() => {
+            if (aborted) return;
+            setStreamingMetrics(loader.scheduler.metrics.snapshot());
+          }, STATS_POLL_MS);
+
+          // subscribe to progress / readiness events for the status overlay
+          const offProgress = loader.on('progress', (p) => {
+            if (aborted) return;
+            setProgress(p.ratio * 100);
+            setLoadedBytes(p.loaded);
+            setTotalBytes(p.total);
+            setIndeterminate(false);
+          });
+          const offChunk = loader.on('chunkDecoded', (_p) => {
+            // each decoded chunk nudges interactivity; update currentLod based
+            // on the streaming target for display purposes
+            setCurrentLod('low');
+          });
+
+          await loader.start(viewer);
+
+          // streamed scenes are interactive immediately after the low LOD
+          // first frame; report ready and dissolve the overlay quickly.
+          if (aborted) { clearInterval(metricsTimer); offProgress(); offChunk(); return; }
+          setStatus('ready');
+          setPhase('READY');
+          setProgress(99);
+          dissolveTimerRef.current = setTimeout(() => {
+            if (!aborted) { setOverlayVisible(false); setProgress(100); }
+            dissolveTimerRef.current = null;
+          }, 400);
+
+          return () => {
+            clearInterval(metricsTimer);
+            offProgress();
+            offChunk();
+            loader.destroy();
+            streamedLoaderRef.current = null;
+            loadController?.abort();
+            loadControllerRef.current = null;
+            offReady();
+            offViewerFailed();
+            offContextLost();
+          };
+        }
+
         // Resolve the progressive manifest (fetch + validation), then drive a
         // LoadSession for the LOD tiers.
-        const sessionId = `s${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const resolution = await resolveProgressiveScene(sceneIdRef.current);
-        if (aborted) return;
-        setStatus('loading');
-        setPosterUrl(resolution.posterUrl);
-        setPlaceholderColor(resolution.placeholderColor);
 
         loadController = new AbortController();
         loadControllerRef.current = loadController;
+        const resolution = await resolveProgressiveScene(sceneIdRef.current, loadController.signal);
         const session = new LoadSession(
           viewer,
           {
@@ -296,6 +388,11 @@ export function useViewerLifecycle(sceneId: string): ViewerLifecycleState {
     loadControllerRef.current?.abort();
   }, []);
 
+  const setQualityMode = useCallback((mode: QualityMode) => {
+    setQualityModeState(mode);
+    streamedLoaderRef.current?.setQuality(mode);
+  }, []);
+
   return {
     containerRef,
     status,
@@ -317,5 +414,10 @@ export function useViewerLifecycle(sceneId: string): ViewerLifecycleState {
     resetCamera,
     retry,
     cancelLoad,
+    // Phase 04 streamed fields
+    isStreamed,
+    qualityMode,
+    setQualityMode,
+    streamingMetrics,
   };
 }

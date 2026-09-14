@@ -16,6 +16,8 @@ import {
 import type { ViewerCameraMode, LODLevel } from '@gsplatform/viewer';
 import type { ViewerLifecycleState } from './useViewerLifecycle';
 import { ViewerStats } from './ViewerStats';
+import { PerformancePanel } from './PerformancePanel';
+import { QualityPanel } from './QualityPanel';
 
 interface ViewerToolbarProps {
   lifecycle: ViewerLifecycleState;
@@ -27,6 +29,7 @@ interface ViewerToolbarProps {
  */
 export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
   const {
+    status,
     stats,
     cameraMode,
     setCameraMode,
@@ -35,6 +38,10 @@ export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
     currentLod,
     loadedBytes,
     totalBytes,
+    isStreamed,
+    streamingMetrics,
+    qualityMode,
+    setQualityMode,
   } = lifecycle;
   const [perfVisible, setPerfVisible] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -87,13 +94,20 @@ export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
       </footer>
 
       {perfVisible && (
-        <ViewerStats
-          stats={stats}
-          currentLod={currentLod}
-          loadedBytes={loadedBytes}
-          totalBytes={totalBytes}
-          onClose={() => setPerfVisible(false)}
-        />
+        isStreamed ? (
+          <PerformancePanel
+            metrics={streamingMetrics}
+            active={status === 'loading' || status === 'ready'}
+          />
+        ) : (
+          <ViewerStats
+            stats={stats}
+            currentLod={currentLod}
+            loadedBytes={loadedBytes}
+            totalBytes={totalBytes}
+            onClose={() => setPerfVisible(false)}
+          />
+        )
       )}
 
       <Modal
@@ -120,37 +134,47 @@ export function ViewerToolbar({ lifecycle }: ViewerToolbarProps) {
         width={480}
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
-          <Alert
-            type="success"
-            showIcon
-            message="渲染后端"
-            description={stats ? (stats.renderer === 'webgpu' ? 'WebGPU（硬件加速可用）' : 'WebGL2（自动降级）') : '检测中…'}
-          />
-          <Alert
-            type="info"
-            showIcon
-            message="当前场景高斯点数"
-            description={stats ? `${stats.splatCount.toLocaleString()} splats` : '尚未加载'}
-          />
-          <Alert
-            type={phase === 'READY' ? 'success' : 'info'}
-            showIcon
-            message={`渐进加载阶段：${lodLabel(currentLod)}`}
-            description={
-              phase === 'READY'
-                ? '高质量版本已完整呈现'
-                : currentLod
-                    ? `已就绪的 LOD：${lodLabel(currentLod)}${totalBytes != null ? `，共 ${formatBytes(totalBytes)}` : ''}`
-                    : '正在准备场景'
-            }
-          />
-          {phase !== 'READY' && loadedBytes > 0 && (
-            <Alert
-              type="info"
-              showIcon
-              message="已传输字节数"
-              description={formatBytes(loadedBytes)}
+          {isStreamed ? (
+            <QualityPanel
+              currentMode={qualityMode}
+              onModeChange={setQualityMode}
+              targetLod={0}
             />
+          ) : (
+            <>
+              <Alert
+                type="success"
+                showIcon
+                message="渲染后端"
+                description={stats ? (stats.renderer === 'webgpu' ? 'WebGPU（硬件加速可用）' : 'WebGL2（自动降级）') : '检测中…'}
+              />
+              <Alert
+                type="info"
+                showIcon
+                message="当前场景高斯点数"
+                description={stats ? `${stats.splatCount.toLocaleString()} splats` : '尚未加载'}
+              />
+              <Alert
+                type={phase === 'READY' ? 'success' : 'info'}
+                showIcon
+                message={`渐进加载阶段：${lodLabel(currentLod)}`}
+                description={
+                  phase === 'READY'
+                    ? '高质量版本已完整呈现'
+                    : currentLod
+                        ? `已就绪的 LOD：${lodLabel(currentLod)}${totalBytes != null ? `，共 ${formatBytes(totalBytes)}` : ''}`
+                        : '正在准备场景'
+                }
+              />
+              {phase !== 'READY' && loadedBytes > 0 && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message="已传输字节数"
+                  description={formatBytes(loadedBytes)}
+                />
+              )}
+            </>
           )}
         </Space>
       </Modal>

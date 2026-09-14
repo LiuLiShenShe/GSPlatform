@@ -9,7 +9,7 @@
  * 后端 /api/v1 接入后（Phase 05+），此模块由真实 API 替换；本文件只负责
  * 把本地 manifest 解析为 ViewerAdapter 可消费的 DTO，不伪造任何渲染结果。
  */
-import type { LODAssetRef, SceneDescriptor, ViewerErrorCode } from '@gsplatform/viewer';
+import type { LODAssetRef, SceneDescriptor, ViewerErrorCode, StreamedManifest } from '@gsplatform/viewer';
 
 export interface LocalSceneResolution {
   descriptor: SceneDescriptor;
@@ -236,4 +236,86 @@ function asVec3(value: unknown): [number, number, number] | undefined {
     return value as [number, number, number];
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 04 — Streamed SOG resolver
+// ---------------------------------------------------------------------------
+
+/** Result of resolving a streamed-SOG manifest for a scene. */
+export interface StreamedSceneResolution {
+  /** The full business manifest (includes stream.entryUrl, counts, etc.). */
+  manifest: StreamedManifest;
+  /** Fully-resolved asset URL for the upstream lod-meta.json. */
+  entryUrl: string;
+  /** Base URL for the version directory (where lod-meta.json + chunks live). */
+  baseUrl: string;
+  /** Stable manifest URL (for cache-control / freshness checks). */
+  manifestUrl: string;
+}
+
+/**
+ * Resolve a streamed-SOG scene manifest.
+ *
+ * The manifest lives at `/local-scenes/<sceneId>/current/manifest.json` and
+ * its `stream.entryUrl` is scene-root-relative (e.g.
+ * `versions/<sha>/lod-meta.json`). The entry URL and base URL are resolved
+ * to absolute paths the viewer embed and the streaming scheduler can use.
+ *
+ * Throws `LocalSceneError` on 404 / malformed JSON.
+ */
+export async function resolveStreamedScene(
+  sceneId: string,
+  signal?: AbortSignal,
+): Promise<StreamedSceneResolution> {
+  const mUrl = manifestUrl(sceneId);
+  const raw = await fetchManifestRaw(sceneId, signal);
+
+  if (raw.format !== 'streamed-sog') {
+    throw new LocalSceneError(
+      'ASSET_FETCH_FAILED',
+      `场景清单 format 非 streamed-sog: ${mUrl}`,
+    );
+  }
+
+  const stream = raw.stream as Record<string, unknown> | undefined;
+  const entryUrl = typeof stream?.entryUrl === 'string' ? stream.entryUrl : undefined;
+  if (!entryUrl) {
+    throw new LocalSceneError(
+      'ASSET_FETCH_FAILED',
+      `场景清单缺少 stream.entryUrl: ${mUrl}`,
+    );
+  }
+
+  const assetVersion = typeof raw.assetVersion === 'string' ? raw.assetVersion : 'unknown';
+
+  // Base URL = directory of lod-meta.json on the dev-server, where the
+  // versioned chunk dirs live and from which UrlReadFileSystem resolves
+  // relative paths (e.g. `0_0/meta.json`).
+  const baseUrl = `/local-scenes/${encodeURIComponent(sceneId)}/versions/${encodeURIComponent(assetVersion)}/`;
+
+  const manifest = {
+    schemaVersion: 1,
+    sceneId,
+    assetVersion,
+    format: 'streamed-sog' as const,
+    stream: {
+      entryUrl,
+      byteLength: typeof stream?.byteLength === 'number' ? stream.byteLength : 0,
+      sha256: typeof stream?.sha256 === 'string' ? stream.sha256 : '',
+      transport: 'range' as const,
+      lodLevels: typeof stream?.lodLevels === 'number' ? stream.lodLevels : 3,
+      counts: Array.isArray(stream?.counts) ? (stream.counts as number[]) : [0, 0, 0],
+    },
+    title: typeof raw.title === 'string' ? raw.title : sceneId,
+    posterUrl: typeof raw.posterUrl === 'string' ? raw.posterUrl : undefined,
+    camera: parseCamera(raw.camera),
+  } satisfies StreamedManifest;
+
+  return {
+    manifest,
+    entryUrl: `${baseUrl}${entryUrl.replace(/^\.\//, '')}`,
+    baseUrl,
+    manifestUrl: mUrl,
+  };
 }

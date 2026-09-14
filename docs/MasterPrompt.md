@@ -13,9 +13,9 @@
 ## 本次只允许手工修改的两个参数
 
 ```text
-PHASE_NUMBER = 3
+PHASE_NUMBER = 4
 
-PHASE_DOC = /fj/GSPlatform/docs/PHASE_03_PROGRESSIVE_LOADING.md
+PHASE_DOC = /fj/GSPlatform/docs/PHASE_04_STREAMED_SOG_LOD.md
 ```
 
 除这两个参数外，不需要用户再手工提供：

@@ -13,6 +13,18 @@ export interface ViewerStats {
 
 export type ViewerCameraMode = 'orbit' | 'fly';
 
+/**
+ * Current camera pose snapshot. `target` is the orbit focal point; `position`
+ * is the PlayCanvas camera entity position, so the host can persist the pose
+ * and restore it across route changes (Phase 04 observability/UX).
+ */
+export interface ViewerCameraPose {
+    position: [number, number, number];
+    target: [number, number, number];
+    fov: number;
+    mode: ViewerCameraMode;
+}
+
 export interface CreateViewerOptions {
     /**
      * Base URL of the viewer embed build (defaults to '/viewer/embed.html').
@@ -58,6 +70,8 @@ export interface ViewerHandle {
     setCameraMode(mode: ViewerCameraMode): Promise<void>;
     resize(width: number, height: number, devicePixelRatio: number): Promise<void>;
     getStats(): Promise<ViewerStats>;
+    /** Snapshot the current camera pose (position/target/fov/mode). */
+    getCameraPose(): Promise<{ camera: ViewerCameraPose }>;
     destroy(): void;
     /** Subscribe to embed-reported events. Returns unsubscribe. */
     on<T extends keyof ViewerEventMap>(type: T, listener: ViewerEventMap[T]): () => void;
@@ -263,6 +277,10 @@ export const createViewer = (
         async getStats() {
             const res = await send('getStats');
             return res.payload as ViewerStats;
+        },
+        async getCameraPose() {
+            const res = await send('getCameraPose');
+            return res.payload as { camera: ViewerCameraPose };
         },
         destroy() {
             if (destroyed) {

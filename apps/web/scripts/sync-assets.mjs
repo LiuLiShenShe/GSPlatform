@@ -4,7 +4,12 @@
  * server and production build both serve them from the same origin:
  *
  *   /viewer/*          <- apps/viewer/dist   (SuperSplat embed build)
- *   /local-scenes/*    <- scenes/            (git-ignored local scene assets)
+ *
+ * Scene assets (`/local-scenes/*`) are NOT copied: the dev server serves them
+ * straight from the git-ignored `scenes/` tree via the `gs-serve-streamed-
+ * scenes` Vite middleware (real HTTP Range, symlink-aware). Copying would
+ * break the `current` version symlink (absolute link escaping the public
+ * root) and duplicate gigabytes of chunk units.
  *
  * The source directories are not committed (scene assets are large, viewer
  * dist is a build artifact), so this runs as a pre-step of dev/build.
@@ -32,4 +37,5 @@ const syncTree = (name, sourceDir) => {
 };
 
 syncTree('viewer', join(webRoot, '../viewer/dist'));
-syncTree('local-scenes', join(__dirname, '../../../scenes'));
+// local-scenes intentionally omitted — served from scenes/ by the dev
+// middleware (see vite.config.ts gs-serve-streamed-scenes).

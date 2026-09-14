@@ -60,6 +60,11 @@ scenes/**/*.mkv
 scenes/**/*.zip
 !scenes/.gitkeep
 
+# --- Streamed SOG build output (built by build_streamed_sog.sh, never in git) ---
+scenes/**/versions/
+scenes/**/current
+scenes/**/.staging-*
+
 # --- Uploads / user data ---
 uploads/
 storage/

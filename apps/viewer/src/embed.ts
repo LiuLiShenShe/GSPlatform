@@ -1,4 +1,4 @@
-import { WebPCodec, WorkerQueue } from '@playcanvas/splat-transform';
+import { WebPCodec, WorkerQueue, UrlReadFileSystem } from '@playcanvas/splat-transform';
 import { Color, createGraphicsDevice, Vec3 } from 'playcanvas';
 
 import { CommandQueue } from './command-queue';
@@ -19,7 +19,7 @@ import { Splat } from './splat';
 
 interface GsViewerSceneDescriptor {
     assetUrl: string;
-    format: 'sog' | 'ply' | 'splat';
+    format: 'sog' | 'ply' | 'splat' | 'streamed-sog';
     camera?: {
         position: [number, number, number];
         target: [number, number, number];
@@ -29,6 +29,8 @@ interface GsViewerSceneDescriptor {
     lod?: 'low' | 'medium' | 'high';
     /** Correlation id echoed back in lodState events. */
     sessionId?: string;
+    /** Base URL for streamed-SOG resolution (defaults to the directory of assetUrl). */
+    baseUrl?: string;
 }
 
 interface GsViewerRequest {
@@ -317,6 +319,86 @@ const start = async () => {
             // For normal HTTP URLs: keep the pre-Phase03 behavior, deriving
             // the directory as baseUrl so sibling assets resolve correctly.
             const isBlob = descriptor.assetUrl.startsWith('blob:');
+
+            // Streamed SOG (Phase 04): the assetUrl points at the upstream
+            // lod-meta.json container and every chunk unit is fetched over
+            // HTTP Range on demand. UrlReadFileSystem probes the origin for
+            // Range support and streams; sibling chunk units resolve against
+            // baseUrl (the version directory the manifest lives in). The
+            // initial load always selects the lowest LOD so interactive
+            // first frame appears fast; the platform refines above it.
+            if (descriptor.format === 'streamed-sog' && !isBlob) {
+                const baseUrl = descriptor.baseUrl ?? new URL('.', new URL(descriptor.assetUrl, window.location.href)).href;
+                const fileSystem = new UrlReadFileSystem(baseUrl);
+                // Programmatic LOD selection: start at the lowest detail and
+                // let the platform's scheduler refine. pickLod(null) cancels
+                // the load — never happens with the embedded streaming path.
+                const pickLod = (_lodCounts: readonly number[]) => Promise.resolve(0 as const);
+                const model = await scene.assetLoader.load(descriptor.assetUrl, fileSystem, false, true, pickLod);
+                if (!model) {
+                    throw new Error('ASSET_INVALID');
+                }
+                postStage('decoded');
+                if (currentModel) {
+                    try {
+                        scene.remove(currentModel);
+                    } catch (error: unknown) {
+                        console.warn('[gsviewer] error removing previous LOD model:', error);
+                    }
+                }
+                const ADD_TIMEOUT_MS = 5_000;
+                const addResult = await Promise.race([
+                    scene.add(model).then(() => 'ok' as const),
+                    new Promise<'timeout'>((resolve) => {
+                        setTimeout(() => resolve('timeout'), ADD_TIMEOUT_MS);
+                    })
+                ]);
+                currentModel = model;
+                postStage('applied');
+
+                if (descriptor.camera && !hasLoadedAnyScene) {
+                    scene.camera.setPose(
+                        new Vec3(...descriptor.camera.position),
+                        new Vec3(...descriptor.camera.target),
+                        0
+                    );
+                    scene.camera.fov = descriptor.camera.fov;
+                } else if (!hasLoadedAnyScene) {
+                    scene.camera.focus();
+                }
+                hasLoadedAnyScene = true;
+
+                // Wait for the first frame containing the streamed model.
+                const FRAME_TIMEOUT_MS = 10_000;
+                let frameTimer: ReturnType<typeof setTimeout> | null = null;
+                const frameResult = await new Promise<{ kind: 'frame' } | { kind: 'timeout' }>((resolve) => {
+                    const onRender = () => {
+                        scene.events.off('postrender', onRender);
+                        if (frameTimer) clearTimeout(frameTimer);
+                        resolve({ kind: 'frame' });
+                    };
+                    frameTimer = setTimeout(() => {
+                        scene.events.off('postrender', onRender);
+                        resolve({ kind: 'timeout' });
+                    }, FRAME_TIMEOUT_MS);
+                    scene.events.on('postrender', onRender);
+                });
+                console.warn(`[gsviewer] firstFrame ${lod} (race=${frameResult.kind})`);
+                postStage('firstFrame');
+
+                post({
+                    id: 0,
+                    command: 'sceneLoaded',
+                    ok: true,
+                    payload: {
+                        splatCount: getSplatCount(),
+                        lod,
+                        sessionId
+                    }
+                });
+                return;
+            }
+
             const fileSystem = isBlob ? new MappedReadFileSystem() : new MappedReadFileSystem(
                 new URL('.', new URL(descriptor.assetUrl, window.location.href)).href
             );
@@ -498,6 +580,26 @@ const start = async () => {
                     }
                 });
                 break;
+            case 'getCameraPose': {
+                // current camera pose so the host can persist or restore it
+                // across LOD upgrades and route changes (Phase 04 observability).
+                const pos = scene.camera.mainCamera.getPosition();
+                const target = scene.camera.focalPoint;
+                post({
+                    id: data.id,
+                    command: 'getCameraPose',
+                    ok: true,
+                    payload: {
+                        camera: {
+                            position: [pos.x, pos.y, pos.z],
+                            target: [target.x, target.y, target.z],
+                            fov: scene.camera.fov,
+                            mode: scene.camera.controlMode
+                        }
+                    }
+                });
+                break;
+            }
             default:
                 post({ id: data.id, command: data.command, ok: false, error: 'UNKNOWN_COMMAND' });
                 break;

@@ -39,3 +39,28 @@ export type {
     LODStage
 } from './loading/LoadEvents';
 export { LOD_LEVELS } from './loading/LoadEvents';
+
+// Streamed SOG streaming (Phase 04) — host-side orchestration.
+export {
+    StreamedSogLoader,
+    StreamScheduler,
+    LodSelector,
+    RequestQueue,
+    ResidencyManager,
+    BoundedLru,
+    StreamingMetrics
+} from './streaming';
+export type {
+    StreamedManifest,
+    ChunkKey,
+    ChunkRange,
+    ChunkPriority,
+    ChunkRequestState,
+    CacheEntry,
+    ResidencyStatus,
+    LodDecision,
+    QualityMode,
+    QualityModeConfig,
+    StreamingMetricsSnapshot,
+    StreamingEventMap
+} from './streaming';

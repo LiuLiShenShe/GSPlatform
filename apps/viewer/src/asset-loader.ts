@@ -24,25 +24,23 @@ class AssetLoader {
         return asset;
     }
 
-    async load(filename: string, fileSystem: ReadFileSystem, animationFrame?: boolean, skipReorder?: boolean) {
-        const loaded = await this.loadAsset(filename, fileSystem, animationFrame, skipReorder);
+    async load(filename: string, fileSystem: ReadFileSystem, animationFrame?: boolean, skipReorder?: boolean, pickLod?: (lodCounts: readonly number[]) => Promise<number | null>) {
+        const loaded = await this.loadAsset(filename, fileSystem, animationFrame, skipReorder, pickLod);
         return loaded && new Splat(loaded.asset, loaded.rotation);
     }
 
     // Load the static tier only, without a layer over it. A .ssproj can have
     // several layers sharing one resource, so the document loader creates the
     // asset once here and then builds each layer's own instance list.
-    async loadAsset(filename: string, fileSystem: ReadFileSystem, animationFrame?: boolean, skipReorder?: boolean) {
+    async loadAsset(filename: string, fileSystem: ReadFileSystem, animationFrame?: boolean, skipReorder?: boolean, pickLodOverride?: (lodCounts: readonly number[]) => Promise<number | null>) {
         if (!animationFrame) {
             this.events.fire('startSpinner');
         }
 
         try {
-            // ask the user which LOD to load when the file contains multiple,
-            // pausing the spinner while the popup is up. the editor loads a
-            // single LOD, so also recommend uploading the original file when
-            // publishing to superspl.at.
-            const pickLod = async (lodCounts: readonly number[]) => {
+            // If a programmatic pickLod is provided (e.g. streaming embed),
+            // use it directly instead of showing the UI popup.
+            const pickLod = pickLodOverride ?? (async (lodCounts: readonly number[]) => {
                 this.events.fire('stopSpinner');
                 try {
                     const result = await this.events.invoke('showPopup', {
@@ -66,7 +64,7 @@ class AssetLoader {
                 } finally {
                     this.events.fire('startSpinner');
                 }
-            };
+            });
 
             // Skip reordering for animation frames (speed) or when explicitly requested (already ordered)
             const result = await loadSplatSource(filename, fileSystem, skipReorder || animationFrame, animationFrame ? undefined : pickLod);

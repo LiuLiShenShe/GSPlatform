@@ -8,8 +8,8 @@ export interface SceneDescriptor {
   id: string;
   /** Human-readable title. */
   title: string;
-  /** Scene format: 'sog' | 'ply' | 'splat'. */
-  format: 'sog' | 'ply' | 'splat';
+  /** Scene format: 'sog' | 'ply' | 'splat' | 'streamed-sog'. */
+  format: 'sog' | 'ply' | 'splat' | 'streamed-sog';
   /** Absolute or relative URL to the scene asset file. */
   assetUrl: string;
   /** Optional poster image URL (used for preloading in future phases). */

@@ -2,9 +2,19 @@ import { useNavigate } from 'react-router-dom';
 import type { ViewerLifecycleState } from './useViewerLifecycle';
 import { ViewerErrorState } from './ViewerErrorState';
 import { LoadingOverlay } from './loading/LoadingOverlay';
+import { StreamingStatus, type StreamingPhase } from './StreamingStatus';
 
 interface ViewerCanvasProps {
   lifecycle: ViewerLifecycleState;
+}
+
+/** Map the load phase to the streamed-status indicator phase. */
+function streamPhase(lifecycle: ViewerLifecycleState): StreamingPhase {
+  const { status, phase } = lifecycle;
+  if (status === 'error') return 'error';
+  if (phase === 'READY' || status === 'ready') return 'initial-view-ready';
+  if (status === 'loading') return 'interactive-ready';
+  return 'loading-manifest';
 }
 
 /**
@@ -30,6 +40,9 @@ export function ViewerCanvas({ lifecycle }: ViewerCanvasProps) {
     placeholderColor,
     overlayVisible,
     cancelLoad,
+    isStreamed,
+    streamingMetrics,
+    qualityMode,
   } = lifecycle;
   const navigate = useNavigate();
 
@@ -40,9 +53,26 @@ export function ViewerCanvas({ lifecycle }: ViewerCanvasProps) {
     (status === 'loading' ||
       (status === 'ready' && phase !== 'ERROR' && phase !== 'CANCELLED'));
 
+  // Streamed scenes get a compact phase/residency badge (Phase 04 checklist G).
+  const residentChunks = streamingMetrics?.gpuResident ?? 0;
+  const targetChunks = streamingMetrics?.chunksCompleted ?? 0;
+
   return (
     <div className="gs-viewer__canvas" data-testid="viewer-mount">
       <div ref={containerRef} className="gs-viewer__canvas-host" data-testid="viewer-canvas-host" />
+
+      {isStreamed && !showOverlay && (
+        <div className="gs-viewer__stream-status" style={{ position: 'absolute', top: 12, left: 12, zIndex: 5 }}>
+          <StreamingStatus
+            phase={streamPhase(lifecycle)}
+            progress={progress != null ? progress / 100 : 0}
+            residentChunks={residentChunks}
+            targetChunks={Math.max(1, targetChunks)}
+            qualityLabel={qualityMode === 'eco' ? '省流' : qualityMode === 'quality' ? '高质量' : '自动'}
+            errorMessage={error ?? undefined}
+          />
+        </div>
+      )}
 
       {showOverlay && (
         <LoadingOverlay

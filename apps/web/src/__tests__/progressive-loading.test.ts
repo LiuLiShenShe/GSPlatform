@@ -275,6 +275,9 @@ function createMockHandle(listenerMap: ListenerMap): ViewerHandle {
     async getStats() {
       return { fps: 60, frameTimeMs: 16.6, splatCount: 1, renderer: 'webgl2' };
     },
+    async getCameraPose() {
+      return { camera: { position: [0, 0, 5], target: [0, 0, 0], fov: 45, mode: 'orbit' as const } };
+    },
     destroy() {},
     on(type: string, listener: (...args: unknown[]) => void) {
       (listenerMap[type] ??= []).push(listener);
@@ -313,6 +316,9 @@ function createStallingHandle(listenerMap: ListenerMap): ViewerHandle {
     async resize() {},
     async getStats() {
       return { fps: 60, frameTimeMs: 16.6, splatCount: 1, renderer: 'webgl2' };
+    },
+    async getCameraPose() {
+      return { camera: { position: [0, 0, 5], target: [0, 0, 0], fov: 45, mode: 'orbit' as const } };
     },
     destroy() {},
     on(type: string, listener: (...args: unknown[]) => void) {

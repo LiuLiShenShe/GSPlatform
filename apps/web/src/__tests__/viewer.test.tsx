@@ -28,6 +28,9 @@ const createMockHandle = (listenerMap: ListenerMap): ViewerHandle => {
     },
     async resize() { /* noop */ },
     async getStats() { return makeStats(); },
+    async getCameraPose() {
+      return { camera: { position: [0, 0, 5], target: [0, 0, 0], fov: 45, mode: 'orbit' as const } };
+    },
     destroy() { destroySpy(); },
     on(type: string, listener: (...args: unknown[]) => void) {
       (listenerMap[type] ??= []).push(listener);
