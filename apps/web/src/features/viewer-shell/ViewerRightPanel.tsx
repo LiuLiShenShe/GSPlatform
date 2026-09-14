@@ -40,14 +40,14 @@ export function ViewerRightPanel({ scene }: ViewerRightPanelProps) {
           <Descriptions.Item label="作者">{scene.author}</Descriptions.Item>
           <Descriptions.Item label="分类">{scene.category}</Descriptions.Item>
           <Descriptions.Item label="高斯点数">
-            {scene.splatCount.toLocaleString()}
+            {scene.splatCount?.toLocaleString() ?? '—'}
           </Descriptions.Item>
-          <Descriptions.Item label="大小">{scene.sizeMB} MB</Descriptions.Item>
+          <Descriptions.Item label="大小">{scene.sizeMB ?? '—'} MB</Descriptions.Item>
           <Descriptions.Item label="浏览">
-            {scene.views.toLocaleString()}
+            {scene.views?.toLocaleString() ?? '—'}
           </Descriptions.Item>
           <Descriptions.Item label="点赞">
-            {scene.likes.toLocaleString()}
+            {scene.likes?.toLocaleString() ?? '—'}
           </Descriptions.Item>
         </Descriptions>
       ),

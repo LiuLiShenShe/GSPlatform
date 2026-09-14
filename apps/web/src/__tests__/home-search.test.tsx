@@ -1,7 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test/utils';
+
+vi.mock('../services/sceneApi', async () => {
+  const { sceneFixtures } = await vi.importActual<typeof import('../fixtures/scenes')>('../fixtures/scenes');
+  return {
+    fetchSceneList: vi.fn(async () => sceneFixtures),
+    findScene: vi.fn(async () => sceneFixtures[0]),
+  };
+});
 
 describe('首页搜索', () => {
   it('输入关键词后按 Enter 提交并过滤结果', async () => {

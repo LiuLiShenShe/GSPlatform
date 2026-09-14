@@ -8,6 +8,7 @@ const STATUS_TAG: Record<
   { label: string; color: string } | null
 > = {
   READY: null,
+  PUBLISHED: null,
   PROCESSING: { label: '处理中', color: 'processing' },
   FAILED: { label: '失败', color: 'error' },
 };

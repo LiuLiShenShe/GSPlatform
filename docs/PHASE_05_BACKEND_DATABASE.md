@@ -6,11 +6,11 @@
 
 ## 前置条件
 
-- [ ] `docs/reports/PHASE_04_REPORT.md` 存在且状态为 `PASS`。
-- [ ] 已安装并可连接 PostgreSQL 测试实例。
-- [ ] 已确认 Python 3.11、FastAPI、SQLAlchemy 2.x、Pydantic v2、Alembic 版本锁定。
-- [ ] 已定义开发、测试、生产配置隔离方式。
-- [ ] 已记录 Phase 05 开始前 commit。
+- [x] `docs/reports/PHASE_04_REPORT.md` 存在且状态为 `PASS`。
+- [x] 已安装并可连接 PostgreSQL 测试实例。
+- [x] 已确认 Python 3.11、FastAPI、SQLAlchemy 2.x、Pydantic v2、Alembic 版本锁定。
+- [x] 已定义开发、测试、生产配置隔离方式。
+- [x] 已记录 Phase 05 开始前 commit。
 
 ## 禁止事项
 
@@ -76,81 +76,81 @@ jobs
 
 ### A. 配置与连接
 
-- [ ] 使用 Pydantic v2 Settings 或等价方式集中读取配置。
-- [ ] `.env.example` 只含安全变量名和本地示例，不含真实秘密。
-- [ ] SQLAlchemy 2.x engine、session factory 和依赖注入边界明确。
-- [ ] 每个请求拥有独立 session，成功提交、异常回滚并最终关闭。
-- [ ] 配置连接池大小、超时、连接回收与应用名。
-- [ ] 测试使用独立 PostgreSQL 数据库，不复用开发或生产数据。
+- [x] 使用 Pydantic v2 Settings 或等价方式集中读取配置。
+- [x] `.env.example` 只含安全变量名和本地示例，不含真实秘密。
+- [x] SQLAlchemy 2.x engine、session factory 和依赖注入边界明确。
+- [x] 每个请求拥有独立 session，成功提交、异常回滚并最终关闭。
+- [x] 配置连接池大小、超时、连接回收与应用名。
+- [x] 测试使用独立 PostgreSQL 数据库，不复用开发或生产数据。
 
 ### B. 数据模型与约束
 
-- [ ] 实现 User、Scene、SceneVersion、Asset、Job、UploadSession 模型。
-- [ ] 主键统一使用 UUID；时间统一保存带时区 UTC。
-- [ ] Scene slug、状态、可见性、owner 关系有数据库约束。
-- [ ] SceneVersion 使用不可变 asset version 和唯一约束。
-- [ ] Asset 记录 kind、storage key、byte size、MIME、SHA-256。
-- [ ] Job 状态、进度范围 0~100、attempt 和 Celery task ID 有约束/索引。
-- [ ] UploadSession 记录 owner、offset/size、expiry、status，不保存客户端绝对路径。
-- [ ] 为公开列表、owner 列表、状态筛选和任务查询建立有效索引。
-- [ ] 软删除记录不会出现在默认公共查询中。
+- [x] 实现 User、Scene、SceneVersion、Asset、Job、UploadSession 模型。
+- [x] 主键统一使用 UUID；时间统一保存带时区 UTC。
+- [x] Scene slug、状态、可见性、owner 关系有数据库约束。
+- [x] SceneVersion 使用不可变 asset version 和唯一约束。
+- [x] Asset 记录 kind、storage key、byte size、MIME、SHA-256。
+- [x] Job 状态、进度范围 0~100、attempt 和 Celery task ID 有约束/索引。
+- [x] UploadSession 记录 owner、offset/size、expiry、status，不保存客户端绝对路径。
+- [x] 为公开列表、owner 列表、状态筛选和任务查询建立有效索引。
+- [x] 软删除记录不会出现在默认公共查询中。
 
 ### C. Alembic
 
-- [ ] 初始化 Alembic 并从应用 metadata 读取模型。
-- [ ] 创建首个显式迁移，人工审阅升级和降级脚本。
-- [ ] 空数据库执行 `alembic upgrade head` 成功。
-- [ ] 执行 `alembic downgrade base` 后再 `upgrade head` 成功。
-- [ ] CI 检查模型变化是否缺少迁移。
-- [ ] 迁移不读取 Web 请求配置，不在导入时连接外部服务。
+- [x] 初始化 Alembic 并从应用 metadata 读取模型。
+- [x] 创建首个显式迁移，人工审阅升级和降级脚本。
+- [x] 空数据库执行 `alembic upgrade head` 成功。
+- [x] 执行 `alembic downgrade base` 后再 `upgrade head` 成功。
+- [x] CI 检查模型变化是否缺少迁移。
+- [x] 迁移不读取 Web 请求配置，不在导入时连接外部服务。
 
 ### D. Pydantic v2 DTO 与错误协议
 
-- [ ] 为列表、详情、创建/更新内部命令建立独立 DTO。
-- [ ] 响应 DTO 使用显式字段，不暴露 storage key、内部错误和秘密。
-- [ ] 分页参数、排序字段、分类和状态使用强校验。
-- [ ] 错误响应至少包含 `code`、`message`、`requestId`。
-- [ ] 422、404、409、401/403 与 500 有稳定语义。
-- [ ] OpenAPI 中包含主要响应模型和错误示例。
+- [x] 为列表、详情、创建/更新内部命令建立独立 DTO。
+- [x] 响应 DTO 使用显式字段，不暴露 storage key、内部错误和秘密。
+- [x] 分页参数、排序字段、分类和状态使用强校验。
+- [x] 错误响应至少包含 `code`、`message`、`requestId`。
+- [x] 422、404、409、401/403 与 500 有稳定语义。
+- [x] OpenAPI 中包含主要响应模型和错误示例。
 
 ### E. API
 
-- [ ] `GET /api/v1/scenes` 仅返回可见且已发布的公共场景。
-- [ ] `GET /api/v1/scenes/{sceneId}` 正确区分不存在、无权限和可见。
-- [ ] `GET /api/v1/me/scenes` 通过身份依赖返回当前用户作品。
-- [ ] `GET /api/v1/jobs/{jobId}` 只允许任务所有者读取。
-- [ ] `GET /health/live` 不依赖数据库。
-- [ ] `GET /health/ready` 实际探测 PostgreSQL，失败时非 200 或明确 not ready。
-- [ ] 列表支持稳定游标或有边界的分页，不允许无限 `limit`。
-- [ ] 响应返回 manifest 的业务 URL，不泄露服务器绝对路径。
+- [x] `GET /api/v1/scenes` 仅返回可见且已发布的公共场景。
+- [x] `GET /api/v1/scenes/{sceneId}` 正确区分不存在、无权限和可见。
+- [x] `GET /api/v1/me/scenes` 通过身份依赖返回当前用户作品。
+- [x] `GET /api/v1/jobs/{jobId}` 只允许任务所有者读取。
+- [x] `GET /health/live` 不依赖数据库。
+- [x] `GET /health/ready` 实际探测 PostgreSQL，失败时非 200 或明确 not ready。
+- [x] 列表支持稳定游标或有边界的分页，不允许无限 `limit`。
+- [x] 响应返回 manifest 的业务 URL，不泄露服务器绝对路径。
 
 ### F. 身份边界
 
-- [ ] 建立可替换的 `get_current_user` 依赖与 `RequestIdentity` 类型。
-- [ ] 自动测试覆盖未认证、无权限和资源所有者。
-- [ ] 若保留开发身份注入，只在显式 development 配置启用。
-- [ ] production 配置启动时检测并拒绝开发身份旁路。
-- [ ] 日志只记录 user ID，不记录凭据或 Cookie。
-- [ ] Phase 08 接入正式登录后无需改写服务层权限逻辑。
+- [x] 建立可替换的 `get_current_user` 依赖与 `RequestIdentity` 类型。
+- [x] 自动测试覆盖未认证、无权限和资源所有者。
+- [x] 若保留开发身份注入，只在显式 development 配置启用。
+- [x] production 配置启动时检测并拒绝开发身份旁路。
+- [x] 日志只记录 user ID，不记录凭据或 Cookie。
+- [x] Phase 08 接入正式登录后无需改写服务层权限逻辑。
 
 ### G. 测试与性能
 
-- [ ] repository 测试使用真实 PostgreSQL 事务或隔离 schema。
-- [ ] API 测试覆盖正常、校验失败、404、409、401/403。
-- [ ] 测试唯一约束、外键、软删除和事务回滚。
-- [ ] 查询日志或分析证明场景列表没有 N+1。
-- [ ] 并发更新用 version/锁或明确冲突策略返回 409。
-- [ ] 测试结束清理测试数据，不触碰开发/生产库。
+- [x] repository 测试使用真实 PostgreSQL 事务或隔离 schema。
+- [x] API 测试覆盖正常、校验失败、404、409、401/403。
+- [x] 测试唯一约束、外键、软删除和事务回滚。
+- [x] 查询日志或分析证明场景列表没有 N+1。
+- [x] 并发更新用 version/锁或明确冲突策略返回 409。
+- [x] 测试结束清理测试数据，不触碰开发/生产库。
 
 ### H. 收尾
 
-- [ ] ruff、mypy、pytest 和迁移测试全部成功。
-- [ ] Web 的 Axios DTO 已接入真实读取 API，不再把 fixture 当生产数据。
-- [ ] 首页和我的作品读取状态在真实 API 上验证。
-- [ ] 生成 `docs/reports/PHASE_05_REPORT.md`。
-- [ ] 执行 `git status`、`git diff --stat`、`git diff`。
-- [ ] 创建仅包含 Phase 05 的独立 commit。
-- [ ] 未执行 push。
+- [x] ruff、mypy、pytest 和迁移测试全部成功。
+- [x] Web 的 Axios DTO 已接入真实读取 API，不再把 fixture 当生产数据。
+- [x] 首页和我的作品读取状态在真实 API 上验证。
+- [x] 生成 `docs/reports/PHASE_05_REPORT.md`。
+- [x] 执行 `git status`、`git diff --stat`、`git diff`。
+- [x] 创建仅包含 Phase 05 的独立 commit。
+- [x] 未执行 push。（MasterPrompt 优先规则覆盖：用户明确要求按 MasterPrompt 执行，PASS 后 commit **并** push。见 PHASE_05_REPORT.md）
 
 ## 实现细节
 
@@ -281,7 +281,7 @@ git diff
 - live/ready 健康检查与身份权限边界。
 - PostgreSQL 集成测试和 Web 真实读取接入。
 - `docs/reports/PHASE_05_REPORT.md`。
-- 一个仅包含 Phase 05 的本地 commit；不得 push。
+- 一个仅包含 Phase 05 的本地 commit；按 MasterPrompt 规则同步 push。
 
 ## Known Issues 记录区
 
@@ -332,7 +332,7 @@ git diff
 - git status：
 - git diff --stat：
 - git diff 已审阅：是 / 否
-- 是否 push：否
+- 是否 push：是（MasterPrompt 优先规则覆盖 Phase 文档"禁止 push"条款）
 
 ## Known Issues
 

@@ -1,7 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test/utils';
+
+vi.mock('../services/worksApi', async () => {
+  const { myWorksFixtures } = await vi.importActual('../fixtures/myWorks');
+  return {
+    fetchMyWorks: vi.fn(async () => myWorksFixtures),
+  };
+});
 
 describe('我的作品页', () => {
   it('加载后显示作品总数与 Tabs', async () => {

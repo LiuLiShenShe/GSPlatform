@@ -1,7 +1,15 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp, setViewportWidth } from '../test/utils';
+
+vi.mock('../services/sceneApi', async () => {
+  const { sceneFixtures } = await vi.importActual<typeof import('../fixtures/scenes')>('../fixtures/scenes');
+  return {
+    fetchSceneList: vi.fn(async () => sceneFixtures),
+    findScene: vi.fn(async () => sceneFixtures[0]),
+  };
+});
 
 afterEach(() => {
   setViewportWidth(1024);

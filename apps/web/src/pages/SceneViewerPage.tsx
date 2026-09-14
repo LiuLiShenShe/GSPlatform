@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { findScene } from '../services/sceneApi';
+import type { SceneSummary } from '../fixtures/scenes';
 import { ViewerCanvas } from '../features/viewer/ViewerCanvas';
 import { ViewerToolbar } from '../features/viewer/ViewerToolbar';
 import { useViewerLifecycle } from '../features/viewer/useViewerLifecycle';
@@ -17,7 +19,15 @@ export default function SceneViewerPage() {
   useDocumentTitle(effectiveSceneId ? `场景 ${effectiveSceneId}` : '场景');
 
   const lifecycle = useViewerLifecycle(effectiveSceneId);
-  const scene = findScene(effectiveSceneId);
+
+  const [scene, setScene] = useState<SceneSummary | undefined>(undefined);
+  useEffect(() => {
+    const controller = new AbortController();
+    findScene(effectiveSceneId, controller.signal).then((result) => {
+      setScene(result);
+    });
+    return () => controller.abort();
+  }, [effectiveSceneId]);
 
   return (
     <div className="gs-viewer-scene" data-testid="scene-viewer-page">

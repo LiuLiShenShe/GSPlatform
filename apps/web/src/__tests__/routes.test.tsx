@@ -1,6 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderApp } from '../test/utils';
+
+vi.mock('../services/sceneApi', async () => {
+  const { sceneFixtures } = await vi.importActual<typeof import('../fixtures/scenes')>('../fixtures/scenes');
+  return {
+    fetchSceneList: vi.fn(async () => sceneFixtures),
+    findScene: vi.fn(async () => sceneFixtures[0]),
+  };
+});
+
+vi.mock('../services/worksApi', async () => {
+  const { myWorksFixtures } = await vi.importActual('../fixtures/myWorks');
+  return {
+    fetchMyWorks: vi.fn(async () => myWorksFixtures),
+  };
+});
 
 describe('五个核心路由与 404 页面', () => {
   it('首页 / 可直接访问', async () => {

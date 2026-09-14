@@ -13,7 +13,7 @@ export interface SceneSummary {
   sizeMB: number;
   views: number;
   likes: number;
-  status: 'READY' | 'PROCESSING' | 'FAILED';
+  status: 'READY' | 'PROCESSING' | 'FAILED' | 'PUBLISHED';
   poster: string;
 }
 

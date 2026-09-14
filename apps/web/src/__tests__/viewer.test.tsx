@@ -95,6 +95,14 @@ vi.mock('@gsplatform/viewer', async () => {
   };
 });
 
+vi.mock('../services/sceneApi', async () => {
+  const { sceneFixtures } = await vi.importActual<typeof import('../fixtures/scenes')>('../fixtures/scenes');
+  return {
+    fetchSceneList: vi.fn(async () => sceneFixtures),
+    findScene: vi.fn(async () => sceneFixtures[0]),
+  };
+});
+
 vi.mock('../../services/scenes.local', () => {
   return {
     resolveLocalScene: vi.fn(async (_sceneId: string) => ({

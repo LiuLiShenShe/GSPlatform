@@ -73,7 +73,7 @@ GSPlatform 是一个面向 3D Gaussian Splatting 场景的 Web 平台。用户�
 | 02 | Scene Viewer | 真实 SOG 场景可在全屏页交互 | 01 PASS | 真实资产加载、相机控制、资源释放通过 |
 | 03 | 渐进加载 | Poster、0~100%、低 LOD 到清晰状态可见 | 02 PASS | 真实网络/解码事件驱动进度 |
 | 04 | Streamed SOG / LOD | 分片、Range、缓存和 LOD 策略上线 | 03 PASS | 限速测试与请求证据 |
-| 05 | 后端数据库 | 持久化 Scene/Asset/Job/User 数据 | 04 PASS | 迁移、API、事务与测试通过 |
+| 05 | 后端数据库 | 持久化 Scene/Asset/Job/User 数据 | 04 PASS | 迁移、API、事务与测试通过✅ PASS(2026-09-14) |
 | 06 | 上传与发布 | 安全上传、校验、转换、原子发布 | 05 PASS | 真实上传到 Viewer 闭环 |
 | 07 | 3DGS 重建 | 视频/图片到发布场景的异步流水线 | 06 PASS | 一次真实重建或明确硬件验收记录 |
 | 08 | 平台功能 | 作品管理、收藏、分享、问 AI、详情 | 07 PASS | 鉴权、权限、状态一致性与 E2E 通过 |

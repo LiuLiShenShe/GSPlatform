@@ -14,6 +14,7 @@ dependencies = [
     "pydantic-settings>=2.3,<3.0",
     "sqlalchemy>=2.0.30,<3.0",
     "alembic>=1.13,<2.0",
+    "psycopg2-binary>=2.9.9,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -33,9 +34,11 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "S"]
+ignore = ["B008"]  # FastAPI Depends() is the standard dependency injection pattern
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]  # assert is the normal assertion idiom in tests
+"tests/**" = ["S101"]
+"migrations/**" = ["E501"]  # migration scripts are intentionally verbose
 
 [tool.mypy]
 python_version = "3.11"
