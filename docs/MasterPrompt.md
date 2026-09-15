@@ -13,9 +13,9 @@
 ## 本次只允许手工修改的两个参数
 
 ```text
-PHASE_NUMBER = 5
+PHASE_NUMBER = 6
 
-PHASE_DOC = /fj/GSPlatform/docs/PHASE_05_BACKEND_DATABASE.md
+PHASE_DOC = /fj/GSPlatform/docs/PHASE_06_UPLOAD_PUBLISH.md
 ```
 
 除这两个参数外，不需要用户再手工提供：

@@ -17,10 +17,10 @@ describe('上传作品页（UploadPage）', () => {
     expect(screen.getByText('请选择分类')).toBeInTheDocument();
   });
 
-  it('「校验并发布」按钮禁用并说明阶段原因', () => {
+  it('「校验并发布」按钮可用', () => {
     renderApp({ route: '/upload' });
     const btn = screen.getByRole('button', { name: /校验并发布/ });
-    expect(btn).toBeDisabled();
+    expect(btn).toBeEnabled();
   });
 
   it('保存草稿写入 localStorage 并显示成功提示', async () => {
@@ -40,16 +40,21 @@ describe('上传作品页（UploadPage）', () => {
     expect(await screen.findByText(/已保存到本地草稿/)).toBeInTheDocument();
   });
 
-  it('存在草稿时显示恢复入口', async () => {
-    localStorage.setItem(
-      'gsplatform.upload.draft',
-      JSON.stringify({ savedAt: '2026-09-09T10:00:00Z', title: '已保存标题', description: '', category: '', visibility: '公开', sceneFileName: '', posterName: '' }),
-    );
+  it('保存草稿后显示恢复入口', async () => {
     renderApp({ route: '/upload' });
+    const titleInput = screen.getByLabelText('作品标题');
+    await userEvent.type(titleInput, '我的测试作品');
+
+    const sceneInput = document.querySelectorAll('input[type=file]')[0];
+    fireEvent.change(sceneInput, {
+      target: { files: [new File(['x'], 'test.sog', { type: 'application/octet-stream' })] },
+    });
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+
     expect(await screen.findByText(/存在本地草稿/)).toBeInTheDocument();
     const restoreBtn = screen.getByRole('button', { name: '恢复草稿' });
     await userEvent.click(restoreBtn);
-    expect(screen.getByLabelText('作品标题')).toHaveValue('已保存标题');
+    expect(screen.getByLabelText('作品标题')).toHaveValue('我的测试作品');
   });
 
   it('替换文件时释放旧文件的 Object URL', async () => {

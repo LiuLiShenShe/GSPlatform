@@ -48,6 +48,29 @@ class Settings(BaseSettings):
     dev_identity_display_name: str = "本地开发用户"
     dev_identity_user_role: str = "user"
 
+    # --- Storage roots (Phase 06) ---
+    # Logical names; deployment overrides via GS_STORAGE_ROOT env var.
+    storage_root: str = "/home/test/gsplatform-data"
+
+    # Upload constraints (Phase 06)
+    upload_max_bytes: int = 5 * 1024 * 1024 * 1024      # 5 GB
+    upload_chunk_max_bytes: int = 64 * 1024 * 1024       # 64 MB per chunk
+    upload_expiry_hours: int = 24                         # session TTL
+    max_concurrent_uploads_per_user: int = 5
+    allowed_upload_formats: list[str] = ["ply", "sog", "splat", "zip"]
+    allowed_upload_mime_types: list[str] = [
+        "model/ply",
+        "model/sog",
+        "application/octet-stream",
+        "application/zip",
+        "application/x-zip-compressed",
+    ]
+
+    # Redis / Celery (Phase 06)
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str = "redis://localhost:6379/0"
+    celery_result_backend: str = "redis://localhost:6379/1"
+
     # Allowed CORS origins for browser callers (Vite dev server).
     cors_origins: list[str] = [
         "http://localhost:5173",

@@ -1,8 +1,9 @@
 """UploadSession model — resumable, size-bounded upload state.
 
-Never stores a client-provided absolute filesystem path; ``storage_key`` is
-server-generated. Expiry is enforced by the service layer; the DB constraint
-only bounds sizes to sane ranges.
+Stores scene-declared metadata (title/visibility/category/description) so the
+complete step can create a Scene without trusting client state. Never stores a
+client-provided absolute filesystem path; ``storage_key`` is server-generated.
+Expiry is enforced by the service layer; the DB constraint only bounds sizes.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
+    Text,
     Uuid,
     func,
 )
@@ -34,14 +36,28 @@ class UploadSession(Base):
     owner_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("users.id"), nullable=False
     )
+    # Populated in the complete step; null while the session is being filled.
+    scene_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("scenes.id"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(30), nullable=False)
     storage_key: Mapped[str] = mapped_column(String(500), nullable=False)
     mime_type: Mapped[str] = mapped_column(String(120), nullable=False)
+    upload_format: Mapped[str] = mapped_column(String(20), nullable=False)
     offset: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     total_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    declared_sha256: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+
+    # Scene declaration captured at session creation (Phase 06).
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    visibility: Mapped[str] = mapped_column(String(20), nullable=False)
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -55,7 +71,8 @@ class UploadSession(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('INITIATED', 'UPLOADING', 'VALIDATING', 'READY', "
+            "status IN ('CREATED', 'UPLOADING', 'UPLOADED', 'QUEUED', 'VALIDATING', "
+            "'CONVERTING', 'VERIFYING', 'PUBLISHING', 'SUCCEEDED', 'FAILED', "
             "'EXPIRED', 'CANCELLED')",
             name="status_valid",
         ),
