@@ -24,6 +24,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(
         String(320), unique=True, index=True, nullable=False
     )
+    password_hash: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

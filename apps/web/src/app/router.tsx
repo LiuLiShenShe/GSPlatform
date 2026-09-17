@@ -3,9 +3,13 @@ import PlatformLayout from '../layouts/PlatformLayout';
 import ViewerLayout from '../layouts/ViewerLayout';
 import HomePage from '../pages/HomePage';
 import MyWorksPage from '../pages/MyWorksPage';
+import FavoritesPage from '../pages/FavoritesPage';
 import ComputePage from '../pages/ComputePage';
 import UploadPage from '../pages/UploadPage';
 import SceneViewerPage from '../pages/SceneViewerPage';
+import ShareRedirectPage from '../pages/ShareRedirectPage';
+import LoginPage from '../pages/LoginPage';
+import RegisterPage from '../pages/RegisterPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import State403 from '../components/State403';
 import HealthUI from '../pages/HealthUI';
@@ -14,6 +18,7 @@ import HealthUI from '../pages/HealthUI';
  * 应用路由（React Router v7 data router）。
  * 平台页面共用一个 PlatformLayout（固定 Sidebar + Topbar）；
  * /scene/:sceneId 使用无 Sidebar 的全屏 ViewerLayout。
+ * /s/:token 分享解析页面独立路由，不使用 PlatformLayout。
  */
 export const appRouter = createBrowserRouter([
   {
@@ -22,6 +27,7 @@ export const appRouter = createBrowserRouter([
     children: [
       { index: true, element: <HomePage /> },
       { path: 'works', element: <MyWorksPage /> },
+      { path: 'favorites', element: <FavoritesPage /> },
       { path: 'compute', element: <ComputePage /> },
       { path: 'upload', element: <UploadPage /> },
       { path: 'health-ui', element: <HealthUI /> },
@@ -32,6 +38,9 @@ export const appRouter = createBrowserRouter([
     element: <ViewerLayout />,
     children: [{ index: true, element: <SceneViewerPage /> }],
   },
+  { path: '/s/:token', element: <ShareRedirectPage /> },
+  { path: '/login', element: <LoginPage /> },
+  { path: '/register', element: <RegisterPage /> },
   { path: '/403', element: <State403 /> },
   { path: '*', element: <NotFoundPage /> },
 ]);

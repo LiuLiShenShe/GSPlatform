@@ -45,6 +45,10 @@ class SceneRepository:
     def __init__(self, session: Session) -> None:
         self._session = session
 
+    @property
+    def session(self) -> Session:
+        return self._session
+
     def list_public(
         self,
         *,
@@ -160,6 +164,8 @@ class SceneRepository:
         limit: int = 20,
         cursor: str | None = None,
         status_filter: str | None = None,
+        search: str | None = None,
+        sort: str = "updated",
     ) -> tuple[list[Scene], str | None]:
         """Return owner's scenes ordered by updated_at DESC + keyset cursor."""
         conditions = [
@@ -168,6 +174,8 @@ class SceneRepository:
         ]
         if status_filter:
             conditions.append(Scene.status == status_filter)
+        if search:
+            conditions.append(Scene.title.ilike(f"%{search}%"))
 
         q = (
             select(Scene)
@@ -189,9 +197,13 @@ class SceneRepository:
                 )
             )
 
-        q = q.order_by(Scene.updated_at.desc(), Scene.id.desc()).limit(
-            limit + 1
-        )
+        if sort == "title":
+            q = q.order_by(Scene.title.asc(), Scene.id.desc())
+        elif sort == "created":
+            q = q.order_by(Scene.created_at.desc(), Scene.id.desc())
+        else:
+            q = q.order_by(Scene.updated_at.desc(), Scene.id.desc())
+        q = q.limit(limit + 1)
         rows = list(self._session.execute(q).unique().scalars())
         has_more = len(rows) > limit
         items = rows[:limit]
@@ -228,3 +240,33 @@ class SceneRepository:
             .order_by(SceneVersion.created_at.desc())
             .first()
         )
+
+    def flush(self) -> None:
+        self._session.flush()
+
+    # ---- favorite / share counters (Phase 08) ----
+
+    def is_favorited(self, user_id: uuid.UUID, scene_id: uuid.UUID) -> bool:
+        from app.db.models.favorite import Favorite
+
+        return (
+            self._session.query(Favorite)
+            .filter(Favorite.user_id == user_id, Favorite.scene_id == scene_id)
+            .first()
+            is not None
+        )
+
+    def favorite_ids(
+        self, user_id: uuid.UUID, scene_ids: list[uuid.UUID]
+    ) -> set[uuid.UUID]:
+        if not scene_ids:
+            return set()
+        from app.db.models.favorite import Favorite
+
+        rows = self._session.execute(
+            select(Favorite.scene_id).where(
+                Favorite.user_id == user_id,
+                Favorite.scene_id.in_(scene_ids),
+            )
+        ).scalars().all()
+        return set(rows)

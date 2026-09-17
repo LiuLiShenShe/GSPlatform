@@ -7,6 +7,10 @@ vi.mock('../services/worksApi', async () => {
   const { myWorksFixtures } = await vi.importActual('../fixtures/myWorks');
   return {
     fetchMyWorks: vi.fn(async () => myWorksFixtures),
+    updateScene: vi.fn(async () => ({})),
+    archiveScene: vi.fn(async () => {}),
+    restoreScene: vi.fn(async () => {}),
+    deleteScene: vi.fn(async () => {}),
   };
 });
 
@@ -26,12 +30,14 @@ describe('我的作品页', () => {
     expect(screen.queryByText('我的街拍作品 A')).not.toBeInTheDocument();
   });
 
-  it('编辑按钮禁用并说明阶段', async () => {
+  it('编辑按钮打开编辑弹窗（Phase 08 真实编辑）', async () => {
     renderApp({ route: '/works' });
     const card = await screen.findByTestId('works-card-work-01');
     // antd icons with aria-hidden prevent name pollution
     const editBtn = within(card).getByRole('button', { name: '编辑' });
-    expect(editBtn).toBeDisabled();
+    expect(editBtn).toBeEnabled();
+    await userEvent.click(editBtn);
+    expect(await screen.findByText('编辑作品 — 我的街拍作品 A')).toBeInTheDocument();
   });
 
   it('删除按钮触发二次确认弹窗', async () => {
@@ -44,7 +50,7 @@ describe('我的作品页', () => {
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
     expect(
-      await screen.findByText(/已记录删除/),
+      await screen.findByText(/已删除/),
     ).toBeInTheDocument();
   });
 

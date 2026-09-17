@@ -1,7 +1,9 @@
 import { App, Button, Tag, Tooltip } from 'antd';
-import { EyeOutlined, LikeOutlined, StarOutlined } from '@ant-design/icons';
+import { EyeOutlined, LikeOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { SceneSummary } from '../fixtures/scenes';
+import { addFavorite, removeFavorite } from '../services/favoritesApi';
+import { useAuthStore } from '../stores/authStore';
 
 const STATUS_TAG: Record<
   SceneSummary['status'],
@@ -15,23 +17,46 @@ const STATUS_TAG: Record<
 
 interface SceneCardProps {
   scene: SceneSummary;
+  isFavorited?: boolean;
+  onFavoritedChange?: (sceneId: string, favorited: boolean) => void;
 }
 
 /**
  * 首页场景卡片：Poster + 标题 + 作者 + 统计。
- * 整卡可打开场景（Enter/Space 亦可）；内部按钮不冒泡触发整卡跳转。
+ * Phase 08：收藏按钮对接真实后端（乐观更新 + 回滚）。
  */
-export function SceneCard({ scene }: SceneCardProps) {
+export function SceneCard({
+  scene,
+  isFavorited = false,
+  onFavoritedChange,
+}: SceneCardProps) {
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const user = useAuthStore((s) => s.user);
 
   const openScene = (): void => {
     navigate(`/scene/${scene.id}`);
   };
 
-  const onFavorite = (event: { stopPropagation: () => void }): void => {
+  const onFavorite = async (event: { stopPropagation: () => void }): Promise<void> => {
     event.stopPropagation();
-    message.info('收藏功能将在 Phase 08 接入，当前仅作为占位交互。');
+    if (!user) {
+      message.warning('收藏需要登录，请先登录。');
+      navigate(`/login?returnTo=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+    const target = !isFavorited;
+    onFavoritedChange?.(scene.id, target); // 乐观更新
+    try {
+      if (target) {
+        await addFavorite(scene.id);
+      } else {
+        await removeFavorite(scene.id);
+      }
+    } catch {
+      onFavoritedChange?.(scene.id, !target); // 回滚
+      message.error('收藏操作失败，请稍后重试。');
+    }
   };
 
   return (
@@ -71,12 +96,12 @@ export function SceneCard({ scene }: SceneCardProps) {
           <span>
             <LikeOutlined aria-hidden /> {scene.likes.toLocaleString()}
           </span>
-          <Tooltip title="Phase 08 接入收藏">
+          <Tooltip title={isFavorited ? '取消收藏' : '收藏'}>
             <Button
               size="small"
               type="text"
-              icon={<StarOutlined />}
-              aria-label={`收藏 ${scene.title}`}
+              icon={isFavorited ? <StarFilled aria-hidden /> : <StarOutlined aria-hidden />}
+              aria-label={isFavorited ? `取消收藏 ${scene.title}` : `收藏 ${scene.title}`}
               onClick={onFavorite}
             />
           </Tooltip>

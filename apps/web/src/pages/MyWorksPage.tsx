@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, Input, Segmented, Tabs, Typography } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { WorkCard } from '../components/WorkCard';
 import { EmptyState, ErrorState, LoadingState } from '../components/stateViews';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
@@ -14,24 +14,42 @@ type TabKey = 'all' | WorkSummary['status'];
 
 const STATUS_COUNTS_DEFAULT = { PUBLISHED: 0, DRAFT: 0, PROCESSING: 0, FAILED: 0 };
 
+function toTabKey(value: string): TabKey {
+  if (value === 'PUBLISHED' || value === 'DRAFT' || value === 'PROCESSING' || value === 'FAILED') {
+    return value;
+  }
+  return 'all';
+}
+
 /**
  * 我的作品页：状态 Tabs + 搜索 + 排序 + 上传入口。
- * 未接后端的操作明确禁用并说明阶段，不伪造成功状态。
+ * Phase 08：搜索/排序由服务端执行（?q &sort 同步到 URL），
+ * 卡片上的编辑/归档/删除/任务查看均对接真实后端。
  */
 export default function MyWorksPage() {
   useDocumentTitle('我的作品');
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const q = searchParams.get('q') ?? '';
+  const sortParam = searchParams.get('sort') ?? 'updated';
+  const tabParam = toTabKey(searchParams.get('status') ?? 'all');
+
   const [state, setState] = useState<LoadState>('loading');
   const [works, setWorks] = useState<WorkSummary[]>([]);
-  const [tab, setTab] = useState<TabKey>('all');
-  const [keyword, setKeyword] = useState('');
-  const [sort, setSort] = useState('updated');
+  const [tab, setTab] = useState<TabKey>(tabParam);
+  const [keyword, setKeyword] = useState(q);
+  const [sort, setSort] = useState(sortParam);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     setState('loading');
-    fetchMyWorks({ signal: controller.signal })
+    fetchMyWorks({
+      signal: controller.signal,
+      search: q || undefined,
+      sort: sortParam === 'title' ? 'title' : 'updated',
+    })
       .then((data) => {
         setWorks(data);
         setState('ready');
@@ -43,7 +61,7 @@ export default function MyWorksPage() {
         }
       });
     return () => controller.abort();
-  }, [reloadToken]);
+  }, [reloadToken, q, sortParam]);
 
   const counts = useMemo(() => {
     const map = { ...STATUS_COUNTS_DEFAULT };
@@ -64,12 +82,44 @@ export default function MyWorksPage() {
     }
     if (sort === 'title') {
       list = [...list].sort((a, b) => a.title.localeCompare(b.title));
-    } else {
-      // 默认按更新时间倒序，fixture 数组已按更新时间排列
-      list = [...list];
     }
     return list;
   }, [works, tab, keyword, sort]);
+
+  // 本地关键词与 URL q 分离：本地输入即时过滤，Enter 提交才同步到 URL。
+  const submitKeyword = useCallback(() => {
+    const params = new URLSearchParams(searchParams);
+    if (keyword.trim()) {
+      params.set('q', keyword.trim());
+    } else {
+      params.delete('q');
+    }
+    setSearchParams(params, { replace: true });
+  }, [keyword, searchParams, setSearchParams]);
+
+  const onTabChange = useCallback(
+    (key: string) => {
+      setTab(toTabKey(key));
+      const params = new URLSearchParams(searchParams);
+      if (key === 'all') params.delete('status');
+      else params.set('status', key);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const onSortChange = useCallback(
+    (value: string) => {
+      setSort(value);
+      const params = new URLSearchParams(searchParams);
+      if (value === 'updated') params.delete('sort');
+      else params.set('sort', value);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
   const tabItems = [
     { key: 'all', label: `全部 ${works.length}` },
@@ -110,11 +160,13 @@ export default function MyWorksPage() {
       >
         <Input
           prefix={<SearchOutlined aria-hidden />}
-          placeholder="搜索作品标题"
+          placeholder="搜索作品标题（服务端匹配）"
           allowClear
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          aria-label="搜索作品标题"
+          onPressEnter={submitKeyword}
+          onBlur={submitKeyword}
+          aria-label="搜索作品标题（服务端匹配）"
           style={{ maxWidth: 280 }}
         />
         <Segmented
@@ -123,7 +175,7 @@ export default function MyWorksPage() {
             { label: '按标题', value: 'title' },
           ]}
           value={sort}
-          onChange={(value) => setSort(String(value))}
+          onChange={(value) => onSortChange(String(value))}
           aria-label="作品排序"
         />
       </div>
@@ -131,7 +183,7 @@ export default function MyWorksPage() {
       <Tabs
         activeKey={tab}
         items={tabItems}
-        onChange={(key) => setTab(key as TabKey)}
+        onChange={onTabChange}
         destroyOnHidden
       />
 
@@ -139,8 +191,8 @@ export default function MyWorksPage() {
       {state === 'error' && (
         <ErrorState
           title="作品列表加载失败"
-          description="本地 fixture 服务暂时不可用，请重试。"
-          onRetry={() => setReloadToken((n) => n + 1)}
+          description="服务暂时不可用，请重试。"
+          onRetry={reload}
         />
       )}
       {state === 'ready' &&
@@ -157,7 +209,7 @@ export default function MyWorksPage() {
         ) : (
           <div className="gs-works-grid">
             {filtered.map((work) => (
-              <WorkCard key={work.id} work={work} />
+              <WorkCard key={work.id} work={work} onChanged={reload} />
             ))}
           </div>
         ))}

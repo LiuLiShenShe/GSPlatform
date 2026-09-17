@@ -86,18 +86,83 @@ function toWorkSummary(raw: BackendSceneSummary): WorkSummary {
 /**
  * 获取当前用户作品列表。
  * 需要开发身份（GS_DEV_IDENTITY_ENABLED=true）或真实会话。
+ * Phase 08 支持服务端筛选/搜索/排序。
  */
-export async function fetchMyWorks(options?: {
+export interface FetchWorksOptions {
   signal?: AbortSignal;
   limit?: number;
-}): Promise<WorkSummary[]> {
+  status?: string;
+  search?: string;
+  sort?: 'updated' | 'title';
+}
+
+export async function fetchMyWorks(options?: FetchWorksOptions): Promise<WorkSummary[]> {
+  const params: Record<string, string> = {
+    limit: String(options?.limit ?? 100),
+  };
+  if (options?.status) params.status = options.status;
+  if (options?.search) params.search = options.search;
+  if (options?.sort) params.sort = options.sort;
+
   const response = await httpClient.get<{ items: BackendSceneSummary[] }>(
     '/me/scenes',
     {
       signal: options?.signal,
-      params: { limit: String(options?.limit ?? 100) },
+      params,
     },
   );
 
   return response.data.items.map(toWorkSummary);
+}
+
+/** 编辑场景元数据（owner）。optimistic 冲突由 409 返回，页面提示刷新。 */
+export async function updateScene(
+  slug: string,
+  patch: {
+    title?: string;
+    description?: string | null;
+    category?: string;
+    visibility?: string;
+    expectedUpdatedAt?: string;
+  },
+): Promise<unknown> {
+  const response = await httpClient.patch(
+    `/scenes/${encodeURIComponent(slug)}`,
+    patch,
+  );
+  return response.data;
+}
+
+/** 归档场景（owner）。 */
+export async function archiveScene(slug: string): Promise<void> {
+  await httpClient.post(`/scenes/${encodeURIComponent(slug)}/archive`);
+}
+
+/** 恢复场景（owner）。 */
+export async function restoreScene(slug: string): Promise<void> {
+  await httpClient.post(`/scenes/${encodeURIComponent(slug)}/restore`);
+}
+
+/** 软删除场景（owner，延迟清理）。 */
+export async function deleteScene(slug: string): Promise<void> {
+  await httpClient.delete(`/scenes/${encodeURIComponent(slug)}`);
+}
+
+export interface JobSummary {
+  id: string;
+  sceneId: string;
+  kind: string;
+  status: string;
+  progress: number;
+  stage: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+/** 查看场景的任务（owner）。 */
+export async function fetchSceneJobs(slug: string): Promise<JobSummary[]> {
+  const response = await httpClient.get<JobSummary[]>(
+    `/me/scenes/${encodeURIComponent(slug)}/jobs`,
+  );
+  return response.data;
 }

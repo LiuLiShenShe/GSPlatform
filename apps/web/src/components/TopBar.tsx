@@ -1,7 +1,8 @@
-import { Button, Tooltip } from 'antd';
-import { MenuOutlined, UserOutlined } from '@ant-design/icons';
+import { Button, Dropdown, Tooltip, Typography } from 'antd';
+import { LogoutOutlined, MenuOutlined, UserOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useUiStore } from '../stores/uiStore';
+import { useAuthStore } from '../stores/authStore';
 import { CategoryNav } from './CategoryNav';
 import { SearchBox } from './SearchBox';
 
@@ -10,12 +11,14 @@ interface TopBarProps {
 }
 
 /**
- * 全宽 Topbar：品牌 + 分类导航 + 搜索 + 用户入口 + 移动端菜单开关。
+ * 全宽 Topbar：品牌 + 分类导航 + 搜索 + 用户入口（登录/登出）+ 移动端菜单开关。
+ * Phase 08：接入真实会话状态，显示当前用户/登出。
  */
 export function TopBar({ onOpenMobileNav }: TopBarProps) {
   const navigate = useNavigate();
   const homeCategory = useUiStore((s) => s.homeCategory);
   const setHomeCategory = useUiStore((s) => s.setHomeCategory);
+  const { user, loading: authLoading, logout } = useAuthStore();
 
   const onCategoryChange = (category: string): void => {
     setHomeCategory(category);
@@ -23,9 +26,34 @@ export function TopBar({ onOpenMobileNav }: TopBarProps) {
   };
 
   const onSearch = (keyword: string): void => {
-    // 搜索词写入 URL 查询参数，由 HomePage 读取过滤（与 URL 同步，可后退）。
     navigate(keyword ? `/?q=${encodeURIComponent(keyword)}` : '/');
   };
+
+  const userMenuItems = user
+    ? [
+        {
+          key: 'works',
+          label: '我的作品',
+          onClick: () => navigate('/works'),
+        },
+        {
+          key: 'favorites',
+          label: '我的收藏',
+          onClick: () => navigate('/favorites'),
+        },
+        { type: 'divider' as const },
+        {
+          key: 'logout',
+          icon: <LogoutOutlined aria-hidden />,
+          label: '退出登录',
+          danger: true,
+          onClick: () => {
+            void logout();
+            navigate('/');
+          },
+        },
+      ]
+    : [];
 
   return (
     <header className="gs-topbar">
@@ -47,18 +75,40 @@ export function TopBar({ onOpenMobileNav }: TopBarProps) {
       <div className="gs-topbar__search">
         <SearchBox placeholder="搜索场景、作者…" onSearch={onSearch} />
       </div>
-      <Tooltip title="登录与账户功能将在 Phase 08 接入">
-        <span>
+
+      {authLoading ? (
+        <Button
+          type="text"
+          icon={<UserOutlined aria-hidden />}
+          loading
+          aria-label="加载用户信息"
+        />
+      ) : user ? (
+        <Dropdown menu={{ items: userMenuItems }} placement="bottomRight" trigger={['click']}>
           <Button
             type="text"
             icon={<UserOutlined aria-hidden />}
-            disabled
-            aria-label="用户菜单（未接入）"
+            aria-label={`用户菜单 - ${user.displayName}`}
+          >
+            <Typography.Text ellipsis style={{ maxWidth: 100, marginLeft: 4 }}>
+              {user.displayName}
+            </Typography.Text>
+          </Button>
+        </Dropdown>
+      ) : (
+        <Tooltip title="登录后可管理作品和收藏">
+          <Button
+            type="text"
+            icon={<UserOutlined aria-hidden />}
+            onClick={() => {
+              const returnTo = window.location.pathname;
+              navigate(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+            }}
           >
             登录
           </Button>
-        </span>
-      </Tooltip>
+        </Tooltip>
+      )}
     </header>
   );
 }

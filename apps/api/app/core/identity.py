@@ -1,11 +1,13 @@
-"""Request identity and the replaceable ``get_current_user`` dependency.
+"""Request identity and the ``get_current_user`` dependency.
 
-Phase 05 only establishes the *boundary*: no real login/session exists until
-Phase 08. A development identity bypass is allowed to shape the local loop,
-but it must be:
+Phase 08 introduces real sessions backed by HttpOnly cookies.  Every
+authenticated request resolves identity from the ``gs_session`` cookie:
 
-- enabled ONLY when ``GS_ENV=development`` AND ``GS_DEV_IDENTITY_ENABLED=true``
-- refused by production startup checks (see ``app.main``)
+- cookie value → sha256 → sessions.token_hash → (user, expiry, revocation)
+- CSRF double-submit token hash lives on the same session row.
+
+The development bypass remains supported in ``development`` + explicit flag,
+and is refused by production startup checks (see ``app.main``).
 """
 
 from __future__ import annotations
@@ -13,9 +15,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from uuid import UUID
 
-from fastapi import Depends
+from fastapi import Depends, Request
 
 from app.core.config import Settings, get_settings
+from app.core.csrf import verify_csrf
 from app.core.errors import UnauthorizedError
 from app.db.session import SessionLocal
 
@@ -27,9 +30,12 @@ class RequestIdentity:
     user_id: UUID
     email: str
     display_name: str
-    # "dev" when the development bypass supplied it; real sessions arrive in
-    # Phase 08 (source="session").
+    # "dev" when the development bypass supplied it; "session" for real sessions.
     source: str = "dev"
+    # sha256 of the double-submit CSRF value (session-based calls only).
+    csrf_token_hash: str | None = None
+    # session row id (session-based calls only).
+    session_id: UUID | None = None
 
     @property
     def is_authenticated(self) -> bool:
@@ -41,12 +47,7 @@ DEV_USER_DISPLAY_NAME = "本地开发用户"
 
 
 def _resolve_dev_user_id(settings: Settings) -> UUID:
-    """Return (creating if needed) the fixed dev user used by the bypass.
-
-    Fails loudly if the bypass is configured outside development, which the
-    startup check also refuses. The dev user is created lazily on first
-    authenticated request so the app stays seed-independent.
-    """
+    """Return (creating if needed) the fixed dev user used by the bypass."""
     session = SessionLocal()
     try:
         from app.repositories.users import find_or_create_dev_user
@@ -65,15 +66,12 @@ def _resolve_dev_user_id(settings: Settings) -> UUID:
         session.close()
 
 
-def get_current_user(
-    settings: Settings = Depends(get_settings),
-) -> RequestIdentity:
-    """Resolve the caller's identity (Phase 05: development bypass only).
+def _resolve_request_identity(request: Request, settings: Settings) -> RequestIdentity:
+    """Resolve identity from the session cookie, falling back to dev bypass."""
+    cookie_name = settings.session_cookie_name
+    raw_token = request.cookies.get(cookie_name)
 
-    Replaceable in Phase 08 with real session verification without touching
-    service-layer permission logic.
-    """
-    if settings.env == "development" and settings.dev_identity_enabled:
+    def _dev_fallback() -> RequestIdentity:
         user_id = _resolve_dev_user_id(settings)
         return RequestIdentity(
             user_id=user_id,
@@ -81,17 +79,90 @@ def get_current_user(
             display_name=settings.dev_identity_display_name or DEV_USER_DISPLAY_NAME,
             source="dev",
         )
-    raise UnauthorizedError("未登录或会话已过期")
+
+    # Dev bypass short-circuits session lookups in development only.
+    if settings.env == "development" and settings.dev_identity_enabled:
+        return _dev_fallback()
+
+    if not raw_token:
+        raise UnauthorizedError("未登录或会话已过期")
+
+    db = SessionLocal()
+    try:
+        # 延迟导入避免与 services/__init__ 的循环依赖：
+        # identity ← auth_service ← services ← identity。
+        from app.services.auth_service import AuthService
+
+        service = AuthService(db)
+        user_id, email, display_name, _source, session_id = service.resolve_session(raw_token)
+        from app.db.models.session import Session as SessionModel
+
+        session_row = db.get(SessionModel, session_id)
+        csrf_hash = session_row.csrf_token_hash if session_row is not None else None
+        return RequestIdentity(
+            user_id=user_id,
+            email=email,
+            display_name=display_name,
+            source="session",
+            csrf_token_hash=csrf_hash,
+            session_id=session_id,
+        )
+    except UnauthorizedError:
+        raise
+    finally:
+        db.close()
+
+
+def _ensure_csrf(request: Request, identity: RequestIdentity, settings: Settings) -> None:
+    """Verify the double-submit CSRF token for session-based callers.
+
+    The dev bypass is not itself CSRF-exempt for state-changes; however the
+    API layer calls ``verify_csrf`` explicitly on mutating routes with the
+    identity's stored hash, so this is the single enforcement point.
+    """
+    if identity.source != "session":
+        return
+    if identity.csrf_token_hash is None:
+        raise UnauthorizedError("会话状态无效")
+    verify_csrf(request, identity.csrf_token_hash)
+
+
+def get_current_user(
+    request: Request,
+    settings: Settings = Depends(get_settings),
+) -> RequestIdentity:
+    """Resolve the caller's identity via session cookie (or dev bypass)."""
+    return _resolve_request_identity(request, settings)
 
 
 def get_optional_current_user(
+    request: Request,
     settings: Settings = Depends(get_settings),
 ) -> RequestIdentity | None:
     """Identity dependency that never raises: anonymous callers get None."""
     try:
-        return get_current_user(settings=settings)
+        return _resolve_request_identity(request, settings)
     except UnauthorizedError:
         return None
+
+
+def require_csrf(
+    request: Request,
+    identity: RequestIdentity = Depends(get_current_user),
+) -> RequestIdentity:
+    """Identity + CSRF dependency for state-changing routes.
+
+    - Resolves the session (or dev bypass) exactly like ``get_current_user``.
+    - For session-based callers, verifies the double-submit CSRF token.
+    - Returns the verified identity so handlers can use it directly.
+
+    Usage: ``identity: RequestIdentity = Depends(require_csrf)``
+    """
+    if identity.source == "session":
+        if identity.csrf_token_hash is None:
+            raise UnauthorizedError("会话状态无效")
+        verify_csrf(request, identity.csrf_token_hash)
+    return identity
 
 
 CurrentUser = RequestIdentity

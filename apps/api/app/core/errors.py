@@ -28,6 +28,7 @@ ERROR_NOT_FOUND = "NOT_FOUND"
 ERROR_CONFLICT = "CONFLICT"
 ERROR_UNAUTHORIZED = "UNAUTHORIZED"
 ERROR_FORBIDDEN = "FORBIDDEN"
+ERROR_RATE_LIMITED = "RATE_LIMITED"
 ERROR_INTERNAL = "INTERNAL_ERROR"
 ERROR_DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
 
@@ -85,6 +86,13 @@ class ForbiddenError(ApiError):
 
     code = ERROR_FORBIDDEN
     status_code = status.HTTP_403_FORBIDDEN
+
+
+class RateLimitError(ApiError):
+    """Too many requests for a scope+key within the window."""
+
+    code = ERROR_RATE_LIMITED
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
 
 
 class DatabaseUnavailableError(ApiError):

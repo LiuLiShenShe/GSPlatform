@@ -27,7 +27,7 @@ describe('五个核心路由与 404 页面', () => {
   it('/works 我的作品页', async () => {
     renderApp({ route: '/works' });
     expect(await screen.findByText('全部 12')).toBeInTheDocument();
-    expect(screen.getByLabelText('搜索作品标题')).toBeInTheDocument();
+    expect(screen.getByLabelText('搜索作品标题（服务端匹配）')).toBeInTheDocument();
   });
 
   it('/compute 免费计算页（三步流程）', () => {

@@ -65,3 +65,63 @@ def _cleanup_dev_upload_sessions_after_each_test():  # noqa: ANN202
             session.commit()
         except Exception:  # noqa: S110
             pass
+
+
+# ---------------------------------------------------------------------------
+# Phase 08 scene fixtures (dev-identity acting user)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def db():
+    """Request-scoped DB session (committed writes stay)."""
+    from app.db.session import SessionLocal
+
+    session = SessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture()
+def dev_user_id():
+    """The deterministic dev user used by the identity bypass."""
+    from app.core.config import settings
+    from app.core.identity import _resolve_dev_user_id
+
+    return _resolve_dev_user_id(settings)
+
+
+@pytest.fixture()
+def public_scene(db, dev_user_id):
+    """A public + published scene owned by the dev user."""
+    from tests.conftest_scenes import create_scene
+
+    return create_scene(session=db, owner_id=dev_user_id)
+
+
+@pytest.fixture()
+def private_scene(db, dev_user_id):
+    """A private + published scene owned by the dev user."""
+    from tests.conftest_scenes import create_scene
+
+    return create_scene(
+        session=db,
+        owner_id=dev_user_id,
+        visibility="PRIVATE",
+        status="PUBLISHED",
+    )
+
+
+@pytest.fixture()
+def draft_scene(db, dev_user_id):
+    """A draft scene owned by the dev user (not shareable)."""
+    from tests.conftest_scenes import create_scene
+
+    return create_scene(
+        session=db,
+        owner_id=dev_user_id,
+        status="DRAFT",
+        visibility="PRIVATE",
+    )
+

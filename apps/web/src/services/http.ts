@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { InternalAxiosRequestConfig } from 'axios';
 
 /**
  * 项目自有 HTTP 客户端。
@@ -8,8 +9,52 @@ import axios from 'axios';
 export const httpClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8001/api/v1',
   timeout: 15_000,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 });
+
+/**
+ * Read the CSRF token from the gs_csrf cookie (JS-readable).
+ */
+function readCsrfCookie(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)gs_csrf=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * On mutating requests (POST/PATCH/DELETE), attach the double-submit CSRF
+ * header so the server can verify it against the session row.
+ */
+httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+  const method = (config.method ?? '').toUpperCase();
+  if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
+    const csrf = readCsrfCookie();
+    if (csrf) {
+      config.headers.set('X-CSRF-Token', csrf);
+    }
+  }
+  return config;
+});
+
+/**
+ * On 401 responses, redirect to the login page so the user can re-authenticate.
+ * Preserve the current path in a `returnTo` query param so login can send the
+ * user back to where they were.
+ */
+httpClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      axios.isAxiosError(error) &&
+      error.response?.status === 401 &&
+      window.location.pathname !== '/login'
+    ) {
+      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+      window.location.href = `/login?returnTo=${returnTo}`;
+    }
+    return Promise.reject(error);
+  },
+);
 
 export interface ApiError {
   status: number | null;

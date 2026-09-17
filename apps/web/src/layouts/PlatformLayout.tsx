@@ -15,8 +15,6 @@ import { useIsMobile } from '../hooks/useBreakpoints';
 import { useUiStore } from '../stores/uiStore';
 import { layout } from '../styles/tokens';
 
-const PHASE_08_NOTE = '账户与平台功能将在 Phase 08 接入';
-
 const PRIMARY_MENU = [
   {
     key: '/',
@@ -45,7 +43,6 @@ const SECONDARY_MENU = [
     key: '/favorites',
     icon: <StarOutlined aria-hidden />,
     label: '收藏',
-    disabled: true,
   },
   {
     key: '/recent',
@@ -73,9 +70,9 @@ const FOOTER_MENU = [
 const NAV = [
   ...PRIMARY_MENU,
   { type: 'divider' as const },
-  ...SECONDARY_MENU.map((item) => ({ ...item, title: PHASE_08_NOTE })),
+  ...SECONDARY_MENU,
   { type: 'divider' as const },
-  ...FOOTER_MENU.map((item) => ({ ...item, title: PHASE_08_NOTE })),
+  ...FOOTER_MENU,
 ];
 
 /**

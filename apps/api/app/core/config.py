@@ -48,6 +48,29 @@ class Settings(BaseSettings):
     dev_identity_display_name: str = "本地开发用户"
     dev_identity_user_role: str = "user"
 
+    # --- Sessions (Phase 08) ---
+    session_cookie_name: str = "gs_session"
+    session_ttl_hours: int = 7 * 24        # 7 days
+    session_secure_cookie: bool = False     # production injects GS_SESSION_SECURE_COOKIE=true
+    session_same_site: str = "lax"          # strict | lax | none
+    # Double-submit CSRF cookie (must be JS-readable; never HttpOnly).
+    csrf_cookie_name: str = "gs_csrf"
+    # Rate limiting
+    rate_limit_login_per_minute: int = 5
+    rate_limit_register_per_hour: int = 10
+    rate_limit_share_per_hour: int = 20
+    rate_limit_assistant_per_minute: int = 10
+    audit_enabled: bool = True
+
+    # --- Scene Assistant (Phase 08) ---
+    # Only server-side configuration; the API key must never reach the browser.
+    ai_base_url: str = "https://apihub.agnes-ai.cn/v1"
+    ai_model: str = "agnes-2.5-flash"
+    ai_api_key: str = ""          # GS_AI_API_KEY injected at runtime, never committed
+    ai_timeout_seconds: float = 30.0
+    ai_max_question_chars: int = 2000
+    ai_max_answer_chars: int = 4000
+
     # --- Storage roots (Phase 06) ---
     # Logical names; deployment overrides via GS_STORAGE_ROOT env var.
     storage_root: str = "/home/test/gsplatform-data"

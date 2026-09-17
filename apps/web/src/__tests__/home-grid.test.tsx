@@ -53,13 +53,13 @@ describe('首页 SceneCard 与交互', () => {
     expect(await screen.findByTestId('scene-viewer-page')).toBeInTheDocument();
   });
 
-  it('收藏按钮不触发页面跳转，而是提示阶段信息', async () => {
+  it('未登录点击收藏：不跳转场景页，提示登录并跳转登录页', async () => {
     renderApp({ route: '/' });
     const favBtn = await screen.findByRole('button', { name: '收藏 上海陆家嘴天际线' });
     await userEvent.click(favBtn);
     // 未跳转到 viewer 页面
     expect(screen.queryByTestId('scene-viewer-page')).not.toBeInTheDocument();
-    // antd message 提示出现
-    expect(await screen.findByText(/收藏功能将在 Phase 08 接入/)).toBeInTheDocument();
+    // 匿名用户收藏 → 提示登录并跳转到登录页（Phase 08 真实行为）
+    expect(await screen.findByText(/收藏需要登录/)).toBeInTheDocument();
   });
 });

@@ -37,7 +37,7 @@ select = ["E", "F", "W", "I", "UP", "B", "S"]
 ignore = ["B008"]  # FastAPI Depends() is the standard dependency injection pattern
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["S101", "S106", "S107"]  # test fixtures use plaintext/predictable passwords on purpose
 "migrations/**" = ["E501"]  # migration scripts are intentionally verbose
 
 [tool.mypy]

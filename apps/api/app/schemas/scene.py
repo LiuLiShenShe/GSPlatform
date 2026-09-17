@@ -40,6 +40,9 @@ class SceneSummaryOut(BaseModel):
     posterUrl: str | None = Field(default=None, alias="posterUrl")
     manifestUrl: str | None = Field(default=None, alias="manifestUrl")
     publishedAt: datetime | None = Field(default=None, alias="publishedAt")
+    isFavorited: bool = Field(default=False, alias="isFavorited")
+    favoriteCount: int | None = Field(default=None, alias="favoriteCount")
+    shareCount: int | None = Field(default=None, alias="shareCount")
 
     model_config = {"populate_by_name": True}
 
