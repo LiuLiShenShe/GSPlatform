@@ -28,6 +28,8 @@ class CreateUploadRequest(BaseModel):
         default="experiment",
         pattern=r"^(urban|architecture|interior|nature|portrait|experiment)$",
     )
+    # Phase 07: PUBLISH (scene upload, legacy path) or RECONSTRUCT (3DGS input).
+    purpose: str = Field(default="PUBLISH", pattern=r"^(PUBLISH|RECONSTRUCT)$")
 
 
 class UploadSessionOut(BaseModel):
@@ -43,6 +45,7 @@ class UploadSessionOut(BaseModel):
     expiresAt: datetime
     format: str
     mimeType: str
+    purpose: str = "PUBLISH"
 
 
 class UploadStatusOut(UploadSessionOut):

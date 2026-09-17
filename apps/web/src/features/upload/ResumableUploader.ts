@@ -185,7 +185,11 @@ export class ResumableUploader {
   }
 }
 
-/** Create an upload session on the server (POST /uploads). */
+/**
+ * Create an upload session on the server (POST /uploads).
+ * `purpose` is Phase 07: PUBLISH (default, scene upload) or RECONSTRUCT
+ * (3DGS reconstruction input, accepts video + photo formats).
+ */
 export async function createUploadSession(
   meta: {
     filename: string;
@@ -193,9 +197,10 @@ export async function createUploadSession(
     size: number;
     format: string;
     title: string;
-    description?: string;
+    description?: string | null;
     visibility: string;
     category: string;
+    purpose?: string;
   },
 ): Promise<UploadSessionInfo> {
   const resp = await httpClient.post('/uploads', meta);

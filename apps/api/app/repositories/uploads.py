@@ -23,6 +23,7 @@ class UploadRepository:
     def create(
         self,
         *,
+        id: uuid.UUID,
         owner_id: uuid.UUID,
         storage_key: str,
         mime_type: str,
@@ -35,8 +36,10 @@ class UploadRepository:
         visibility: str,
         category: str,
         declared_sha256: str | None,
+        purpose: str = "PUBLISH",
     ) -> UploadSession:
         us = UploadSession(
+            id=id,
             owner_id=owner_id,
             status=status.value,
             storage_key=storage_key,
@@ -49,6 +52,7 @@ class UploadRepository:
             visibility=visibility,
             category=category,
             declared_sha256=declared_sha256,
+            purpose=purpose,
         )
         self._session.add(us)
         self._session.flush()
@@ -74,15 +78,13 @@ class UploadRepository:
         )
 
     def count_active_for_user(self, owner_id: uuid.UUID) -> int:
+        # Only *in-flight* sessions hold a concurrent-upload slot. Completed
+        # sessions (UPLOADED/QUEUED/…) are referenced by later jobs and must
+        # not block larger RECONSTRUCT photo sequences (uploaded one file at a
+        # time through separate sessions).
         active_states = [
             UploadSessionStatus.CREATED.value,
             UploadSessionStatus.UPLOADING.value,
-            UploadSessionStatus.UPLOADED.value,
-            UploadSessionStatus.QUEUED.value,
-            UploadSessionStatus.VALIDATING.value,
-            UploadSessionStatus.CONVERTING.value,
-            UploadSessionStatus.VERIFYING.value,
-            UploadSessionStatus.PUBLISHING.value,
         ]
         return (
             self._session.query(UploadSession)

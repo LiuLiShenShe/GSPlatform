@@ -54,10 +54,14 @@ class UploadService:
         return f"quarantine/{upload_id}"
 
     def _check_limits(self, req: CreateUploadRequest, owner_id: uuid.UUID) -> None:
-        allowed_fmt = self._settings.allowed_upload_formats
+        if req.purpose == "RECONSTRUCT":
+            allowed_fmt = self._settings.reconstruct_upload_formats
+            allowed_mime = self._settings.reconstruct_upload_mime_types
+        else:
+            allowed_fmt = self._settings.allowed_upload_formats
+            allowed_mime = self._settings.allowed_upload_mime_types
         if req.format not in allowed_fmt:
             raise ConflictError(f"不支持的格式: {req.format}")
-        allowed_mime = self._settings.allowed_upload_mime_types
         if req.mime_type not in allowed_mime:
             raise ConflictError(f"不支持的 MIME 类型: {req.mime_type}")
         if req.size > self._settings.upload_max_bytes:
@@ -84,6 +88,7 @@ class UploadService:
             hours=self._settings.upload_expiry_hours
         )
         us = self._repo.create(
+            id=upload_id,
             owner_id=identity.user_id,
             storage_key=storage_key,
             mime_type=req.mime_type,
@@ -96,6 +101,7 @@ class UploadService:
             visibility=req.visibility,
             category=req.category,
             declared_sha256=req.sha256,
+            purpose=req.purpose,
         )
         self._storage.mkdir(f"staging/{upload_id}")
         self._session.commit()
@@ -161,6 +167,14 @@ class UploadService:
         real_sha = self._storage.sha256(us.storage_key)
         if client_sha256 and client_sha256.lower() != real_sha:
             raise ConflictError("SHA-256 校验失败", details={"sha256": real_sha})
+
+        # Phase 07: RECONSTRUCT sessions never publish here — the reconstruction
+        # submit step (POST /compute/reconstruct) owns the publish side. Just
+        # mark the bytes as uploaded so the compute flow can reference them.
+        if us.purpose == "RECONSTRUCT":
+            self._repo.update_status(upload_id, UploadSessionStatus.UPLOADED)
+            self._session.commit()
+            return UploadCompleteOut(uploadId=us.id, status=us.status)
 
         scene = self._create_draft_scene(us, identity, size=real_offset, sha256=real_sha)
         # Link session to the newly created scene.
@@ -239,6 +253,7 @@ class UploadService:
             expiresAt=us.expires_at,
             format=us.upload_format,
             mimeType=us.mime_type,
+            purpose=us.purpose,
         )
 
     def _to_status(self, us) -> UploadStatusOut:

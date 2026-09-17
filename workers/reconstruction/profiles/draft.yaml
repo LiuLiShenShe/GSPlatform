@@ -1,0 +1,68 @@
+# Phase 07 quality profile — draft.
+# Fast recipe for quick validation: modest frame budget, CPU COLMAP, short
+# gsplat training. Numeric parameters are versioned with the pipeline; every
+# stage records tool versions + param_hash so profile changes invalidate
+# stale completion markers automatically.
+name: draft
+version: 1
+
+input:
+  max_bytes: 1048576000        # 1 GB per job
+  max_video_seconds: 300
+  max_images: 80
+  max_frames: 80
+
+extract:
+  fps: 5                         # ~40 frames from an 8s orbit → 9° spacing like photos
+  max_frames: 80
+  target_width: 960
+  quality: 5                     # ffmpeg -q:v
+  rotation: "auto"
+
+colmap:
+  camera_model: "SIMPLE_RADIAL"
+  single_camera: 1
+  use_gpu: false
+  matching: "exhaustive"         # small sets: exhaustive across all pairs
+  max_features_per_image: 4096
+  num_threads: 4                 # pin FLANN thread count for deterministic matching
+  min_registered_ratio: 0.3
+  min_registered_images: 2
+  min_points: 200
+
+gsplat:
+  iterations: 1200
+  sh_degree: 0
+  lr: 0.01
+  downscale: 1
+  save_interval: 200
+  random_init: false
+  densify: true
+  seed: 42
+
+convert:
+  profile: "balanced"            # splat-transform LOD profile
+  gpu: "cpu"
+
+# Stage weights (normalized to 100). Indeterminate stages keep their base %
+# so the UI never fakes precision where the tool has no denominator.
+stage_weights:
+  PROBING: 4
+  EXTRACTING: 12
+  PRECHECK: 4
+  FEATURES: 10
+  MATCHING: 10
+  MAPPING: 12
+  TRAINING: 24
+  CONVERTING: 12
+  VERIFYING: 6
+  PUBLISHING: 6
+
+precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "TRAINING", "CONVERTING"]
+
+resource:
+  cpu_time_s: 7200
+  gpu_time_s: 3600
+  max_memory_mb: 8192
+  max_open_files: 4096
+  max_log_bytes: 2097152

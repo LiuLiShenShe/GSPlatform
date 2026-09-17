@@ -187,7 +187,7 @@ def convert_to_streamed_sog(
     # The staged upload is stored as ``upload.bin`` (server-side random name);
     # splat-transform detects input format by extension. Copy + rename into the
     # workdir using the real source extension so conversion succeeds.
-    _EXT_FROM_MAGIC = ".sog"  # default; refined by magic sniffing below
+    _EXT_FROM_MAGIC = source_path.suffix.lower() or ".sog"
     if source_path.suffix.lower() not in {
         ".ply", ".sog", ".spz", ".splat", ".ksplat", ".lcc", ".lcc2", ".gz",
     }:

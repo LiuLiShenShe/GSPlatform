@@ -1,0 +1,62 @@
+# Phase 07 quality profile — standard.
+# Balanced default: up to 4 GB input, ~300 frames, fuller COLMAP matching,
+# longer gsplat training with densification. GPU enabled when available.
+name: standard
+version: 1
+
+input:
+  max_bytes: 4294967296          # 4 GB per job
+  max_video_seconds: 1200
+  max_images: 300
+  max_frames: 300
+
+extract:
+  fps: 4                         # sample every 0.25 s
+  max_frames: 300
+  target_width: 1280
+  quality: 4
+  rotation: "auto"
+
+colmap:
+  camera_model: "SIMPLE_RADIAL"
+  single_camera: 1
+  use_gpu: true                  # honored when a usable GPU adapter exists
+  matching: "exhaustive"
+  max_features_per_image: 8192
+  min_registered_ratio: 0.7
+  min_registered_images: 10
+
+gsplat:
+  iterations: 8000
+  sh_degree: 1
+  lr: 0.01
+  downscale: 1
+  save_interval: 500
+  random_init: false
+  densify: true
+  seed: 42
+
+convert:
+  profile: "balanced"
+  gpu: "cpu"
+
+stage_weights:
+  PROBING: 4
+  EXTRACTING: 12
+  PRECHECK: 4
+  FEATURES: 10
+  MATCHING: 10
+  MAPPING: 12
+  TRAINING: 24
+  CONVERTING: 12
+  VERIFYING: 6
+  PUBLISHING: 6
+
+precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "TRAINING", "CONVERTING"]
+
+resource:
+  cpu_time_s: 14400
+  gpu_time_s: 7200
+  max_memory_mb: 12288
+  max_open_files: 8192
+  max_log_bytes: 4194304

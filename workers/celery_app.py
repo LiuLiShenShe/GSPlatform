@@ -40,6 +40,17 @@ celery_app.conf.update(
     result_expires=3600,
     broker_connection_retry_on_startup=True,
     task_default_queue="gsplatform",
+    # CPU/GPU queue routing for Phase 07 reconstruction.
+    # Worker invocation:
+    #   celery -A workers.celery_app worker -Q cpu --concurrency=2
+    #   celery -A workers.celery_app worker -Q gpu --concurrency=1
+    task_routes={
+        "tasks.reconstruct_cpu_stages": {"queue": "cpu"},
+        "tasks.reconstruct_train": {"queue": "gpu"},
+        "tasks.reconstruct_finish": {"queue": "cpu"},
+        "tasks.publish_scene": {"queue": "gsplatform"},
+        "tasks.cleanup_expired_uploads": {"queue": "gsplatform"},
+    },
 )
 
 # Import task modules so their @celery_app.task decorators register.
@@ -48,5 +59,6 @@ celery_app.autodiscover_tasks(["tasks"])
 # Explicit import fallback: ensures tasks are discovered even when
 # autodiscover resolution fails (e.g. running via -m celery).
 import tasks.publish_scene  # noqa: F401, E402
+import tasks.reconstruct_scene  # noqa: F401, E402
 
 __all__ = ["celery_app"]

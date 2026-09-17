@@ -1,0 +1,64 @@
+# Phase 07 quality profile — high.
+# Maximum fidelity: 8 GB input, long gsplat training with densification and
+# SH degree 2, heavier ROMA/SIFT budgets. Marked *experimental* until a full
+# run is tested on the reference hardware; the UI must not advertise
+# "free high quality" while the backend cannot yet cap its cost.
+name: high
+version: 1
+
+input:
+  max_bytes: 8589934592          # 8 GB per job
+  max_video_seconds: 2400
+  max_images: 800
+  max_frames: 800
+
+extract:
+  fps: 8
+  max_frames: 800
+  target_width: 1920
+  quality: 3
+  rotation: "auto"
+
+colmap:
+  camera_model: "OPENCV"
+  single_camera: 0
+  use_gpu: true
+  matching: "sequential"         # large sets: sequential window matching
+  max_features_per_image: 16384
+  min_registered_ratio: 0.75
+  min_registered_images: 30
+
+gsplat:
+  iterations: 30000
+  sh_degree: 2
+  lr: 0.008
+  downscale: 1
+  save_interval: 1000
+  random_init: false
+  densify: true
+  seed: 42
+
+convert:
+  profile: "quality"
+  gpu: "cpu"
+
+stage_weights:
+  PROBING: 4
+  EXTRACTING: 12
+  PRECHECK: 4
+  FEATURES: 10
+  MATCHING: 10
+  MAPPING: 12
+  TRAINING: 24
+  CONVERTING: 12
+  VERIFYING: 6
+  PUBLISHING: 6
+
+precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "TRAINING", "CONVERTING"]
+
+resource:
+  cpu_time_s: 28800
+  gpu_time_s: 21600
+  max_memory_mb: 24576
+  max_open_files: 16384
+  max_log_bytes: 8388608

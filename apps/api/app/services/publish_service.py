@@ -12,14 +12,25 @@ a fully-verified version directory. The contract:
 
 The scene row itself is created at upload-complete time (DRAFT→PROCESSING) so
 the scene id exists before the worker runs.
+
+Dev-mode symlink bridge (Phase 07):
+After a successful publish the service creates a ``current`` symlink in the
+repo-level ``scenes/<slug>/`` tree that points into the published version dir.
+This allows the Vite dev-server middleware (``/local-scenes/<slug>/<rel>``) to
+serve assets without duplicating files on disk.
 """
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
+from typing import Any
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.errors import NotFoundError
 from app.db.models.asset import Asset
 from app.db.models.enums import (
@@ -32,6 +43,8 @@ from app.db.models.job import Job
 from app.db.models.scene import Scene, SceneVersion
 from app.repositories.uploads import UploadRepository
 from app.storage.base import Storage
+
+logger = logging.getLogger("gsplatform.publish")
 
 
 class PublishService:
@@ -83,7 +96,7 @@ class PublishService:
         *,
         scene_id: uuid.UUID,
         version_id: str,
-        manifest: dict,
+        manifest: dict[str, Any],
         entry_bytes: int,
         entry_url: str,
         counts: list[int],
@@ -156,7 +169,61 @@ class PublishService:
         scene.published_at = version.created_at
         scene.splat_count = sum(counts)
         self._session.flush()
+        self._bridge_dev_scene_view(scene, version_id)
         return version
+
+    # ------------------------------------------------------------------ #
+    # dev-mode viewer bridge
+    # ------------------------------------------------------------------ #
+    def _bridge_dev_scene_view(self, scene: Scene, version_id: str) -> None:
+        """Expose the published version to the Vite dev viewer.
+
+        The web dev server's ``gs-serve-streamed-scenes`` middleware answers
+        ``/local-scenes/<slug>/<rel>`` from ``<repo>/scenes/<slug>/<rel>``,
+        following a ``current`` symlink exactly like ``build_streamed_sog.sh``:
+
+        ``scenes/<slug>/current       -> versions/<ver>``   (relative)
+        ``scenes/<slug>/versions/<ver> -> <storage>/published/<uuid>/versions/<ver>``
+
+        This method creates that tree (only in development) so a published
+        scene is immediately visible in the Viewer without copying files.
+        """
+        if settings.env not in {"development", "test"}:
+            return
+        repo_root = Path(__file__).resolve().parents[3]
+        scenes_root = repo_root / "scenes"
+        if not scenes_root.is_dir():
+            logger.debug("repo scenes root missing; skip viewer bridge: %s", scenes_root)
+            return
+
+        slug_dir = scenes_root / scene.slug
+        target = Path(settings.storage_root) / "published" / str(scene.id) / "versions" / version_id
+
+        try:
+            slug_dir.mkdir(parents=True, exist_ok=True)
+            # 1) versions/<ver> -> <storage>/published/<uuid>/versions/<ver>
+            versions_dir = slug_dir / "versions"
+            versions_dir.mkdir(exist_ok=True)
+            ver_link = versions_dir / version_id
+            if ver_link.is_symlink() or ver_link.exists():
+                if ver_link.is_symlink() and os.path.realpath(ver_link) == os.path.realpath(target):
+                    pass
+                else:
+                    ver_link.unlink()
+                    ver_link.symlink_to(target, target_is_directory=True)
+            else:
+                ver_link.symlink_to(target, target_is_directory=True)
+            # 2) current -> versions/<ver>   (relative, matching build_streamed_sog.sh)
+            current = slug_dir / "current"
+            expected_rel = f"versions/{version_id}"
+            if current.is_symlink():
+                if os.readlink(current) == expected_rel:
+                    return  # already correct
+                current.unlink()
+            current.symlink_to(expected_rel, target_is_directory=True)
+            logger.info("dev viewer bridge: %s/current -> %s", slug_dir, ver_link)
+        except OSError as exc:
+            logger.warning("dev viewer bridge failed for %s: %s", scene.slug, exc)
 
     def mark_upload_succeeded(self, upload_id: uuid.UUID) -> None:
         self._uploads.update_status(upload_id, UploadSessionStatus.SUCCEEDED)

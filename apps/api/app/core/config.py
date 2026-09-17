@@ -66,6 +66,21 @@ class Settings(BaseSettings):
         "application/x-zip-compressed",
     ]
 
+    # Phase 07: formats accepted for RECONSTRUCT-purpose uploads (video + images).
+    reconstruct_upload_formats: list[str] = [
+        "mp4", "mov", "avi", "mkv", "jpg", "jpeg", "png", "webp",
+    ]
+    reconstruct_upload_mime_types: list[str] = [
+        "video/mp4",
+        "video/quicktime",
+        "video/x-msvideo",
+        "video/x-matroska",
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "application/octet-stream",
+    ]
+
     # Redis / Celery (Phase 06)
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/0"

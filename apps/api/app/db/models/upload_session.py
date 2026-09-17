@@ -59,6 +59,11 @@ class UploadSession(Base):
     visibility: Mapped[str] = mapped_column(String(20), nullable=False)
     category: Mapped[str] = mapped_column(String(40), nullable=False)
 
+    # Phase 07: PUBLISH (legacy) or RECONSTRUCT (3DGS pipeline).
+    purpose: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="PUBLISH", server_default="PUBLISH"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -75,6 +80,10 @@ class UploadSession(Base):
             "'CONVERTING', 'VERIFYING', 'PUBLISHING', 'SUCCEEDED', 'FAILED', "
             "'EXPIRED', 'CANCELLED')",
             name="status_valid",
+        ),
+        CheckConstraint(
+            "purpose IN ('PUBLISH', 'RECONSTRUCT')",
+            name="purpose_valid",
         ),
         CheckConstraint('"offset" >= 0', name="offset_non_negative"),
         CheckConstraint("total_size > 0", name="total_size_positive"),

@@ -30,6 +30,14 @@ def _get_broker() -> Celery:
         _broker.conf.task_always_eager = False
         _broker.conf.result_expires = 3600
         _broker.conf.task_default_queue = "gsplatform"
+        # Mirror the worker-side routing table (workers/celery_app.py) so the
+        # producer sends Phase 07 reconstruction stages to the CPU/GPU queues
+        # instead of the default one.
+        _broker.conf.task_routes = {
+            "tasks.reconstruct_cpu_stages": {"queue": "cpu"},
+            "tasks.reconstruct_train": {"queue": "gpu"},
+            "tasks.reconstruct_finish": {"queue": "cpu"},
+        }
     return _broker
 
 
