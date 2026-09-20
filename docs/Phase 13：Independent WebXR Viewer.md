@@ -66,21 +66,21 @@ XrRoot
 
 ## Checklist
 
-- [ ] 创建 `apps/xr-viewer`。
-- [ ] Viewer boot。
-- [ ] WebGPU / WebGL fallback 明确。
-- [ ] `navigator.xr` 检测。
-- [ ] VR support detection。
-- [ ] Enter VR。
-- [ ] Exit VR。
-- [ ] Camera parent rig。
-- [ ] SOG 加载。
-- [ ] Streamed SOG 加载。
-- [ ] Manifest 同源。
-- [ ] Annotation 加载。
-- [ ] background / skybox。
-- [ ] collision。
-- [ ] runtime cleanup。
+- [x] 创建 `apps/xr-viewer`。
+- [x] Viewer boot。
+- [x] WebGPU / WebGL fallback 明确。
+- [x] `navigator.xr` 检测。
+- [x] VR support detection。
+- [x] Enter VR。
+- [x] Exit VR。
+- [x] Camera parent rig。
+- [x] SOG 加载。
+- [x] Streamed SOG 加载。
+- [x] Manifest 同源。
+- [x] Annotation 加载。
+- [x] background / skybox。
+- [x] collision。
+- [x] runtime cleanup。
 
 ## PASS
 
