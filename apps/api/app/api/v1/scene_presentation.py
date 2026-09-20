@@ -1,4 +1,4 @@
-"""Scene Presentation & Viewpoints endpoints (Phase 10).
+"""Scene Presentation, Viewpoints & Annotations endpoints (Phase 10 + 11).
 
 Routes:
   GET    /{slug}/presentation                — read presentation settings
@@ -7,11 +7,18 @@ Routes:
   GET    /{slug}/presentation/cover          — serve cover image
   POST   /{slug}/presentation/background     — upload background image (multipart)
   GET    /{slug}/presentation/background     — serve background image
+  GET    /{slug}/presentation/background-audio — serve background audio
+  PATCH  /{slug}/presentation/background-audio — update background audio settings
   GET    /{slug}/viewpoints                  — list viewpoints
   POST   /{slug}/viewpoints                  — create viewpoint
   PATCH  /{slug}/viewpoints/reorder          — reorder viewpoints
   PATCH  /{slug}/viewpoints/{id}             — update viewpoint
   DELETE /{slug}/viewpoints/{id}             — delete viewpoint
+  GET    /{slug}/annotations                 — list annotations
+  POST   /{slug}/annotations                 — create annotation
+  PATCH  /{slug}/annotations/reorder         — reorder annotations
+  PATCH  /{slug}/annotations/{id}            — update annotation
+  DELETE /{slug}/annotations/{id}            — delete annotation
 """
 
 from __future__ import annotations
@@ -28,7 +35,14 @@ from app.core.identity import (
     require_csrf,
 )
 from app.db.session import get_db_session
+from app.schemas.scene_annotation import (
+    SceneAnnotationCreateRequest,
+    SceneAnnotationOut,
+    SceneAnnotationReorderRequest,
+    SceneAnnotationUpdateRequest,
+)
 from app.schemas.scene_presentation import (
+    BackgroundAudioUpdateRequest,
     ScenePresentationOut,
     ScenePresentationUpdateRequest,
     SceneViewpointCreateRequest,
@@ -250,3 +264,111 @@ def delete_viewpoint(
     """Delete a viewpoint."""
     svc.delete_viewpoint(slug, identity.user_id, str(viewpoint_id))
     return {"message": "视角已删除"}
+
+
+# ------------------------------------------------------------------ #
+# Background audio
+# ------------------------------------------------------------------ #
+
+
+@router.patch("/{slug}/presentation/background-audio", response_model=ScenePresentationOut)
+def update_background_audio(
+    slug: str,
+    body: BackgroundAudioUpdateRequest,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: AuthoringService = Depends(_service),
+) -> ScenePresentationOut:
+    """Update background audio settings (assetId, volume, loop, enabled)."""
+    return svc.update_background_audio(
+        slug,
+        identity.user_id,
+        asset_id=body.assetId,
+        volume=body.volume,
+        loop=body.loop,
+        enabled=body.enabled,
+    )
+
+
+@router.get("/{slug}/presentation/background-audio")
+def serve_background_audio(
+    slug: str,
+    svc: AuthoringService = Depends(_service),
+) -> Response:
+    """Serve background audio. No auth required (public)."""
+    data, mime = svc.serve_background_audio(slug)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+# ------------------------------------------------------------------ #
+# Annotations
+# ------------------------------------------------------------------ #
+
+
+@router.get("/{slug}/annotations", response_model=list[SceneAnnotationOut])
+def list_annotations(
+    slug: str,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    svc: AuthoringService = Depends(_service),
+) -> list[SceneAnnotationOut]:
+    """List all annotations for a scene."""
+    return svc.list_annotations(slug, identity.user_id if identity else None)
+
+
+@router.post(
+    "/{slug}/annotations",
+    response_model=SceneAnnotationOut,
+    status_code=201,
+)
+def create_annotation(
+    slug: str,
+    body: SceneAnnotationCreateRequest,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: AuthoringService = Depends(_service),
+) -> SceneAnnotationOut:
+    """Create a new annotation at a Gaussian-picked world position."""
+    return svc.create_annotation(slug, identity.user_id, body)
+
+
+@router.patch(
+    "/{slug}/annotations/reorder",
+    response_model=list[SceneAnnotationOut],
+)
+def reorder_annotations(
+    slug: str,
+    body: SceneAnnotationReorderRequest,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: AuthoringService = Depends(_service),
+) -> list[SceneAnnotationOut]:
+    """Reorder annotations by providing ordered list of annotation IDs."""
+    return svc.reorder_annotations(slug, identity.user_id, body)
+
+
+@router.patch(
+    "/{slug}/annotations/{annotation_id}",
+    response_model=SceneAnnotationOut,
+)
+def update_annotation(
+    slug: str,
+    annotation_id: uuid.UUID,
+    body: SceneAnnotationUpdateRequest,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: AuthoringService = Depends(_service),
+) -> SceneAnnotationOut:
+    """Update annotation properties (title, anchor, style, content, etc.)."""
+    return svc.update_annotation(slug, identity.user_id, str(annotation_id), body)
+
+
+@router.delete("/{slug}/annotations/{annotation_id}")
+def delete_annotation(
+    slug: str,
+    annotation_id: uuid.UUID,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: AuthoringService = Depends(_service),
+) -> dict[str, str]:
+    """Delete an annotation."""
+    svc.delete_annotation(slug, identity.user_id, str(annotation_id))
+    return {"message": "注解已删除"}

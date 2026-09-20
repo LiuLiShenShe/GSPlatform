@@ -31,6 +31,12 @@ class ScenePresentationOut(BaseModel):
     coverAssetId: str | None = Field(default=None, alias="coverAssetId")
     coverUrl: str | None = Field(default=None, alias="coverUrl")
 
+    # Background audio
+    backgroundAudioAssetId: str | None = Field(default=None, alias="backgroundAudioAssetId")
+    backgroundAudioVolume: float = Field(default=0.5, alias="backgroundAudioVolume")
+    backgroundAudioLoop: bool = Field(default=True, alias="backgroundAudioLoop")
+    backgroundAudioEnabled: bool = Field(default=False, alias="backgroundAudioEnabled")
+
     model_config = {"populate_by_name": True}
 
 
@@ -50,6 +56,12 @@ class ScenePresentationUpdateRequest(BaseModel):
     backgroundMetadata: dict[str, Any] | None = Field(default=None, alias="backgroundMetadata")
 
     coverAssetId: str | None = Field(default=None, alias="coverAssetId")
+
+    # Background audio
+    backgroundAudioAssetId: str | None = Field(default=None, alias="backgroundAudioAssetId")
+    backgroundAudioVolume: float | None = Field(default=None, alias="backgroundAudioVolume")
+    backgroundAudioLoop: bool | None = Field(default=None, alias="backgroundAudioLoop")
+    backgroundAudioEnabled: bool | None = Field(default=None, alias="backgroundAudioEnabled")
 
     model_config = {"populate_by_name": True}
 
@@ -90,6 +102,16 @@ class SceneViewpointUpdateRequest(BaseModel):
 class SceneViewpointReorderRequest(BaseModel):
     """Reorder viewpoints."""
     viewpointIds: list[str] = Field(alias="viewpointIds")
+
+    model_config = {"populate_by_name": True}
+
+
+class BackgroundAudioUpdateRequest(BaseModel):
+    """Update background audio settings."""
+    assetId: str | None = Field(default=None, alias="assetId")
+    volume: float | None = Field(default=None, alias="volume")
+    loop: bool | None = Field(default=None, alias="loop")
+    enabled: bool | None = Field(default=None, alias="enabled")
 
     model_config = {"populate_by_name": True}
 

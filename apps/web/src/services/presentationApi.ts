@@ -25,6 +25,10 @@ export interface ScenePresentation {
   backgroundMetadata?: Record<string, unknown>;
   coverAssetId?: string;
   coverUrl?: string;
+  backgroundAudioAssetId?: string;
+  backgroundAudioVolume: number;
+  backgroundAudioLoop: boolean;
+  backgroundAudioEnabled: boolean;
 }
 
 export interface SceneViewpoint {

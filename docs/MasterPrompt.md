@@ -13,9 +13,9 @@
 ## 本次只允许手工修改的两个参数
 
 ```text
-PHASE_NUMBER = 10
+PHASE_NUMBER = 11
 
-PHASE_DOC = /fj/GSPlatform/docs/Phase 10：Scene Authoring Core.md
+PHASE_DOC = /fj/GSPlatform/docs/Phase 11：Spatial Annotation & Media.md
 ```
 
 除这两个参数外，不需要用户再手工提供：

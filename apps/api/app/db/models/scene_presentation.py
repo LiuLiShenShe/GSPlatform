@@ -68,6 +68,20 @@ class ScenePresentation(Base):
         Uuid, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
     )
 
+    # Background audio
+    background_audio_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
+    )
+    background_audio_volume: Mapped[float] = mapped_column(
+        nullable=False, default=0.5
+    )
+    background_audio_loop: Mapped[bool] = mapped_column(
+        nullable=False, default=True
+    )
+    background_audio_enabled: Mapped[bool] = mapped_column(
+        nullable=False, default=False
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

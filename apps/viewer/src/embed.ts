@@ -703,6 +703,55 @@ const start = async () => {
                 }
                 break;
             }
+            case 'pickWorldPosition': {
+                // Phase 11: pick the world-space 3D position at a normalized
+                // screen coordinate by reading the depth buffer and unprojecting.
+                const pickPayload = data.payload as { x: number; y: number } | null;
+                if (!pickPayload || typeof pickPayload.x !== 'number' || typeof pickPayload.y !== 'number') {
+                    post({ id: data.id, command: 'pickWorldPosition', ok: false, error: 'INVALID_COORDS' });
+                    break;
+                }
+                const doPick = async () => {
+                    const splats = scene.getElementsByType(ElementType.splat) as Splat[];
+                    if (splats.length === 0) {
+                        throw new Error('NO_SCENE');
+                    }
+                    const splat = splats[0];
+                    scene.camera.picker.prepareDepth(splat);
+                    const depth = await scene.camera.picker.readDepth(pickPayload.x, pickPayload.y);
+                    if (depth === null || depth <= 0) {
+                        throw new Error('NO_HIT');
+                    }
+                    const cam = scene.camera.mainCamera.camera;
+                    const screenX = pickPayload.x * 2 - 1;
+                    const screenY = -(pickPayload.y * 2 - 1);
+                    const invProj = cam.projectionMatrix.clone().invert();
+                    const invView = cam.viewMatrix.clone().invert();
+                    const clipW = depth;
+                    const clipX = screenX * clipW;
+                    const clipY = screenY * clipW;
+                    const vx = invProj.data[0] * clipX + invProj.data[4] * clipY + invProj.data[8] * depth + invProj.data[12] * clipW;
+                    const vy = invProj.data[1] * clipX + invProj.data[5] * clipY + invProj.data[9] * depth + invProj.data[13] * clipW;
+                    const vz = invProj.data[2] * clipX + invProj.data[6] * clipY + invProj.data[10] * depth + invProj.data[14] * clipW;
+                    const vw = invProj.data[3] * clipX + invProj.data[7] * clipY + invProj.data[11] * depth + invProj.data[15] * clipW;
+                    const wx = invView.data[0] * vx + invView.data[4] * vy + invView.data[8] * vz + invView.data[12] * vw;
+                    const wy = invView.data[1] * vx + invView.data[5] * vy + invView.data[9] * vz + invView.data[13] * vw;
+                    const wz = invView.data[2] * vx + invView.data[6] * vy + invView.data[10] * vz + invView.data[14] * vw;
+                    const ww = invView.data[3] * vx + invView.data[7] * vy + invView.data[11] * vz + invView.data[15] * vw;
+                    return [wx / ww, wy / ww, wz / ww] as [number, number, number];
+                };
+                doPick().then((position) => {
+                    post({ id: data.id, command: 'pickWorldPosition', ok: true, payload: { position } });
+                }).catch((err: unknown) => {
+                    post({
+                        id: data.id,
+                        command: 'pickWorldPosition',
+                        ok: false,
+                        error: err instanceof Error ? err.message : String(err)
+                    });
+                });
+                break;
+            }
             default:
                 post({ id: data.id, command: data.command, ok: false, error: 'UNKNOWN_COMMAND' });
                 break;

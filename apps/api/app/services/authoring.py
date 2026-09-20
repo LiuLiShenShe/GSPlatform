@@ -1,7 +1,8 @@
-"""Authoring service — ScenePresentation & SceneViewpoint use-cases.
+"""Authoring service — ScenePresentation, SceneViewpoint & SceneAnnotation use-cases.
 
-Owns all read/write for presentation settings, viewpoints, cover/background
-asset management. The service does not touch the original SOG; transforms are
+Owns all read/write for presentation settings, viewpoints, annotations,
+cover/background asset management, and background audio.
+The service does not touch the original SOG; transforms are
 applied to the viewer entity at load time.
 """
 
@@ -18,11 +19,19 @@ from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.db.models.asset import Asset
 from app.db.models.enums import AssetKind  # noqa: F401  (referenced via .value below)
 from app.db.models.scene import Scene
+from app.db.models.scene_annotation import SceneAnnotation
 from app.db.models.scene_presentation import ScenePresentation
 from app.db.models.scene_viewpoint import SceneViewpoint
 from app.repositories.authoring import (
+    SceneAnnotationRepository,
     ScenePresentationRepository,
     SceneViewpointRepository,
+)
+from app.schemas.scene_annotation import (
+    SceneAnnotationCreateRequest,
+    SceneAnnotationOut,
+    SceneAnnotationReorderRequest,
+    SceneAnnotationUpdateRequest,
 )
 from app.schemas.scene_presentation import (
     ScenePresentationOut,
@@ -82,6 +91,12 @@ def _presentation_out(
         backgroundMetadata=pres.background_metadata,
         coverAssetId=str(pres.cover_asset_id) if pres.cover_asset_id else None,
         coverUrl=cover_url,
+        backgroundAudioAssetId=(
+            str(pres.background_audio_asset_id) if pres.background_audio_asset_id else None
+        ),
+        backgroundAudioVolume=pres.background_audio_volume,
+        backgroundAudioLoop=pres.background_audio_loop,
+        backgroundAudioEnabled=pres.background_audio_enabled,
     )
 
 
@@ -93,6 +108,7 @@ class AuthoringService:
         self._storage = storage
         self._presentations = ScenePresentationRepository(session)
         self._viewpoints = SceneViewpointRepository(session)
+        self._annotations = SceneAnnotationRepository(session)
 
     # ------------------------------------------------------------------ #
     # helpers
@@ -465,3 +481,261 @@ class AuthoringService:
             existing[vp_id].order_index = index + 1
         self._session.flush()
         return self.list_viewpoints(slug_or_id, owner_id)
+
+    # ------------------------------------------------------------------ #
+    # background audio
+    # ------------------------------------------------------------------ #
+
+    def update_background_audio(
+        self,
+        slug_or_id: str,
+        owner_id: uuid.UUID,
+        *,
+        asset_id: str | None = None,
+        volume: float | None = None,
+        loop: bool | None = None,
+        enabled: bool | None = None,
+    ) -> ScenePresentationOut:
+        """Update background audio settings on the presentation."""
+        scene, pres = self._resolve_pres_for_edit(slug_or_id, owner_id)
+
+        if asset_id is not None:
+            if asset_id == "":
+                pres.background_audio_asset_id = None
+            else:
+                try:
+                    audio_uuid = uuid.UUID(asset_id)
+                except ValueError:
+                    raise ConflictError("无效的 backgroundAudioAssetId") from None
+                asset = self._session.get(Asset, audio_uuid)
+                if asset is None:
+                    raise NotFoundError("音频资源不存在")
+                if asset.scene_id != scene.id:
+                    raise ForbiddenError("音频资源不属于该场景")
+                pres.background_audio_asset_id = audio_uuid
+
+        if volume is not None:
+            pres.background_audio_volume = max(0.0, min(1.0, volume))
+
+        if loop is not None:
+            pres.background_audio_loop = loop
+
+        if enabled is not None:
+            pres.background_audio_enabled = enabled
+
+        self._session.flush()
+        return _presentation_out(pres, self._storage)
+
+    def serve_background_audio(self, slug_or_id: str) -> tuple[bytes, str]:
+        """Return background audio bytes + mime (or raise NotFound)."""
+        from app.repositories.scenes import SceneRepository
+
+        scene = SceneRepository(self._session).get_by_slug(slug_or_id)
+        if scene is None:
+            raise NotFoundError(f"场景 {slug_or_id} 不存在")
+        pres = self._presentations.get_by_scene(scene.id)
+        if pres is None or pres.background_audio_asset_id is None:
+            raise NotFoundError("该场景尚未设置背景音频")
+        asset = self._session.get(Asset, pres.background_audio_asset_id)
+        if asset is None:
+            raise NotFoundError("音频资源不存在")
+        data = self._storage.read(asset.storage_key)
+        return data, asset.mime_type
+
+    # ------------------------------------------------------------------ #
+    # annotations
+    # ------------------------------------------------------------------ #
+
+    def list_annotations(
+        self, slug_or_id: str, identity_user_id: uuid.UUID | None
+    ) -> list[SceneAnnotationOut]:
+        scene = self._get_owned_scene_for_read(slug_or_id, identity_user_id)
+        return [
+            SceneAnnotationOut(
+                id=str(a.id),
+                title=a.title,
+                description=a.description,
+                anchorX=a.anchor_x,
+                anchorY=a.anchor_y,
+                anchorZ=a.anchor_z,
+                style=a.style,
+                contentType=a.content_type,
+                textContent=a.text_content,
+                mediaAssetId=str(a.media_asset_id) if a.media_asset_id else None,
+                textColor=a.text_color,
+                textSize=a.text_size,
+                fov=a.fov,
+                orderIndex=a.order_index,
+                enabled=a.enabled,
+            )
+            for a in self._annotations.list_by_scene(scene.id)
+        ]
+
+    def create_annotation(
+        self, slug_or_id: str, owner_id: uuid.UUID, body: SceneAnnotationCreateRequest
+    ) -> SceneAnnotationOut:
+        scene = self._get_owned_scene(slug_or_id, owner_id)
+
+        # Validate style
+        if body.style not in {"LEADER_TEXT", "NUMBER_POPUP", "HIDDEN"}:
+            raise ConflictError(f"无效的注解样式: {body.style}")
+
+        # Validate content type
+        if body.contentType not in {"TEXT", "IMAGE", "VIDEO", "AUDIO", "PANORAMA"}:
+            raise ConflictError(f"无效的内容类型: {body.contentType}")
+
+        # Validate media asset if provided
+        media_uuid: uuid.UUID | None = None
+        if body.mediaAssetId is not None:
+            try:
+                media_uuid = uuid.UUID(body.mediaAssetId)
+            except ValueError:
+                raise ConflictError("无效的 mediaAssetId") from None
+            asset = self._session.get(Asset, media_uuid)
+            if asset is None:
+                raise NotFoundError("媒体资源不存在")
+            if asset.scene_id != scene.id:
+                raise ForbiddenError("媒体资源不属于该场景")
+
+        annotation = SceneAnnotation(
+            scene_id=scene.id,
+            title=body.title.strip(),
+            description=body.description.strip(),
+            anchor_x=body.anchorX,
+            anchor_y=body.anchorY,
+            anchor_z=body.anchorZ,
+            style=body.style,
+            content_type=body.contentType,
+            text_content=body.textContent,
+            media_asset_id=media_uuid,
+            text_color=body.textColor,
+            text_size=body.textSize,
+            fov=body.fov,
+            order_index=self._annotations.next_order_index(scene.id),
+            enabled=True,
+        )
+        self._annotations.add(annotation)
+
+        return SceneAnnotationOut(
+            id=str(annotation.id),
+            title=annotation.title,
+            description=annotation.description,
+            anchorX=annotation.anchor_x,
+            anchorY=annotation.anchor_y,
+            anchorZ=annotation.anchor_z,
+            style=annotation.style,
+            contentType=annotation.content_type,
+            textContent=annotation.text_content,
+            mediaAssetId=str(annotation.media_asset_id) if annotation.media_asset_id else None,
+            textColor=annotation.text_color,
+            textSize=annotation.text_size,
+            fov=annotation.fov,
+            orderIndex=annotation.order_index,
+            enabled=annotation.enabled,
+        )
+
+    def update_annotation(
+        self,
+        slug_or_id: str,
+        owner_id: uuid.UUID,
+        annotation_id: str,
+        body: SceneAnnotationUpdateRequest,
+    ) -> SceneAnnotationOut:
+        scene = self._get_owned_scene(slug_or_id, owner_id)
+        try:
+            ann_uuid = uuid.UUID(annotation_id)
+        except ValueError:
+            raise NotFoundError("注解不存在") from None
+        ann = self._annotations.get_by_scene(scene.id, ann_uuid)
+        if ann is None:
+            raise NotFoundError("注解不存在")
+
+        if body.title is not None:
+            ann.title = body.title.strip()
+        if body.description is not None:
+            ann.description = body.description.strip()
+        if body.anchorX is not None:
+            ann.anchor_x = body.anchorX
+        if body.anchorY is not None:
+            ann.anchor_y = body.anchorY
+        if body.anchorZ is not None:
+            ann.anchor_z = body.anchorZ
+        if body.style is not None:
+            if body.style not in {"LEADER_TEXT", "NUMBER_POPUP", "HIDDEN"}:
+                raise ConflictError(f"无效的注解样式: {body.style}")
+            ann.style = body.style
+        if body.contentType is not None:
+            if body.contentType not in {"TEXT", "IMAGE", "VIDEO", "AUDIO", "PANORAMA"}:
+                raise ConflictError(f"无效的内容类型: {body.contentType}")
+            ann.content_type = body.contentType
+        if body.textContent is not None:
+            ann.text_content = body.textContent
+        if body.mediaAssetId is not None:
+            if body.mediaAssetId == "":
+                ann.media_asset_id = None
+            else:
+                try:
+                    media_uuid = uuid.UUID(body.mediaAssetId)
+                except ValueError:
+                    raise ConflictError("无效的 mediaAssetId") from None
+                asset = self._session.get(Asset, media_uuid)
+                if asset is None:
+                    raise NotFoundError("媒体资源不存在")
+                if asset.scene_id != scene.id:
+                    raise ForbiddenError("媒体资源不属于该场景")
+                ann.media_asset_id = media_uuid
+        if body.textColor is not None:
+            ann.text_color = body.textColor
+        if body.textSize is not None:
+            ann.text_size = body.textSize
+        if body.fov is not None:
+            ann.fov = body.fov
+        if body.orderIndex is not None:
+            ann.order_index = body.orderIndex
+        if body.enabled is not None:
+            ann.enabled = body.enabled
+
+        self._session.flush()
+
+        return SceneAnnotationOut(
+            id=str(ann.id),
+            title=ann.title,
+            description=ann.description,
+            anchorX=ann.anchor_x,
+            anchorY=ann.anchor_y,
+            anchorZ=ann.anchor_z,
+            style=ann.style,
+            contentType=ann.content_type,
+            textContent=ann.text_content,
+            mediaAssetId=str(ann.media_asset_id) if ann.media_asset_id else None,
+            textColor=ann.text_color,
+            textSize=ann.text_size,
+            fov=ann.fov,
+            orderIndex=ann.order_index,
+            enabled=ann.enabled,
+        )
+
+    def delete_annotation(self, slug_or_id: str, owner_id: uuid.UUID, annotation_id: str) -> None:
+        scene = self._get_owned_scene(slug_or_id, owner_id)
+        try:
+            ann_uuid = uuid.UUID(annotation_id)
+        except ValueError:
+            raise NotFoundError("注解不存在") from None
+        ann = self._annotations.get_by_scene(scene.id, ann_uuid)
+        if ann is None:
+            raise NotFoundError("注解不存在")
+        self._annotations.delete(ann)
+
+    def reorder_annotations(
+        self, slug_or_id: str, owner_id: uuid.UUID, body: SceneAnnotationReorderRequest
+    ) -> list[SceneAnnotationOut]:
+        scene = self._get_owned_scene(slug_or_id, owner_id)
+        existing = {str(a.id): a for a in self._annotations.list_by_scene(scene.id)}
+        if len(body.annotationIds) != len(existing) or any(
+            a_id not in existing for a_id in body.annotationIds
+        ):
+            raise ConflictError("注解列表不完整，请刷新后重试")
+        for index, a_id in enumerate(body.annotationIds):
+            existing[a_id].order_index = index + 1
+        self._session.flush()
+        return self.list_annotations(slug_or_id, owner_id)

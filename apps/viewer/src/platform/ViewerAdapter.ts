@@ -79,6 +79,10 @@ export interface ViewerScreenshotResult {
     dataUrl: string;
 }
 
+export interface ViewerPickResult {
+    position: [number, number, number];
+}
+
 export interface ViewerHandle {
     /** Load a scene described by the controlled DTO. Aborts on signal. */
     loadScene(descriptor: SceneDescriptor, abortSignal?: AbortSignal): Promise<void>;
@@ -98,6 +102,8 @@ export interface ViewerHandle {
     setBackground(bg: ViewerBackground): Promise<void>;
     /** Capture the canvas as a data URL. */
     captureScreenshot(opts?: { format?: string; quality?: number }): Promise<ViewerScreenshotResult>;
+    /** Pick the world-space 3D position at a normalized screen coordinate. */
+    pickWorldPosition(x: number, y: number): Promise<ViewerPickResult>;
     destroy(): void;
     /** Subscribe to embed-reported events. Returns unsubscribe. */
     on<T extends keyof ViewerEventMap>(type: T, listener: ViewerEventMap[T]): () => void;
@@ -324,6 +330,10 @@ export const createViewer = (
         async captureScreenshot(opts?: { format?: string; quality?: number }) {
             const res = await send('captureScreenshot', opts ?? {});
             return res.payload as ViewerScreenshotResult;
+        },
+        async pickWorldPosition(x: number, y: number) {
+            const res = await send('pickWorldPosition', { x, y });
+            return res.payload as ViewerPickResult;
         },
         destroy() {
             if (destroyed) {

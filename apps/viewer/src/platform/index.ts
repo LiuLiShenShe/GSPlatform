@@ -17,7 +17,8 @@ export type {
     ViewerStats,
     ViewerWorldTransform,
     ViewerBackground,
-    ViewerScreenshotResult
+    ViewerScreenshotResult,
+    ViewerPickResult
 } from './ViewerAdapter';
 export type { SceneDescriptor } from './SceneDescriptor';
 export { codeToUserMessage, ViewerError } from './ViewerError';

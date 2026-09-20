@@ -38,7 +38,7 @@ ignore = ["B008"]  # FastAPI Depends() is the standard dependency injection patt
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S106", "S107"]  # test fixtures use plaintext/predictable passwords on purpose
-"migrations/**" = ["E501"]  # migration scripts are intentionally verbose
+"migrations/**" = ["E501", "UP035", "UP007", "I001"]  # migration scripts use alembic-generated patterns
 
 [tool.mypy]
 python_version = "3.11"

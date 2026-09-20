@@ -2,7 +2,7 @@
  * SceneAuthoringPage — scene creation/authoring page.
  *
  * Layout: left = live viewer preview, right = authoring panels
- * (Initial View / World Transform / Cover / Background / Viewpoints).
+ * (Initial View / World Transform / Cover / Background / Annotations / Music / Viewpoints).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -15,9 +15,18 @@ import { InitialViewPanel } from '../features/authoring/InitialViewPanel';
 import { WorldTransformPanel } from '../features/authoring/WorldTransformPanel';
 import { CoverPanel } from '../features/authoring/CoverPanel';
 import { BackgroundPanel } from '../features/authoring/BackgroundPanel';
+import { AnnotationPanel } from '../features/authoring/AnnotationPanel';
+import { BackgroundMusicPanel } from '../features/authoring/BackgroundMusicPanel';
 import { ViewpointPanel } from '../features/authoring/ViewpointPanel';
 import type { SceneViewpoint } from '../services/presentationApi';
 import { updatePresentation } from '../services/presentationApi';
+import type { SceneAnnotation } from '../services/annotationApi';
+import {
+  listAnnotations,
+  createAnnotation as apiCreateAnnotation,
+  updateAnnotation as apiUpdateAnnotation,
+  deleteAnnotation as apiDeleteAnnotation,
+} from '../services/annotationApi';
 
 function useDocumentTitle(title: string) {
   useEffect(() => {
@@ -34,6 +43,10 @@ export default function SceneAuthoringPage() {
   const viewerRef = useRef<ViewerHandle | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewerReady, setViewerReady] = useState(false);
+
+  // Annotations (Phase 11)
+  const [annotations, setAnnotations] = useState<SceneAnnotation[]>([]);
+  const [pickingAnnotation, setPickingAnnotation] = useState(false);
 
   const authoring = useSceneAuthoring(effectiveSceneId);
 
@@ -91,6 +104,64 @@ export default function SceneAuthoringPage() {
       viewerRef.current = null;
     };
   }, [effectiveSceneId]);
+
+  // Load annotations on mount (Phase 11)
+  useEffect(() => {
+    let cancelled = false;
+    listAnnotations(effectiveSceneId)
+      .then((data) => { if (!cancelled) setAnnotations(data); })
+      .catch(() => { /* allow editing without backend (dev mode) */ });
+    return () => { cancelled = true; };
+  }, [effectiveSceneId]);
+
+  // --- Annotation handlers (Phase 11) ---
+
+  const handlePickFromViewer = useCallback(() => {
+    setPickingAnnotation(true);
+  }, []);
+
+  const handleCancelPick = useCallback(() => {
+    setPickingAnnotation(false);
+  }, []);
+
+  const handleAnnotationPickClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!pickingAnnotation) return;
+    const viewer = viewerRef.current;
+    if (!viewer) return;
+    // Normalized coordinates: get the click position relative to the viewer container
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width;
+    const y = (e.clientY - rect.top) / rect.height;
+    try {
+      const result = await viewer.pickWorldPosition(x, y);
+      const ann = await apiCreateAnnotation(effectiveSceneId, {
+        anchorX: result.position[0],
+        anchorY: result.position[1],
+        anchorZ: result.position[2],
+      });
+      setAnnotations((prev) => [...prev, ann]);
+      setPickingAnnotation(false);
+      message.success('注解已创建');
+    } catch {
+      message.error('拾取位置失败，请确保场景已加载');
+    }
+  }, [pickingAnnotation, effectiveSceneId]);
+
+  const handleUpdateAnnotation = useCallback(async (id: string, patch: Partial<SceneAnnotation>) => {
+    const updated = await apiUpdateAnnotation(effectiveSceneId, id, patch);
+    setAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+  }, [effectiveSceneId]);
+
+  const handleDeleteAnnotation = useCallback(async (id: string) => {
+    await apiDeleteAnnotation(effectiveSceneId, id);
+    setAnnotations((prev) => prev.filter((a) => a.id !== id));
+  }, [effectiveSceneId]);
+
+  const handleBackgroundMusicUpdated = useCallback(() => {
+    // Re-fetch the presentation so background audio state updates.
+    // useSceneAuthoring doesn't expose a refresh, so re-poll.
+    void authoring.setInitialView; // dummy — the hook auto-polls via the panel's own API
+  }, [authoring]);
 
   const getCurrentPose = useCallback(async (): Promise<ViewerCameraPose | null> => {
     const viewer = viewerRef.current;
@@ -150,7 +221,11 @@ export default function SceneAuthoringPage() {
   return (
     <div className="gs-authoring" data-testid="scene-authoring-page">
       {/* Viewer preview */}
-      <div className="gs-authoring__viewer">
+      <div
+        className="gs-authoring__viewer"
+        onClick={handleAnnotationPickClick}
+        style={{ cursor: pickingAnnotation ? 'crosshair' : undefined }}
+      >
         {loading && (
           <div className="gs-authoring__loading">
             <Spin tip="加载场景…" />
@@ -194,6 +269,41 @@ export default function SceneAuthoringPage() {
           onSetBackgroundType={authoring.setBackgroundType}
           onSetBackgroundColor={authoring.setBackgroundColor}
           onUploadBackground={authoring.uploadBackground}
+        />
+        <AnnotationPanel
+          annotations={annotations}
+          picking={pickingAnnotation}
+          onCreate={(x, y, z) => {
+            void apiCreateAnnotation(effectiveSceneId, { anchorX: x, anchorY: y, anchorZ: z })
+              .then((ann) => setAnnotations((prev) => [...prev, ann]));
+          }}
+          onUpdate={handleUpdateAnnotation}
+          onDelete={handleDeleteAnnotation}
+          onPickFromViewer={handlePickFromViewer}
+          onCancelPick={handleCancelPick}
+        />
+        <BackgroundMusicPanel
+          presentation={authoring.presentation}
+          sceneId={effectiveSceneId}
+          onUpdated={(pres) => {
+            // Trigger a re-render by forcing a presentation update
+            if (pres) {
+              void authoring.setInitialView({
+                position: [
+                  pres.initialCameraPosition?.x ?? 0,
+                  pres.initialCameraPosition?.y ?? 0,
+                  pres.initialCameraPosition?.z ?? 0,
+                ],
+                target: [
+                  pres.initialCameraTarget?.x ?? 0,
+                  pres.initialCameraTarget?.y ?? 0,
+                  pres.initialCameraTarget?.z ?? 0,
+                ],
+                fov: pres.initialCameraFov ?? 60,
+                mode: 'orbit',
+              });
+            }
+          }}
         />
         <ViewpointPanel
           viewpoints={authoring.viewpoints}

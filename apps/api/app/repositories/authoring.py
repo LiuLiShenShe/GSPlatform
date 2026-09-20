@@ -1,4 +1,4 @@
-"""Scene presentation & viewpoint repository — pure SQLAlchemy queries."""
+"""Scene presentation, viewpoint & annotation repository — pure SQLAlchemy queries."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.db.models.scene_annotation import SceneAnnotation
 from app.db.models.scene_presentation import ScenePresentation
 from app.db.models.scene_viewpoint import SceneViewpoint
 
@@ -81,4 +82,49 @@ class SceneViewpointRepository:
 
     def delete(self, viewpoint: SceneViewpoint) -> None:
         self._session.delete(viewpoint)
+        self._session.flush()
+
+
+class SceneAnnotationRepository:
+    """Ordered annotations per scene."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def list_by_scene(self, scene_id: uuid.UUID) -> list[SceneAnnotation]:
+        return list(
+            self._session.execute(
+                select(SceneAnnotation)
+                .where(SceneAnnotation.scene_id == scene_id)
+                .order_by(SceneAnnotation.order_index.asc(), SceneAnnotation.created_at.asc())
+            ).scalars()
+        )
+
+    def get(self, annotation_id: uuid.UUID) -> SceneAnnotation | None:
+        return self._session.get(SceneAnnotation, annotation_id)
+
+    def get_by_scene(self, scene_id: uuid.UUID, annotation_id: uuid.UUID) -> SceneAnnotation | None:
+        return self._session.execute(
+            select(SceneAnnotation).where(
+                SceneAnnotation.scene_id == scene_id,
+                SceneAnnotation.id == annotation_id,
+            )
+        ).scalar_one_or_none()
+
+    def next_order_index(self, scene_id: uuid.UUID) -> int:
+        row = self._session.execute(
+            select(SceneAnnotation.order_index)
+            .where(SceneAnnotation.scene_id == scene_id)
+            .order_by(SceneAnnotation.order_index.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+        return (row or 0) + 1
+
+    def add(self, annotation: SceneAnnotation) -> SceneAnnotation:
+        self._session.add(annotation)
+        self._session.flush()
+        return annotation
+
+    def delete(self, annotation: SceneAnnotation) -> None:
+        self._session.delete(annotation)
         self._session.flush()
