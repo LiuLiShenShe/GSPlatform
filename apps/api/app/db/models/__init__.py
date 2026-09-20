@@ -16,6 +16,8 @@ from app.db.models.enums import (
 from app.db.models.favorite import Favorite
 from app.db.models.job import Job
 from app.db.models.scene import Scene, SceneVersion
+from app.db.models.scene_presentation import ScenePresentation
+from app.db.models.scene_viewpoint import SceneViewpoint
 from app.db.models.session import Session
 from app.db.models.share_link import ShareLink
 from app.db.models.upload_session import UploadSession
@@ -31,8 +33,10 @@ __all__ = [
     "JobStatus",
     "Scene",
     "SceneCategory",
+    "ScenePresentation",
     "SceneStatus",
     "SceneVersion",
+    "SceneViewpoint",
     "Session",
     "ShareLink",
     "UploadSession",

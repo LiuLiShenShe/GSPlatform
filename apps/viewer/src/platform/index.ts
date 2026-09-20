@@ -11,9 +11,13 @@ export { createViewer } from './ViewerAdapter';
 export type {
     CreateViewerOptions,
     ViewerCameraMode,
+    ViewerCameraPose,
     ViewerEventMap,
     ViewerHandle,
-    ViewerStats
+    ViewerStats,
+    ViewerWorldTransform,
+    ViewerBackground,
+    ViewerScreenshotResult
 } from './ViewerAdapter';
 export type { SceneDescriptor } from './SceneDescriptor';
 export { codeToUserMessage, ViewerError } from './ViewerError';

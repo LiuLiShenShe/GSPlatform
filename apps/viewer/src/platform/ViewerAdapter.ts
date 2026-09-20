@@ -63,6 +63,22 @@ export interface ViewerEventMap {
     cameraMode: (payload: { mode: ViewerCameraMode }) => void;
 }
 
+export interface ViewerWorldTransform {
+    position: [number, number, number] | null;
+    rotation: [number, number, number] | null;
+    scale: [number, number, number] | null;
+}
+
+export interface ViewerBackground {
+    type: 'color' | 'equirectangular';
+    color?: [number, number, number];
+    assetUrl?: string;
+}
+
+export interface ViewerScreenshotResult {
+    dataUrl: string;
+}
+
 export interface ViewerHandle {
     /** Load a scene described by the controlled DTO. Aborts on signal. */
     loadScene(descriptor: SceneDescriptor, abortSignal?: AbortSignal): Promise<void>;
@@ -72,6 +88,16 @@ export interface ViewerHandle {
     getStats(): Promise<ViewerStats>;
     /** Snapshot the current camera pose (position/target/fov/mode). */
     getCameraPose(): Promise<{ camera: ViewerCameraPose }>;
+    /** Set the camera position/target/fov. */
+    setCameraPose(pose: { position?: [number, number, number]; target?: [number, number, number]; fov?: number }): Promise<void>;
+    /** Apply world transform (position/rotation/scale) to all splat entities. */
+    setWorldTransform(transform: { position?: [number, number, number] | null; rotation?: [number, number, number] | null; scale?: [number, number, number] | null }): Promise<void>;
+    /** Get current world transform of the first splat entity. */
+    getWorldTransform(): Promise<ViewerWorldTransform>;
+    /** Set background color or equirectangular panorama. */
+    setBackground(bg: ViewerBackground): Promise<void>;
+    /** Capture the canvas as a data URL. */
+    captureScreenshot(opts?: { format?: string; quality?: number }): Promise<ViewerScreenshotResult>;
     destroy(): void;
     /** Subscribe to embed-reported events. Returns unsubscribe. */
     on<T extends keyof ViewerEventMap>(type: T, listener: ViewerEventMap[T]): () => void;
@@ -281,6 +307,23 @@ export const createViewer = (
         async getCameraPose() {
             const res = await send('getCameraPose');
             return res.payload as { camera: ViewerCameraPose };
+        },
+        async setCameraPose(pose: { position?: [number, number, number]; target?: [number, number, number]; fov?: number }) {
+            await send('setCameraPose', pose);
+        },
+        async setWorldTransform(transform: { position?: [number, number, number] | null; rotation?: [number, number, number] | null; scale?: [number, number, number] | null }) {
+            await send('setWorldTransform', transform);
+        },
+        async getWorldTransform() {
+            const res = await send('getWorldTransform');
+            return res.payload as ViewerWorldTransform;
+        },
+        async setBackground(bg: ViewerBackground) {
+            await send('setBackground', bg);
+        },
+        async captureScreenshot(opts?: { format?: string; quality?: number }) {
+            const res = await send('captureScreenshot', opts ?? {});
+            return res.payload as ViewerScreenshotResult;
         },
         destroy() {
             if (destroyed) {

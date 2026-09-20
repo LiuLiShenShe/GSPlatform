@@ -7,6 +7,7 @@ import FavoritesPage from '../pages/FavoritesPage';
 import ComputePage from '../pages/ComputePage';
 import UploadPage from '../pages/UploadPage';
 import SceneViewerPage from '../pages/SceneViewerPage';
+import SceneAuthoringPage from '../pages/SceneAuthoringPage';
 import ShareRedirectPage from '../pages/ShareRedirectPage';
 import LoginPage from '../pages/LoginPage';
 import RegisterPage from '../pages/RegisterPage';
@@ -31,6 +32,7 @@ export const appRouter = createBrowserRouter([
       { path: 'compute', element: <ComputePage /> },
       { path: 'upload', element: <UploadPage /> },
       { path: 'health-ui', element: <HealthUI /> },
+      { path: 'model/edit/:sceneId', element: <SceneAuthoringPage /> },
     ],
   },
   {

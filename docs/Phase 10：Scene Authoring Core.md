@@ -71,55 +71,55 @@
 
 ### A. 上传预览
 
-- [ ] SOG 上传完成后可直接进入真实 Viewer 预览。
-- [ ] 预览使用已经上传的 Asset，不重新上传文件。
-- [ ] 预览支持 Orbit / Fly。
-- [ ] 可读取当前 camera pose。
-- [ ] 点击“设为初始视角”保存 position / target / FOV。
-- [ ] 页面刷新后初始视角完全恢复。
+- [x] SOG 上传完成后可直接进入真实 Viewer 预览。
+- [x] 预览使用已经上传的 Asset，不重新上传文件。
+- [x] 预览支持 Orbit / Fly。
+- [x] 可读取当前 camera pose。
+- [x] 点击”设为初始视角”保存 position / target / FOV。
+- [x] 页面刷新后初始视角完全恢复。
 
 ### B. 世界方向
 
-- [ ] Viewer 中增加 World Root。
-- [ ] 支持 rotation 调整。
-- [ ] 支持必要的 uniform scale。
-- [ ] 支持 position correction。
-- [ ] 保存后不修改原始 SOG。
-- [ ] Desktop Viewer 重载后恢复同一 World Transform。
+- [x] Viewer 中增加 World Root。
+- [x] 支持 rotation 调整。
+- [x] 支持必要的 uniform scale。
+- [x] 支持 position correction。
+- [x] 保存后不修改原始 SOG。
+- [x] Desktop Viewer 重载后恢复同一 World Transform。
 
 ### C. 初始视角与 FOV
 
-- [ ] 支持 position。
-- [ ] 支持 target。
-- [ ] 支持 FOV。
-- [ ] FOV 有合理 min/max。
-- [ ] Reset Camera 使用持久化初始视角。
-- [ ] 初始视角与 Viewer 自动取景有明确优先级。
+- [x] 支持 position。
+- [x] 支持 target。
+- [x] 支持 FOV。
+- [x] FOV 有合理 min/max。
+- [x] Reset Camera 使用持久化初始视角。
+- [x] 初始视角与 Viewer 自动取景有明确优先级。
 
 ### D. 固定观察点
 
-- [ ] 支持新增 Viewpoint。
-- [ ] 支持删除。
-- [ ] 支持重命名。
-- [ ] 支持排序。
-- [ ] 支持把当前相机保存为 Viewpoint。
+- [x] 支持新增 Viewpoint。
+- [x] 支持删除。
+- [x] 支持重命名。
+- [x] 支持排序。
+- [x] 支持把当前相机保存为 Viewpoint。
 - [ ] Previous / Next 能依顺序切换。
-- [ ] Viewpoint 与 Initial View 数据独立。
+- [x] Viewpoint 与 Initial View 数据独立。
 
 ### E. 封面
 
-- [ ] 上传 JPG / PNG。
-- [ ] 将当前 Viewer 画面截图设为封面。
-- [ ] 封面进入现有 Asset 生命周期。
-- [ ] 替换封面不会残留孤儿资产。
+- [x] 上传 JPG / PNG。
+- [x] 将当前 Viewer 画面截图设为封面。
+- [x] 封面进入现有 Asset 生命周期。
+- [x] 替换封面不会残留孤儿资产。
 - [ ] 卡片页和详情页正确显示封面。
 
 ### F. 背景
 
-- [ ] 支持纯色背景。
-- [ ] 支持 Equirectangular Panorama。
-- [ ] 全景文件进入 Asset 管理。
-- [ ] 保存经纬度元数据的接口预留。
+- [x] 支持纯色背景。
+- [x] 支持 Equirectangular Panorama。
+- [x] 全景文件进入 Asset 管理。
+- [x] 保存经纬度元数据的接口预留。
 - [ ] Scene Viewer 正确恢复背景。
 
 ## 实现细节

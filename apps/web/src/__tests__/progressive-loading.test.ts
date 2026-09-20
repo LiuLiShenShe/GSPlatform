@@ -278,6 +278,13 @@ function createMockHandle(listenerMap: ListenerMap): ViewerHandle {
     async getCameraPose() {
       return { camera: { position: [0, 0, 5], target: [0, 0, 0], fov: 45, mode: 'orbit' as const } };
     },
+    async setCameraPose() {},
+    async setWorldTransform() {},
+    async getWorldTransform() {
+      return { position: null, rotation: null, scale: null };
+    },
+    async setBackground() {},
+    async captureScreenshot() { return { dataUrl: '' }; },
     destroy() {},
     on(type: string, listener: (...args: unknown[]) => void) {
       (listenerMap[type] ??= []).push(listener);
@@ -320,6 +327,13 @@ function createStallingHandle(listenerMap: ListenerMap): ViewerHandle {
     async getCameraPose() {
       return { camera: { position: [0, 0, 5], target: [0, 0, 0], fov: 45, mode: 'orbit' as const } };
     },
+    async setCameraPose() {},
+    async setWorldTransform() {},
+    async getWorldTransform() {
+      return { position: null, rotation: null, scale: null };
+    },
+    async setBackground() {},
+    async captureScreenshot() { return { dataUrl: '' }; },
     destroy() {},
     on(type: string, listener: (...args: unknown[]) => void) {
       (listenerMap[type] ??= []).push(listener);

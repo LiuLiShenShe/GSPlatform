@@ -600,6 +600,109 @@ const start = async () => {
                 });
                 break;
             }
+            case 'setCameraPose': {
+                // Phase 10: set camera position/target/fov from authoring.
+                const pose = data.payload as {
+                    position?: [number, number, number];
+                    target?: [number, number, number];
+                    fov?: number;
+                };
+                if (pose) {
+                    if (pose.position && pose.target) {
+                        scene.camera.setPose(
+                            new Vec3(...pose.position),
+                            new Vec3(...pose.target),
+                            0
+                        );
+                    }
+                    if (typeof pose.fov === 'number' && pose.fov > 0) {
+                        scene.camera.fov = pose.fov;
+                    }
+                }
+                post({ id: data.id, command: 'setCameraPose', ok: true });
+                break;
+            }
+            case 'setWorldTransform': {
+                // Phase 10: apply world transform to all splat entities.
+                // This does NOT modify the original SOG.
+                const wt = data.payload as {
+                    position?: [number, number, number] | null;
+                    rotation?: [number, number, number] | null;
+                    scale?: [number, number, number] | null;
+                } | null;
+                const splats = scene.getElementsByType(ElementType.splat) as Splat[];
+                for (const splat of splats) {
+                    const entity = splat.entity;
+                    if (wt?.position) {
+                        entity.setPosition(wt.position[0], wt.position[1], wt.position[2]);
+                    }
+                    if (wt?.rotation) {
+                        const eulers = wt.rotation.map(v => v * (180 / Math.PI));
+                        entity.setEulerAngles(eulers[0], eulers[1], eulers[2]);
+                    }
+                    if (wt?.scale) {
+                        entity.setLocalScale(wt.scale[0], wt.scale[1], wt.scale[2]);
+                    }
+                    entity.sync();
+                }
+                post({ id: data.id, command: 'setWorldTransform', ok: true });
+                break;
+            }
+            case 'getWorldTransform': {
+                const splatsGT = scene.getElementsByType(ElementType.splat) as Splat[];
+                const first = splatsGT[0]?.entity;
+                const p = first?.getPosition();
+                const e = first?.getEulerAngles();
+                const s = first?.getLocalScale();
+                post({
+                    id: data.id,
+                    command: 'getWorldTransform',
+                    ok: true,
+                    payload: {
+                        position: p ? [p.x, p.y, p.z] : null,
+                        rotation: e ? [e.x, e.y, e.z] : null,
+                        scale: s ? [s.x, s.y, s.z] : null,
+                    }
+                });
+                break;
+            }
+            case 'setBackground': {
+                // Phase 10: set background color or equirectangular panorama.
+                const bg = data.payload as {
+                    type: 'color' | 'equirectangular';
+                    color?: [number, number, number];
+                    assetUrl?: string;
+                } | null;
+                if (bg?.type === 'color' && bg.color) {
+                    bgClr.set(bg.color[0], bg.color[1], bg.color[2], 1);
+                }
+                // equirectangular backgrounds require a texture load (reserved for Phase 11+)
+                post({ id: data.id, command: 'setBackground', ok: true });
+                break;
+            }
+            case 'captureScreenshot': {
+                // Phase 10: capture the canvas as a data URL for cover.
+                try {
+                    const opts = data.payload as { format?: string; quality?: number } | null;
+                    const format = (opts?.format as string) || 'webp';
+                    const quality = typeof opts?.quality === 'number' ? opts.quality : 0.92;
+                    const dataUrl = canvas.toDataURL(`image/${format}`, quality);
+                    post({
+                        id: data.id,
+                        command: 'captureScreenshot',
+                        ok: true,
+                        payload: { dataUrl }
+                    });
+                } catch (err) {
+                    post({
+                        id: data.id,
+                        command: 'captureScreenshot',
+                        ok: false,
+                        error: err instanceof Error ? err.message : String(err)
+                    });
+                }
+                break;
+            }
             default:
                 post({ id: data.id, command: data.command, ok: false, error: 'UNKNOWN_COMMAND' });
                 break;
