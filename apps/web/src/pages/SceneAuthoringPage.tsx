@@ -17,6 +17,7 @@ import { CoverPanel } from '../features/authoring/CoverPanel';
 import { BackgroundPanel } from '../features/authoring/BackgroundPanel';
 import { AnnotationPanel } from '../features/authoring/AnnotationPanel';
 import { BackgroundMusicPanel } from '../features/authoring/BackgroundMusicPanel';
+import { CollisionPanel } from '../features/authoring/CollisionPanel';
 import { ViewpointPanel } from '../features/authoring/ViewpointPanel';
 import type { SceneViewpoint } from '../services/presentationApi';
 import { updatePresentation } from '../services/presentationApi';
@@ -315,6 +316,10 @@ export default function SceneAuthoringPage() {
           onSetActive={authoring.setActiveViewpoint}
           onGetCurrentPose={getCurrentPose}
           onNavigateToViewpoint={handleNavigateToViewpoint}
+        />
+        <CollisionPanel
+          sceneId={effectiveSceneId}
+          isOwner={true}
         />
       </div>
     </div>

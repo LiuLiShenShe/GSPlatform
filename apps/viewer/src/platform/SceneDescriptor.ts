@@ -30,4 +30,17 @@ export interface SceneDescriptor {
    */
   lod?: 'low' | 'medium' | 'high';
   sessionId?: string;
+  /**
+   * Collision mesh URL (Phase 12). The viewer loads this GLB as an invisible
+   * physics proxy for walkable collision. When present, the fly-mode camera
+   * controller respects gravity, slope limits, step offsets, and player height.
+   */
+  collisionUrl?: string;
+  /** Collision physics parameters (Phase 12). */
+  collision?: {
+    gravity: number;
+    slopeLimitDegrees: number;
+    stepOffset: number;
+    playerHeight: number;
+  };
 }

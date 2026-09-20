@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from app.db.models.asset import Asset
 from app.db.models.audit import AuditEvent
+from app.db.models.collision_asset import CollisionAsset
 from app.db.models.enums import (
     AssetKind,
+    CollisionStatus,
     JobKind,
     JobStatus,
     SceneCategory,
@@ -28,6 +30,8 @@ __all__ = [
     "Asset",
     "AssetKind",
     "AuditEvent",
+    "CollisionAsset",
+    "CollisionStatus",
     "Favorite",
     "Job",
     "JobKind",

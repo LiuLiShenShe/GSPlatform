@@ -82,6 +82,29 @@ class ScenePresentation(Base):
         nullable=False, default=False
     )
 
+    # Collision settings (Phase 12)
+    collision_mode: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # INDOOR | OUTDOOR
+    collision_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("assets.id", ondelete="SET NULL"), nullable=True
+    )
+    collision_gravity: Mapped[float] = mapped_column(
+        nullable=False, default=9.81
+    )
+    collision_slope_limit_degrees: Mapped[float] = mapped_column(
+        nullable=False, default=45.0
+    )
+    collision_step_offset: Mapped[float] = mapped_column(
+        nullable=False, default=0.3
+    )
+    collision_player_height: Mapped[float] = mapped_column(
+        nullable=False, default=1.8
+    )
+    collision_enabled: Mapped[bool] = mapped_column(
+        nullable=False, default=False
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

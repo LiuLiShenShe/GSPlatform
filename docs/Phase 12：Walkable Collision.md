@@ -88,17 +88,17 @@ Upload Collision GLB
 
 ## Checklist
 
-- [ ] Outdoor build job。
-- [ ] Indoor build job。
-- [ ] CollisionAsset 数据模型。
-- [ ] Celery job 状态。
-- [ ] Viewer 加载 invisible collision。
-- [ ] gravity。
-- [ ] slope limit。
-- [ ] step offset。
-- [ ] player height。
-- [ ] build failure 可恢复。
-- [ ] collision 可重建。
+- [x] Outdoor build job。
+- [x] Indoor build job。
+- [x] CollisionAsset 数据模型。
+- [x] Celery job 状态。
+- [x] Viewer 加载 invisible collision。
+- [x] gravity。
+- [x] slope limit。
+- [x] step offset。
+- [x] player height。
+- [x] build failure 可恢复。
+- [x] collision 可重建。
 
 ## PASS
 

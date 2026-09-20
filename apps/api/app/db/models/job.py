@@ -66,7 +66,7 @@ class Job(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('VALIDATE_UPLOAD', 'BUILD_STREAMED_SOG', 'RECONSTRUCT', "
-            "'PUBLISH', 'DELETE_ASSETS')",
+            "'PUBLISH', 'DELETE_ASSETS', 'BUILD_COLLISION')",
             name="kind_valid",
         ),
         CheckConstraint(

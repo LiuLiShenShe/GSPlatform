@@ -97,6 +97,13 @@ def _presentation_out(
         backgroundAudioVolume=pres.background_audio_volume,
         backgroundAudioLoop=pres.background_audio_loop,
         backgroundAudioEnabled=pres.background_audio_enabled,
+        collisionMode=pres.collision_mode,
+        collisionAssetId=str(pres.collision_asset_id) if pres.collision_asset_id else None,
+        collisionGravity=pres.collision_gravity,
+        collisionSlopeLimitDegrees=pres.collision_slope_limit_degrees,
+        collisionStepOffset=pres.collision_step_offset,
+        collisionPlayerHeight=pres.collision_player_height,
+        collisionEnabled=pres.collision_enabled,
     )
 
 

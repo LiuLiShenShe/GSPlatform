@@ -83,6 +83,11 @@ export interface ViewerPickResult {
     position: [number, number, number];
 }
 
+export interface ViewerCollisionState {
+    loaded: boolean;
+    mode?: 'INDOOR' | 'OUTDOOR';
+}
+
 export interface ViewerHandle {
     /** Load a scene described by the controlled DTO. Aborts on signal. */
     loadScene(descriptor: SceneDescriptor, abortSignal?: AbortSignal): Promise<void>;
@@ -104,6 +109,8 @@ export interface ViewerHandle {
     captureScreenshot(opts?: { format?: string; quality?: number }): Promise<ViewerScreenshotResult>;
     /** Pick the world-space 3D position at a normalized screen coordinate. */
     pickWorldPosition(x: number, y: number): Promise<ViewerPickResult>;
+    /** Get collision mesh loading state. */
+    getCollisionState(): Promise<ViewerCollisionState>;
     destroy(): void;
     /** Subscribe to embed-reported events. Returns unsubscribe. */
     on<T extends keyof ViewerEventMap>(type: T, listener: ViewerEventMap[T]): () => void;
@@ -334,6 +341,10 @@ export const createViewer = (
         async pickWorldPosition(x: number, y: number) {
             const res = await send('pickWorldPosition', { x, y });
             return res.payload as ViewerPickResult;
+        },
+        async getCollisionState() {
+            const res = await send('getCollisionState');
+            return res.payload as ViewerCollisionState;
         },
         destroy() {
             if (destroyed) {

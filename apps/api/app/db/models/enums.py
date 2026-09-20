@@ -40,6 +40,7 @@ class JobKind(enum.StrEnum):
     RECONSTRUCT = "RECONSTRUCT"
     PUBLISH = "PUBLISH"
     DELETE_ASSETS = "DELETE_ASSETS"
+    BUILD_COLLISION = "BUILD_COLLISION"
 
 
 class JobStatus(enum.StrEnum):
@@ -51,6 +52,14 @@ class JobStatus(enum.StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class CollisionStatus(enum.StrEnum):
+    NONE = "NONE"
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
 class AssetKind(enum.StrEnum):
     SOURCE = "SOURCE"
     POSTER = "POSTER"
@@ -59,6 +68,7 @@ class AssetKind(enum.StrEnum):
     STREAM_INDEX = "STREAM_INDEX"
     STREAM_CHUNK = "STREAM_CHUNK"
     LOG_SUMMARY = "LOG_SUMMARY"
+    COLLISION_GLB = "COLLISION_GLB"
 
 
 class UploadSessionStatus(enum.StrEnum):

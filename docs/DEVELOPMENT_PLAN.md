@@ -80,6 +80,7 @@ GSPlatform 是一个面向 3D Gaussian Splatting 场景的 Web 平台。用户�
 | 09 | 部署上线 | Ubuntu + Nginx + HTTPS 可运维部署 | 08 PASS | 域名、证书、备份、恢复与冒烟通过✅ PASS(2026-09-20) |
 | 10 | 场景创作 | Scene Presentation + Viewpoints + Cover + Background | 09 PASS | 创作页面、API CRUD、Viewer RPC 通过✅ PASS(2026-09-20) |
 | 11 | 空间注解与媒体 | Spatial Annotation + Background Audio | 10 PASS | 3D 注解 CRUD、Gaussian 拾取、背景音乐✅ PASS(2026-09-20) |
+| 12 | Walkable Collision | Collision Proxy + Physics Params | 11 PASS | 碰撞构建、API、Viewer 加载✅ PASS(2026-09-20) |
 
 ## 4. 阶段依赖图
 

@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     assistant,
     auth,
+    collision,
     compute,
     favorites,
     jobs,
@@ -19,6 +20,7 @@ v1_router = APIRouter(prefix="/api/v1")
 v1_router.include_router(auth.router, prefix="/auth", tags=["Auth"])
 v1_router.include_router(scenes.router, prefix="/scenes", tags=["Scenes"])
 v1_router.include_router(scene_presentation.router, prefix="/scenes", tags=["Scene Presentation"])
+v1_router.include_router(collision.router, prefix="/scenes", tags=["Collision"])
 v1_router.include_router(me.router, prefix="/me", tags=["My Work"])
 v1_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
 v1_router.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])

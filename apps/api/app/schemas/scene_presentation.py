@@ -37,6 +37,15 @@ class ScenePresentationOut(BaseModel):
     backgroundAudioLoop: bool = Field(default=True, alias="backgroundAudioLoop")
     backgroundAudioEnabled: bool = Field(default=False, alias="backgroundAudioEnabled")
 
+    # Collision settings (Phase 12)
+    collisionMode: str | None = Field(default=None, alias="collisionMode")
+    collisionAssetId: str | None = Field(default=None, alias="collisionAssetId")
+    collisionGravity: float = Field(default=9.81, alias="collisionGravity")
+    collisionSlopeLimitDegrees: float = Field(default=45.0, alias="collisionSlopeLimitDegrees")
+    collisionStepOffset: float = Field(default=0.3, alias="collisionStepOffset")
+    collisionPlayerHeight: float = Field(default=1.8, alias="collisionPlayerHeight")
+    collisionEnabled: bool = Field(default=False, alias="collisionEnabled")
+
     model_config = {"populate_by_name": True}
 
 
@@ -62,6 +71,17 @@ class ScenePresentationUpdateRequest(BaseModel):
     backgroundAudioVolume: float | None = Field(default=None, alias="backgroundAudioVolume")
     backgroundAudioLoop: bool | None = Field(default=None, alias="backgroundAudioLoop")
     backgroundAudioEnabled: bool | None = Field(default=None, alias="backgroundAudioEnabled")
+
+    # Collision settings (Phase 12)
+    collisionMode: str | None = Field(default=None, alias="collisionMode")
+    collisionAssetId: str | None = Field(default=None, alias="collisionAssetId")
+    collisionGravity: float | None = Field(default=None, alias="collisionGravity")
+    collisionSlopeLimitDegrees: float | None = Field(
+        default=None, alias="collisionSlopeLimitDegrees"
+    )
+    collisionStepOffset: float | None = Field(default=None, alias="collisionStepOffset")
+    collisionPlayerHeight: float | None = Field(default=None, alias="collisionPlayerHeight")
+    collisionEnabled: bool | None = Field(default=None, alias="collisionEnabled")
 
     model_config = {"populate_by_name": True}
 
