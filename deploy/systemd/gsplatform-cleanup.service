@@ -1,0 +1,21 @@
+# gsplatform-cleanup.service — scheduled maintenance task (Phase 06 cleanup).
+#
+# Pair with gsplatform-cleanup.timer; runs the cleanup_expired_uploads Celery
+# task (which also clears expired/abandoned upload sessions and quarantine).
+# Uses `celery call` so it is tracked/idempotent and appears in Flower/queues.
+
+[Unit]
+Description=GSPlatform scheduled maintenance (cleanup expired uploads)
+After=network-online.target redis-server.service gsplatform-api.service
+
+[Service]
+Type=oneshot
+User=gsplatform
+Group=gsplatform
+WorkingDirectory=/opt/gsplatform/current
+EnvironmentFile=/etc/gsplatform/env
+
+ExecStart=/opt/gsplatform/current/workers/.venv/bin/celery -A workers.celery_app call tasks.cleanup_expired_uploads --queue gsplatform
+
+# Do not cascade failures into the timer's "fail" state repeatedly; a single
+# lost cleanup tick is not an incident (INCIDENT_RUNBOOK covers persistent fails).

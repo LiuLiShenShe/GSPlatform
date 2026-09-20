@@ -1,0 +1,50 @@
+# gsplatform-celery-cpu.service — Celery CPU worker (publish / convert / CPU stages).
+#
+# Install to /etc/systemd/system/gsplatform-celery-cpu.service.
+# Runs all non-GPU queues: gsplatform (publish/cleanup) + cpu (reconstruct pre/post).
+#
+# Phase 09 requirements:
+#   - distinct unit, queues, concurrency and resource policy from the GPU worker
+#   - non-root, no privileges, private /tmp
+#   - StopTimeoutSec long enough for a task to checkpoint (it re-queues via acks_late)
+
+[Unit]
+Description=GSPlatform Celery CPU worker
+Wants=network-online.target redis-server.service
+After=network-online.target redis-server.service gsplatform-api.service
+# acks_late + broker reconnect make redis short outages survivable; do not
+# hard-fail this unit just because redis restarted.
+RequiresMountsFor=/opt/gsplatform /srv/gsplatform-data
+
+[Service]
+Type=simple
+User=gsplatform
+Group=gsplatform
+WorkingDirectory=/opt/gsplatform/current
+EnvironmentFile=/etc/gsplatform/env
+
+# --concurrency from CELERY_CPU_CONCURRENCY (env). Prefetch=1 + acks_late
+# means a crash re-queues in-flight tasks instead of silently dropping work.
+ExecStart=/opt/gsplatform/current/workers/.venv/bin/celery -A workers.celery_app worker -Q gsplatform,cpu --concurrency=${CELERY_CPU_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=100
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=3600
+KillSignal=SIGTERM    # celery drains running+prefetched tasks (acks_late)
+KillMode=control-group
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/gsplatform-data /opt/gsplatform/current /tmp
+PrivateDevices=true
+CapabilityBoundingSet=
+SystemCallFilter=~@mount @swap
+
+LimitNOFILE=65536
+LimitNPROC=8192
+
+[Install]
+WantedBy=multi-user.target

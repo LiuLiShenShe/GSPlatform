@@ -75,6 +75,11 @@ class Settings(BaseSettings):
     # Logical names; deployment overrides via GS_STORAGE_ROOT env var.
     storage_root: str = "/home/test/gsplatform-data"
 
+    # Scene asset origin tree (Phase 09).
+    # Production Nginx serves `/local-scenes/<slug>/...` from this tree.
+    # Empty string = no production origin tree (dev uses repo `scenes/` instead).
+    scene_origin_root: str = ""
+
     # Upload constraints (Phase 06)
     upload_max_bytes: int = 5 * 1024 * 1024 * 1024      # 5 GB
     upload_chunk_max_bytes: int = 64 * 1024 * 1024       # 64 MB per chunk

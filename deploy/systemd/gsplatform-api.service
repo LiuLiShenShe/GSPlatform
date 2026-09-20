@@ -1,0 +1,54 @@
+# gsplatform-api.service — FastAPI (uvicorn) production unit.
+#
+# Install to /etc/systemd/system/gsplatform-api.service.
+# With: env=/etc/gsplatform/env (EnvironmentFile) containing GS_* variables,
+#       runtime account `gsplatform` owning /opt/gsplatform and /srv/gsplatform-data.
+#
+# Phase 09 requirements:
+#   - binds 127.0.0.1 only (Nginx is the public gateway)   [C FastAPI localhost]
+#   - non-root, restricted caps, private /tmp                [C unit hardening]
+#   - graceful stop: uvicorn drains in-flight requests before exit
+#
+# Run: sudo cp deploy/systemd/gsplatform-api.service /etc/systemd/system/
+#      sudo systemctl daemon-reload && sudo systemctl enable --now gsplatform-api
+
+[Unit]
+Description=GSPlatform FastAPI (uvicorn)
+Wants=network-online.target
+After=network-online.target postgresql.service redis-server.service
+# Do NOT hard-depend on redis/postgres being up: the app retries internally;
+# a short redis restart must not thrash the unit in a restart loop.
+RequiresMountsFor=/opt/gsplatform /srv/gsplatform-data
+
+[Service]
+Type=simple
+User=gsplatform
+Group=gsplatform
+WorkingDirectory=/opt/gsplatform/current/apps/api
+EnvironmentFile=/etc/gsplatform/env
+
+ExecStart=/opt/gsplatform/current/apps/api/.venv/bin/uvicorn app.main:app --host ${GS_API_HOST} --port ${GS_API_PORT} --workers 4 --proxy-headers --forwarded-allow-ips=127.0.0.1
+ExecReload=/bin/kill -HUP $MAINPID
+
+Restart=on-failure
+RestartSec=5
+# Stop timeout: give in-flight uploads/long requests a chance to checkpoint.
+TimeoutStopSec=120
+KillSignal=SIGTERM
+KillMode=control-group
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/gsplatform-data /opt/gsplatform/current /var/log/gsplatform
+PrivateDevices=true
+CapabilityBoundingSet=
+SystemCallFilter=~@mount @swap
+
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

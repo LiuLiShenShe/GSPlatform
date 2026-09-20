@@ -173,27 +173,38 @@ class PublishService:
         return version
 
     # ------------------------------------------------------------------ #
-    # dev-mode viewer bridge
+    # dev-mode viewer bridge (phase 06) + production origin tree (phase 09)
     # ------------------------------------------------------------------ #
     def _bridge_dev_scene_view(self, scene: Scene, version_id: str) -> None:
-        """Expose the published version to the Vite dev viewer.
+        """Expose the published version to the Vite dev viewer / Nginx origin.
 
-        The web dev server's ``gs-serve-streamed-scenes`` middleware answers
-        ``/local-scenes/<slug>/<rel>`` from ``<repo>/scenes/<slug>/<rel>``,
-        following a ``current`` symlink exactly like ``build_streamed_sog.sh``:
+        Dev (development/test): the web dev server's ``gs-serve-streamed-scenes``
+        middleware answers ``/local-scenes/<slug>/<rel>`` from
+        ``<repo>/scenes/<slug>/<rel>``, following a ``current`` symlink exactly
+        like ``build_streamed_sog.sh``:
 
         ``scenes/<slug>/current       -> versions/<ver>``   (relative)
         ``scenes/<slug>/versions/<ver> -> <storage>/published/<uuid>/versions/<ver>``
 
-        This method creates that tree (only in development) so a published
-        scene is immediately visible in the Viewer without copying files.
+        Production (Phase 09): same tree shape is created under
+        ``settings.scene_origin_root`` so Nginx can serve `/local-scenes/...`
+        as a static origin. Skipped entirely when env is production and
+        ``scene_origin_root`` is empty (no publicly served origin).
+
+        This method creates that tree so a published scene is immediately
+        visible in the Viewer without copying files.
         """
-        if settings.env not in {"development", "test"}:
+        if settings.env == "production":
+            if not settings.scene_origin_root:
+                return
+            scenes_root = Path(settings.scene_origin_root)
+        elif settings.env in {"development", "test"}:
+            repo_root = Path(__file__).resolve().parents[3]
+            scenes_root = repo_root / "scenes"
+        else:
             return
-        repo_root = Path(__file__).resolve().parents[3]
-        scenes_root = repo_root / "scenes"
         if not scenes_root.is_dir():
-            logger.debug("repo scenes root missing; skip viewer bridge: %s", scenes_root)
+            logger.debug("scene origin root missing; skip viewer bridge: %s", scenes_root)
             return
 
         slug_dir = scenes_root / scene.slug

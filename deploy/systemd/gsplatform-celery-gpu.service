@@ -1,0 +1,49 @@
+# gsplatform-celery-gpu.service — Celery GPU worker (training queue only).
+#
+# Install to /etc/systemd/system/gsplatform-celery-gpu.service.
+# Consumes only the `gpu` queue (tasks.reconstruct_train). GPU training holds
+# the device exclusively; concurrency must stay 1 (see CELERY_GPU_CONCURRENCY).
+#
+# NOTE: systemd PrivateDevices=true would hide /dev/nvidia* from the worker.
+# If PrivateDevices is enabled you must add DeviceAllow=/dev/nvidia* entries
+# for CUDA. We keep it OFF here and instead restrict via DevicePolicy=closed
+# is NOT used — see hardening notes in PHASE_09_DEPLOYMENT.md.
+# The unit runs WITHOUT PrivateDevices so CUDA device nodes are visible.
+
+[Unit]
+Description=GSPlatform Celery GPU worker (training)
+Wants=network-online.target redis-server.service
+After=network-online.target redis-server.service gsplatform-api.service
+RequiresMountsFor=/opt/gsplatform /srv/gsplatform-data
+
+[Service]
+Type=simple
+User=gsplatform
+Group=gsplatform
+WorkingDirectory=/opt/gsplatform/current
+EnvironmentFile=/etc/gsplatform/env
+
+ExecStart=/opt/gsplatform/current/workers/.venv/bin/celery -A workers.celery_app worker -Q gpu --concurrency=${CELERY_GPU_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=10
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=15
+TimeoutStopSec=3600
+KillSignal=SIGTERM
+KillMode=control-group
+
+# --- hardening ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/gsplatform-data /opt/gsplatform/current /tmp
+# CUDA needs device access: do NOT enable PrivateDevices here.
+PrivateDevices=false
+CapabilityBoundingSet=
+SystemCallFilter=~@mount @swap
+
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

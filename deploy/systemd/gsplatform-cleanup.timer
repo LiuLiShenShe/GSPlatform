@@ -1,0 +1,16 @@
+# gsplatform-cleanup.timer — runs gsplatform-cleanup.service on a schedule.
+#
+# Phase 09: "定时清理/维护使用 systemd timer 或等价调度，避免重复运行".
+# Use RandomizedDelaySec so multiple hosts don't all fire at once.
+
+[Unit]
+Description=Run GSPlatform maintenance every 6 hours
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=6h
+RandomizedDelaySec=5min
+Unit=gsplatform-cleanup.service
+
+[Install]
+WantedBy=timers.target
