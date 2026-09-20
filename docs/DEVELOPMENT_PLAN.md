@@ -188,6 +188,20 @@ IDLE -> POSTER -> MANIFEST -> LOW_LOD_INTERACTIVE
 - M3（Phase 05~06）：用户可以安全上传并发布自己的作品。
 - M4（Phase 07~08）：免费计算与平台业务形成闭环。
 - M5（Phase 09）：完成可恢复、可监控的生产部署。
+M6：Scene Authoring
+Phase 10–12
+
+M7：Immersive XR
+Phase 13–14
+
+M8：Versioned Gaussian World
+Phase 15–16
+
+M9：Sparse Incremental Gaussian Update
+Phase 17–18
+
+M10：Agricultural Digital Twin
+Phase 19–20
 
 日程由团队能力与硬件资源决定，不在未估算前承诺固定日期。
 
