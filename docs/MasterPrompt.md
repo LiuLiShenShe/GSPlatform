@@ -13,9 +13,9 @@
 ## 本次只允许手工修改的两个参数
 
 ```text
-PHASE_NUMBER = 13
+PHASE_NUMBER = 14
 
-PHASE_DOC = /fj/GSPlatform/docs/Phase 13：Independent WebXR Viewer.md
+PHASE_DOC = /fj/GSPlatform/docs/Phase 14：XR Navigation & Viewpoints.md
 ```
 
 除这两个参数外，不需要用户再手工提供：
