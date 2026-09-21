@@ -1,8 +1,19 @@
 /**
  * XR Application — PlayCanvas + WebXR bootstrap for immersive Gaussian scenes.
  *
- * Creates the PlayCanvas AppBase, sets up WebXR session management, and loads
- * scenes from the same manifest format used by the desktop viewer.
+ * Phase 14 adds PICO interaction to the Phase 13 viewer:
+ *
+ *   left stick  → head-relative locomotion (with gravity + collision)
+ *   right stick → snap turn
+ *   A / B       → next / previous viewpoint (Phase 10 data, shared)
+ *   trigger     → select annotation (Phase 11 data, shared) → media panel
+ *   grip/menu   → dismiss panel
+ *
+ * Layout:  XrRoot → PlayerRig → Camera (+ FadeScreen child)
+ *          GaussianWorld (splats)
+ *          CollisionWorld (invisible collision proxy)
+ *          AnnotationRoot (3D annotations)
+ *          XRUiRoot (media panel)
  */
 
 import {
@@ -12,13 +23,15 @@ import {
     CameraComponentSystem,
     Color,
     ContainerHandler,
+    ElementComponentSystem,
     Entity,
     FILLMODE_FILL_WINDOW,
     GSplatComponentSystem,
     GSplatHandler,
     LightComponentSystem,
-    RESOLUTION_AUTO,
     RenderComponentSystem,
+    RESOLUTION_AUTO,
+    ScreenComponentSystem,
     TextureHandler,
     createGraphicsDevice,
     XRTYPE_VR,
@@ -27,6 +40,14 @@ import {
 
 import { XrSceneLoader } from './scene-loader';
 import type { XrSceneDescriptor } from './types';
+import { XrInputManager } from './input-manager';
+import { CollisionRaycaster } from './collision-raycaster';
+import { Locomotion } from './locomotion';
+import { FadeOverlay } from './fade-overlay';
+import { ViewpointManager } from './viewpoint-manager';
+import { Interaction } from './interaction';
+import { loadXrData } from './data-loader';
+import { INDOOR_PROFILE, OUTDOOR_PROFILE } from './types';
 
 interface XrAppElements {
     statusEl: HTMLDivElement;
@@ -34,14 +55,6 @@ interface XrAppElements {
     sceneInfoEl: HTMLDivElement;
     showError: (msg: string) => void;
 }
-
-// Default scene descriptor — overridden by URL query params or postMessage.
-const DEFAULT_DESCRIPTOR: XrSceneDescriptor = {
-    id: 'demo',
-    format: 'sog',
-    assetUrl: '',
-    title: 'GSPlatform XR Scene',
-};
 
 /**
  * Read the scene descriptor from the URL query string.
@@ -57,7 +70,29 @@ function readDescriptorFromUrl(): XrSceneDescriptor {
         format: (params.get('format') as XrSceneDescriptor['format']) ?? 'sog',
         assetUrl: url,
         title: params.get('title') ?? 'GSPlatform XR Scene',
+        collisionUrl: params.get('collisionUrl') ?? undefined,
+        collision: params.get('gravity')
+            ? {
+                gravity: Number(params.get('gravity')),
+                slopeLimitDegrees: Number(params.get('slopeLimit') ?? 45),
+                stepOffset: Number(params.get('stepOffset') ?? 0.3),
+                playerHeight: Number(params.get('playerHeight') ?? 1.7),
+            }
+            : undefined,
     };
+}
+
+/** Pick the locomotion profile from URL or collision params. */
+function pickProfile(descriptor: XrSceneDescriptor) {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get('profile');
+    let profile = requested === 'indoor' ? INDOOR_PROFILE : OUTDOOR_PROFILE;
+
+    // Override with Phase 12 collision parameters if supplied.
+    if (descriptor.collision) {
+        profile = { ...profile, ...descriptor.collision };
+    }
+    return profile;
 }
 
 /**
@@ -102,6 +137,8 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
         CameraComponentSystem,
         LightComponentSystem,
         GSplatComponentSystem,
+        ScreenComponentSystem,
+        ElementComponentSystem,
     ];
     createOptions.resourceHandlers = [TextureHandler, ContainerHandler, GSplatHandler];
 
@@ -121,11 +158,11 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
     //
     //   XrRoot
     //     +-- PlayerRig (camera rig)
-    //     |     `-- Camera
+    //     |     `-- Camera (+ FadeScreen child)
     //     +-- GaussianWorld (splats go here)
     //     +-- CollisionWorld (invisible collision proxy)
     //     +-- AnnotationRoot (3D annotations)
-    //     `-- XRUiRoot (2D UI panels in VR)
+    //     `-- XRUiRoot (media panel)
 
     const xrRoot = new Entity('XrRoot');
     app.root.addChild(xrRoot);
@@ -157,22 +194,59 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
     const xrUiRoot = new Entity('XRUiRoot');
     xrRoot.addChild(xrUiRoot);
 
-    // --- Light ---
-    const light = new Entity('ambient-light');
-    light.addComponent('light', { type: 'ambient', color: new Color(1, 1, 1) });
-    app.root.addChild(light);
+    // Gaussian splats render via their own shader pipeline — no scene light
+    // entity needed. (PlayCanvas 2.22 dropped LIGHTTYPE_AMBIENT.)
+
+    // --- Phase 14 subsystem wiring ---
+    const fadeOverlay = new FadeOverlay(app, cameraEntity);
+    fadeOverlay.setOpacity(0);
+
+    const collision = new CollisionRaycaster(app);
+    const inputManager = new XrInputManager(app);
+    const profile = pickProfile(readDescriptorFromUrl());
+    const locomotion = new Locomotion({
+        rig: playerRig,
+        camera: cameraEntity,
+        collision,
+        profile,
+    });
+    const viewpointManager = new ViewpointManager({
+        rig: playerRig,
+        camera: cameraEntity,
+        fade: fadeOverlay,
+        collision,
+        profile,
+    });
+    const interaction = new Interaction({
+        app,
+        camera: cameraEntity,
+        rig: playerRig,
+        annotationRoot,
+        uiRoot: xrUiRoot,
+    });
+
+    // Scene descriptor is needed by both the headless and XR paths.
+    const descriptor = readDescriptorFromUrl();
 
     // --- WebXR setup ---
-    const xr = app.xr!;
+    const xr = app.xr;
 
     statusEl.textContent = 'Checking WebXR support…';
 
-    if (!xr.supported) {
-        statusEl.textContent = 'WebXR not supported by this browser.';
+    if (!xr) {
+        statusEl.textContent = 'WebXR manager unavailable (headless).';
         enterVrBtn.disabled = true;
-        sceneInfoEl.textContent = 'WebXR unavailable — desktop mode only.';
-        // Still allow desktop viewing without VR
-        return initDesktopOnly(app, canvas, statusEl, sceneInfoEl);
+        sceneInfoEl.textContent = `WebXR unavailable — desktop mode only. | ${app.graphicsDevice.width}×${app.graphicsDevice.height}`;
+        // Load scene + data anyway for testing
+        await loadDescriptors(app, gaussianWorld, sceneInfoEl, descriptor, collision, viewpointManager, interaction);
+        // Simple orbit for headless
+        let angle = 0;
+        app.on('update', (dt: number) => {
+            angle += dt * 0.3;
+            const cam = app.root.findByName('Camera');
+            if (cam) { cam.setPosition(Math.sin(angle)*3, 1.7, Math.cos(angle)*3); cam.lookAt(0, 1.7, 0); }
+        });
+        return;
     }
 
     const vrAvailable = xr.isAvailable(XRTYPE_VR);
@@ -217,50 +291,63 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
         console.error('[xr] session error:', err);
     });
 
-    // --- Load scene from URL ---
-    const descriptor = readDescriptorFromUrl();
+    // --- Load scene + shared data (viewpoints, annotations, audio) ---
+    await loadDescriptors(app, gaussianWorld, sceneInfoEl, descriptor, collision, viewpointManager, interaction);
 
-    if (descriptor.assetUrl) {
-        statusEl.textContent = `Loading scene: ${descriptor.title}…`;
+    // --- Per-frame update ---
+    app.on('update', (dt: number) => {
+        const active = xr.session != null;
+        if (!active) return;
 
-        try {
-            const loader = new XrSceneLoader(app);
-            await loader.loadScene(gaussianWorld, descriptor);
-            statusEl.textContent = 'Scene loaded.';
-            sceneInfoEl.textContent += `  |  Scene: ${descriptor.title}`;
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            showError(`Failed to load scene: ${msg}`);
-        }
-    } else {
-        statusEl.textContent = 'Ready — no scene specified.';
-        sceneInfoEl.textContent += '  |  Pass ?url=<sog-url> to load a scene.';
-    }
+        const input = inputManager.update(dt);
+        locomotion.update(input, dt);
+        viewpointManager.handleInput(input);
+        viewpointManager.update(dt);
+        interaction.update(input, dt);
+    });
 }
 
 /**
- * Desktop-only fallback — no WebXR, just a basic orbit camera.
+ * Load the scene splat + collision mesh and the shared Phase 10/11 data
+ * (viewpoints, annotations, background audio). Shared by both the XR and
+ * headless paths.
  */
-async function initDesktopOnly(
+async function loadDescriptors(
     app: AppBase,
-    canvas: HTMLCanvasElement,
-    statusEl: HTMLDivElement,
+    gaussianWorld: Entity,
     sceneInfoEl: HTMLDivElement,
+    descriptor: XrSceneDescriptor,
+    collision: CollisionRaycaster,
+    viewpointManager: ViewpointManager,
+    interaction: Interaction,
 ) {
-    statusEl.textContent = 'Desktop mode (no VR).';
+    if (descriptor.assetUrl) {
+        try {
+            const loader = new XrSceneLoader(app);
+            await loader.loadScene(gaussianWorld, descriptor);
 
-    // Simple keyboard orbit as fallback
-    let angle = 0;
-    app.on('update', (dt: number) => {
-        angle += dt * 0.3;
-        const camera = app.root.findByName('Camera');
-        if (camera) {
-            camera.setPosition(
-                Math.sin(angle) * 3,
-                1.7,
-                Math.cos(angle) * 3,
-            );
-            camera.lookAt(0, 1.7, 0);
+            // Index the collision mesh now that it's loaded (if any).
+            collision.collectMeshInstances();
+            console.log(`[xr] collision mesh instances: ${collision.count}`);
+
+            sceneInfoEl.textContent += `  |  Scene: ${descriptor.title}`;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error('[xr] scene load failed:', err);
+            sceneInfoEl.textContent += `  |  Scene load FAILED: ${msg}`;
         }
-    });
+    }
+
+    // Load shared Phase 10/11/12 data (viewpoints, annotations, audio).
+    try {
+        const data = await loadXrData();
+        viewpointManager.setViewpoints(data.viewpoints);
+        interaction.setAnnotations(data.annotations);
+        if (data.backgroundAudio) {
+            interaction.setBackgroundAudio(data.backgroundAudio);
+        }
+        sceneInfoEl.textContent += `  |  VPs: ${viewpointManager.count}  |  Annot: ${data.annotations.length}`;
+    } catch (err) {
+        console.warn('[xr] shared data load failed:', err);
+    }
 }

@@ -50,33 +50,33 @@ PlayerRig      PlayerRig
 
 ### Navigation
 
-- [ ] 左摇杆。
-- [ ] deadzone。
-- [ ] movement speed。
-- [ ] head-relative movement。
-- [ ] snap turn。
-- [ ] gravity。
-- [ ] collision。
-- [ ] indoor/outdoor profile。
+- [ ] 左摇杆。（代码完成：读取 axes[2]/axes[3]；真实移动需 PICO 设备验证）
+- [x] deadzone。（单元测试通过：<0.2 归零、0.2→1 线性重映射）
+- [ ] movement speed。（profile 常量已接线；实际移动未设备验证）
+- [ ] head-relative movement。（轴投影数学已单测；实际移动未设备验证）
+- [ ] snap turn。（已修复 `setFromEulerAngles` 弧度/角度 bug；数学单测通过；右摇杆触发未设备验证）
+- [ ] gravity。（代码完成：自由下落/吸附地面；未设备验证）
+- [ ] collision。（自研逐三角形 raycast 完成；无真实 GLB 碰撞网格可实测）
+- [x] indoor/outdoor profile。（INDOOR/OUTDOOR 常量单测通过；URL 参数选择已接线）
 
 ### Viewpoints
 
-- [ ] Next。
-- [ ] Previous。
-- [ ] cooldown。
-- [ ] Fade out。
-- [ ] move rig。
-- [ ] Fade in。
-- [ ] target orientation。
-- [ ] wraparound。
+- [ ] Next。（已实现 wraparound + cooldown；需 VR A 键）
+- [ ] Previous。（已实现 wraparound + cooldown；需 VR B 键）
+- [ ] cooldown。（1.2 s cooldown 已编码；未在 VR 长按验证）
+- [ ] Fade out。（FadeOverlay.setOpacity 已编码；未在头显验证渲染）
+- [ ] move rig。（applyViewpoint 已定位 rig + 转向；未设备验证）
+- [ ] Fade in。（fade-in 过渡已编码；未设备验证）
+- [ ] target orientation。（atan2 yaw 计算已编码；未设备验证）
+- [x] wraparound。（next→first / prev→last 取模单测通过）
 
 ### Interaction
 
-- [ ] XR ray。
-- [ ] annotation select。
-- [ ] media panel。
-- [ ] close panel。
-- [ ] audio。
+- [ ] XR ray。（perpendicular 点到射线距离测试已编码；未设备验证）
+- [ ] annotation select。（trigger + 射线命中已编码；未设备验证）
+- [ ] media panel。（world-space panel 已创建；CanvasFont 文本渲染已编码；未在设备视觉验证）
+- [ ] close panel。（B 键 / Grip 关闭已编码；未设备验证）
+- [ ] audio。（background audio URL 已接线；播放需用户手势，未在会话验证）
 
 ## PASS
 
