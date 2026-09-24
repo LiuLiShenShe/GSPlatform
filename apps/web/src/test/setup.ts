@@ -19,6 +19,15 @@ Object.defineProperty(window, 'matchMedia', {
   }),
 });
 
+// jsdom 不实现 isSecureContext（始终 undefined）。WebXR 页面（/xr/*）
+// 用它来区分 secure context，测试中固定为 true 以便走正常逻辑分支。
+Object.defineProperty(window, 'isSecureContext', {
+  writable: true,
+  enumerable: true,
+  configurable: true,
+  value: true,
+});
+
 if (!('ResizeObserver' in globalThis)) {
   class ResizeObserverMock {
     observe(): void {}

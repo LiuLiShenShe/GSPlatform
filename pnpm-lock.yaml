@@ -113,12 +113,18 @@ importers:
       '@ant-design/icons':
         specifier: ^6.3.4
         version: 6.3.4(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@playcanvas/supersplat-viewer':
+        specifier: ^1.35.0
+        version: 1.35.0(playcanvas@2.22.4)
       antd:
         specifier: ^6.6.3
         version: 6.6.3(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       axios:
         specifier: ^1.20.0
         version: 1.20.0
+      playcanvas:
+        specifier: ^2.22.4
+        version: 2.22.4
       react:
         specifier: ^19.2.8
         version: 19.2.8
@@ -964,6 +970,15 @@ packages:
     hasBin: true
     peerDependencies:
       playcanvas: ^2.0.0
+
+  '@playcanvas/supersplat-viewer@1.35.0':
+    resolution: {integrity: sha512-+Fu3mlLKc0Ya9bhIk8m77oEJQsyYHmqiqFrYuSROPJyPk7Tf6xuOSWbj8iJyqLh3yIdf3hIQeoIuaiHNosL4ZA==}
+    engines: {node: '>=20.0.0'}
+    peerDependencies:
+      playcanvas: ^2.22.1
+    peerDependenciesMeta:
+      playcanvas:
+        optional: true
 
   '@playwright/test@1.63.0':
     resolution: {integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==}
@@ -3158,6 +3173,10 @@ packages:
     resolution: {integrity: sha512-EuapzvDRVV6pO1xseTynt/1Z5dWDCEUa2KR2o6ExYrDnfRNz83kNT2ieWyQoJB6THO7GLBZbRB0EP/RZrsfUHg==}
     engines: {node: '>=18.3.0'}
 
+  playcanvas@2.22.4:
+    resolution: {integrity: sha512-mcL+1Bl1q/apzU0CLMHMQ3eYrvr3kzPtXtJe8rOYbu7xVPA47fvpL73oCzx6dtCyOxj6bldKIA0GC8maJRtYgA==}
+    engines: {node: '>=18.3.0'}
+
   playwright-core@1.63.0:
     resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
     engines: {node: '>=20'}
@@ -4401,6 +4420,10 @@ snapshots:
       webgpu: 0.4.0
     transitivePeerDependencies:
       - supports-color
+
+  '@playcanvas/supersplat-viewer@1.35.0(playcanvas@2.22.4)':
+    optionalDependencies:
+      playcanvas: 2.22.4
 
   '@playwright/test@1.63.0':
     dependencies:
@@ -6675,6 +6698,11 @@ snapshots:
   picomatch@4.0.7: {}
 
   playcanvas@2.22.0:
+    dependencies:
+      '@types/webxr': 0.5.24
+      '@webgpu/types': 0.1.72
+
+  playcanvas@2.22.4:
     dependencies:
       '@types/webxr': 0.5.24
       '@webgpu/types': 0.1.72

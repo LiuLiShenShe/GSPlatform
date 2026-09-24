@@ -14,11 +14,14 @@ import RegisterPage from '../pages/RegisterPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import State403 from '../components/State403';
 import HealthUI from '../pages/HealthUI';
+import XRViewerPage from '../pages/XRViewerPage';
+import XRTestPage from '../pages/XRTestPage';
 
 /**
  * 应用路由（React Router v7 data router）。
  * 平台页面共用一个 PlatformLayout（固定 Sidebar + Topbar）；
- * /scene/:sceneId 使用无 Sidebar 的全屏 ViewerLayout。
+ * /scene/:sceneId 使用无 Sidebar 的全屏 ViewerLayout；
+ * /xr/* 使用独立 XR Runtime（WebGL + WebXR，非 iframe / postMessage）；
  * /s/:token 分享解析页面独立路由，不使用 PlatformLayout。
  */
 export const appRouter = createBrowserRouter([
@@ -40,6 +43,8 @@ export const appRouter = createBrowserRouter([
     element: <ViewerLayout />,
     children: [{ index: true, element: <SceneViewerPage /> }],
   },
+  { path: '/xr/test', element: <XRTestPage /> },
+  { path: '/xr/:sceneId', element: <XRViewerPage /> },
   { path: '/s/:token', element: <ShareRedirectPage /> },
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },

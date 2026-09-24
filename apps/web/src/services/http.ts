@@ -40,16 +40,23 @@ httpClient.interceptors.request.use((config: InternalAxiosRequestConfig) => {
  * On 401 responses, redirect to the login page so the user can re-authenticate.
  * Preserve the current path in a `returnTo` query param so login can send the
  * user back to where they were.
+ *
+ * `/xr/*` pages are exempt: the XR runtime and diagnostics are fully
+ * self-contained (local scene assets only) and must stay reachable from a
+ * headset browser directly (§21) without a login round-trip.
  */
 httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const currentPath = window.location.pathname;
+    const isXrRoute = currentPath === '/xr' || currentPath.startsWith('/xr/');
     if (
       axios.isAxiosError(error) &&
       error.response?.status === 401 &&
-      window.location.pathname !== '/login'
+      !isXrRoute &&
+      currentPath !== '/login'
     ) {
-      const returnTo = encodeURIComponent(window.location.pathname + window.location.search);
+      const returnTo = encodeURIComponent(currentPath + window.location.search);
       window.location.href = `/login?returnTo=${returnTo}`;
     }
     return Promise.reject(error);

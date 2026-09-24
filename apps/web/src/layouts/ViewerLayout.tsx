@@ -1,10 +1,12 @@
-import { ArrowLeftOutlined, CloseOutlined, FullscreenOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, CloseOutlined, FullscreenOutlined, MobileOutlined } from '@ant-design/icons';
 import { Button, Space, Tooltip, Typography } from 'antd';
 import { Outlet, useNavigate, useParams } from 'react-router-dom';
 
 /**
  * 全屏 Viewer 布局：无平台 Sidebar / Topbar。
- * 顶部提供 返回 / 场景标题 / 进入全屏 / 关闭；子路由在挂载区域渲染页面外壳。
+ * 顶部提供 返回 / 场景标题 / 进入全屏 / 进入 VR / 关闭。
+ * "进入全屏" 是 requestFullscreen()；"进入 VR" 是独立的 WebXR 入口，
+ * 跳转到 /xr/:sceneId（独立 XR Runtime，非 iframe）。
  */
 export default function ViewerLayout() {
   const navigate = useNavigate();
@@ -14,6 +16,12 @@ export default function ViewerLayout() {
     document.documentElement.requestFullscreen?.().catch(() => {
       /* 全屏被拒绝或不可用时静默忽略 */
     });
+  };
+
+  const enterVR = (): void => {
+    if (sceneId) {
+      navigate(`/xr/${sceneId}`);
+    }
   };
 
   return (
@@ -41,6 +49,17 @@ export default function ViewerLayout() {
               onClick={enterFullscreen}
             >
               进入全屏
+            </Button>
+          </Tooltip>
+          <Tooltip title="进入 WebXR 沉浸式 VR（独立 XR Runtime）">
+            <Button
+              type="text"
+              icon={<MobileOutlined aria-hidden />}
+              aria-label="进入 VR"
+              data-testid="enter-vr-nav"
+              onClick={enterVR}
+            >
+              进入 VR
             </Button>
           </Tooltip>
           <Tooltip title="关闭并回到首页">
