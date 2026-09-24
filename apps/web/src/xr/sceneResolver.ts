@@ -44,8 +44,14 @@ export async function resolveSceneForXR(sceneId: string): Promise<XRSceneResolut
     );
   }
 
-  // streamed-sog：第一阶段不支持。
-  if (raw.format === 'streamed-sog' || raw.schemaVersion === 1) {
+  // streamed-sog 判定（§11）：只依据项目 manifest 的真实字段。
+  // 审计结果：scenes/ 下 streamed 场景均为
+  //   { schemaVersion: 1, format: "streamed-sog", stream: { entryUrl, ... } }
+  // 而 legacy 场景为 { format: "sog", assetUrl: ... }。
+  // `schemaVersion` 只是 manifest schema 版本号，与是否流式无关，
+  // 因此绝不能用 schemaVersion === 1 判定 streamed-sog。
+  const isStreamed = raw.format === 'streamed-sog' || typeof raw.stream === 'object';
+  if (isStreamed) {
     throw new XRSceneError(
       'STREAMED_SOG_UNSUPPORTED',
       `场景 ${sceneId} 为 streamed-sog（LOD 流式格式），第一阶段 XR 仅支持单文件 SOG/PLY。`,

@@ -29,6 +29,9 @@ export default function XRViewerPage() {
   const [renderer, setRenderer] = useState<string | null>(null);
   const [lastError, setLastError] = useState<{ name: string; message: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [xrMode, setXrMode] = useState<string | null>(null);
+  const unsubRef = useRef<(() => void) | null>(null);
+  const hadXRRef = useRef(false);
 
   // 解析场景 + 加载 XR viewer（独立 runtime，非 iframe）。
   useEffect(() => {
@@ -71,6 +74,19 @@ export default function XRViewerPage() {
         }
         runtimeRef.current = runtime;
         setRenderer(runtimeRenderer(runtime.app));
+
+        // 真实 XR 状态订阅：系统菜单/浏览器 UI 退出同样触发（§5）。
+        unsubRef.current = runtime.onXRModeChanged((mode) => {
+          if (cancelled) return;
+          setXrMode(mode);
+          if (mode === 'vr' || mode === 'ar') {
+            hadXRRef.current = true;
+            setState('xr-active');
+          } else if (hadXRRef.current) {
+            setState('xr-ended');
+          }
+        });
+
         runtime.loadedPromise.then(() => {
           if (cancelled) return;
           setState('viewer-ready');
@@ -90,12 +106,14 @@ export default function XRViewerPage() {
     void boot();
     return () => {
       cancelled = true;
+      unsubRef.current?.();
+      unsubRef.current = null;
       runtimeRef.current?.destroy();
       runtimeRef.current = null;
     };
   }, [effectiveSceneId]);
 
-  // 用户手势内直接 startXR('vr') —— 不经过任何异步 RPC 中间跳。
+  // 用户手势内直接 startXR('vr') —— 不经过任何异步 RPC 中间跳（§16）。
   const enterVR = async () => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -103,6 +121,8 @@ export default function XRViewerPage() {
     setState('starting-xr');
     try {
       await runtime.startVR();
+      // 完成后由 onXRModeChanged 驱动（mode→'vr'）；兜底置 active。
+      hadXRRef.current = true;
       setState('xr-active');
     } catch (err) {
       console.error('XR START FAILED', err);
@@ -151,7 +171,7 @@ export default function XRViewerPage() {
 
       <h1>XR Scene: {effectiveSceneId}</h1>
       <div className="xr-page__state" data-testid="xr-state">
-        WebXR state: {state.toUpperCase()}
+        WebXR state: {state.toUpperCase()} | XR mode: {xrMode ?? 'null'}
       </div>
 
       <table className="xr-page__table">

@@ -11,6 +11,9 @@
  */
 import { createViewer, type ViewerHandle } from '@playcanvas/supersplat-viewer/viewer';
 
+/** XR 会话模式（与 supersplat-viewer 的 state.xrMode 对齐）。 */
+export type XRMode = 'ar' | 'vr' | null;
+
 /** XR Runtime 对外暴露的最小面。 */
 export interface XRViewerRuntime {
   /** 引擎 app（用于读取 renderer 类型）。 */
@@ -21,6 +24,15 @@ export interface XRViewerRuntime {
   readonly events: ViewerHandle['events'];
   /** 场景首帧渲染完成前 resolve 的 promise（可用 loaded 状态替代）。 */
   loadedPromise: Promise<void>;
+  /**
+   * 订阅真实 XR 会话状态变化。回调收到 'vr' | 'ar' | null。
+   *
+   * 内部绑定 supersplat-viewer 的 `xrMode:changed` 事件 —— 该事件由
+   * PlayCanvas XrManager 的 'start' / 'end' 驱动，因此用户从头显系统菜单
+   * 或浏览器 UI 退出 XR 时同样会触发（state.xrMode → null），不依赖
+   * startXR/endXR 的 promise。返回 unsubscribe 函数。
+   */
+  onXRModeChanged(callback: (mode: XRMode) => void): () => void;
   /** 用户手势内调用：请求 immersive-vr 会话。 */
   startVR: () => Promise<void>;
   /** 结束当前 XR 会话。 */
@@ -99,11 +111,24 @@ export async function createXRRuntime(
     });
   });
 
+  /**
+   * 订阅真实 XR 会话状态。绑定 supersplat-viewer 的 `xrMode:changed` 事件：
+   * xr start → 'vr'/'ar'，xr end（含系统菜单退出）→ null。
+   * 返回 unsubscribe。
+   */
+  const onXRModeChanged = (callback: (mode: XRMode) => void): (() => void) => {
+    const evt = handle.events.on('xrMode:changed', (mode: string | null) => {
+      callback(mode === 'vr' || mode === 'ar' ? mode : null);
+    });
+    return () => evt.off();
+  };
+
   return {
     app: handle.app,
     state: handle.state,
     events: handle.events,
     loadedPromise,
+    onXRModeChanged,
     startVR: () => handle.startXR('vr'),
     endXR: () => handle.endXR(),
     destroy: () => handle.destroy(),

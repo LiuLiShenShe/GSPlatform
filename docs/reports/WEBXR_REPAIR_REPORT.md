@@ -166,3 +166,114 @@ headless 下 `Immersive VR: unsupported` 是环境限制（无头显/OpenXR）�
 - `apps/web` 的 13 个 typecheck 预存在错误（authoring 相关）会阻塞 `pnpm build`（该脚本为 `tsc -b && vite build`）；本次未修（属无关重构，§0 原则 3）。已用 `npx vite build` 单独验证打包正确。
 - `/xr/*` 豁免了 401 登录跳转；若未来 XR 页面需要后端数据（annotations 等），需重新设计认证方式。
 - 生产 nginx 的 `add_header` 继承规则需注意：`add_header` 在子 location 重新声明时会覆盖父级 —— 部署后必须用 `curl -I https://DOMAIN/xr/test` 与 `curl -I https://DOMAIN/` 确认 `Permissions-Policy` 实际响应头包含 `xr-spatial-tracking=(self)`，不能仅凭配置文件判断。
+
+---
+
+# Second-round fixes（第二轮修复）
+
+日期：2026-09-24 · 基于 commit `38ab32c`
+
+## 1. XR system-exit state synchronization（§3/§4/§5）
+
+**问题**：第一轮 `XRTestPage` / `XRViewerPage` 在用户点击 Enter VR 后直接把 React state 设为 `xr-active`。若用户通过 Quest/PICO 系统菜单、浏览器系统 UI 退出 XR，`startXR()` 的 promise 早已 resolve，页面仍会停留在 `xr-active` —— 状态与真实 session 不一致。
+
+**根因审计**（读 `@playcanvas/supersplat-viewer@1.35.0` dist 源码确认，非猜测）：
+- `dist/viewer.js:10383` — `state.xrMode = xr.type === 'immersive-ar' ? 'ar' : 'vr'`（绑定 PlayCanvas XrManager 的 `'start'` 事件）
+- `dist/viewer.js:10397` — `state.xrMode = null`（绑定 XrManager 的 `'end'` 事件，**包含系统菜单退出路径**）
+- `dist/viewer.js:1641` — `events.fire(\`${property}:changed\`, value, prev)`，因此 `events.on('xrMode:changed', cb)` 会在上述两种情况下触发
+
+**修复**：
+- `XRViewerRuntime.ts` 新增 `onXRModeChanged(callback: (mode: XRMode) => void): () => void`（返回 unsubscribe），内部绑定 `xrMode:changed`，归一化 `'vr' | 'ar' | null`。
+- `XRTestPage` / `XRViewerPage` 组件 mount 时订阅；`mode === 'vr' | 'ar'` → `xr-active`；`mode === null` 且曾进入过 XR（`hadXRRef`）→ `xr-ended`。组件卸载时调用 unsubscribe（`unsubRef`），不产生 listener leak。
+- 保留 `startXR()` resolve 后的兜底置 active（极少数浏览器事件不触发的情况）。
+
+**结果**：系统退出后页面自动变 `xr-ended`，再次点击 Enter VR 可重新进入，无需刷新页面。
+
+## 2. Test scene URL resolution（§6/§7）
+
+**问题**：`const TEST_SOG = '/local-scenes/local-garden/scene.sog'` 硬编码。部署到服务器后 `scenes/` 是 git-ignored 本地数据，该路径可能 404；且场景 404 会被误判为 WebXR 失败。
+
+**修复**：`resolveTestScene()` 三级优先级：
+```
+URL query ?scene=<url>  ??  env VITE_XR_TEST_SCENE_URL  ??  /local-scenes/local-garden/scene.sog
+```
+用法：`/xr/test?scene=/local-scenes/local-garden/scene.sog` 或 `/xr/test?scene=https://domain/path/test.sog`。
+
+## 3. Scene loading diagnostics（§8/§9/§13）
+
+**修复**：
+- `XRTestPage` 诊断面板新增 `Test Scene URL`、`Scene`（`LOADING` / `READY` / `FAILED — <error>`）、`Last XR error`（含 `kind :: name: message`）三行。
+- 场景加载完成（`runtime.loadedPromise` resolve）才置 `Scene: READY`。
+- 错误分类显示，三者互不混淆：
+  - `SCENE LOAD ERROR`（`createXRRuntime` 失败，如 HTTP 404）
+  - `WebXR support failure`（secure context / immersive-vr 不支持）
+  - `XR SESSION START FAILED`（`startVR()` 抛错，含 Error name + message）
+- Enter VR 按钮启用条件收紧为 `viewer-loaded && scene-ready`（§15），否则 disabled。
+
+## 4. sceneResolver fix（§10/§11）
+
+**问题**：`raw.format === 'streamed-sog' || raw.schemaVersion === 1` —— `schemaVersion` 只是 manifest schema 版本，与是否流式无关，误杀所有 schema v1 的单文件场景。
+
+**审计**（`rg` 全部真实 manifest）：
+```
+scenes/local-garden/manifest.json      {"format": "sog"}
+scenes/progressive-test/manifest.json  {"format": "sog"}
+scenes/r-8c4e2264e86a/current/...       {"schemaVersion": 1, "format": "streamed-sog", "stream": {...}}
+scenes/stream-{small,medium,large}/...  {"schemaVersion": 1, "format": "streamed-sog", "stream": {...}}
+```
+流式场景同时具备 `format === 'streamed-sog'` 与 `stream` 对象两个真实标识。
+
+**修复**：`isStreamed = raw.format === 'streamed-sog' || typeof raw.stream === 'object'` —— 只依据真实字段，`schemaVersion` 不再参与判断。
+
+## 5. Tests
+
+| 命令 | 结果 |
+|---|---|
+| `pnpm --filter @gsplatform/web test` | **PASS** — 13 files / **131 tests**（第一轮 121 + 本轮 10） |
+| `pnpm --filter @gsplatform/web lint` | **PASS** — 0 error（仅 warning，预存在 authoring 文件） |
+| `cd apps/web && npx vite build` | **PASS** — built in 11.29s |
+| `pnpm --filter @gsplatform/viewer build` | **PASS** — created dist in 41.7s（Desktop Viewer 未破坏） |
+| `pnpm --filter @gsplatform/web typecheck` | 13 error，**全部预存在**（基线 stash 验证一致）；本轮 XR 文件 0 error |
+
+新增测试：
+- `apps/web/src/__tests__/xr-scene-resolver.test.ts`（6 例）— Case A `schemaVersion:1 + format:sog` 允许；Case B `format:streamed-sog` → `STREAMED_SOG_UNSUPPORTED`；Case C legacy 正常；Case D `stream` 字段存在 → 流式；Case E 404 → `SCENE_NOT_FOUND`；Case F 缺 assetUrl → `ASSET_FETCH_FAILED`
+- `apps/web/src/__tests__/xr-pages.test.tsx`（重写，10 例）— Test 1 `navigator.xr` 缺失不 crash；Test 2 immersive-vr unsupported；Test 3 scene load failed 显示 `SCENE LOAD ERROR` 且不显示 session error；Test 4 `xrMode → 'vr'` → XR-ACTIVE；Test 5 `xrMode → null` → XR-ENDED；Test 6 退出后重新进入状态恢复；Test 7/8 路由 + sceneResolver 关联；Test A 诊断面板；Test D SecurityError 归类到 session error
+
+## 6. Runtime startup
+
+web dev server 常驻运行（setsid 脱离 harness，重启会话不退出）：
+
+```bash
+setsid nohup pnpm --filter @gsplatform/web dev --host 0.0.0.0 > /tmp/gs-web-dev.log 2>&1 &
+```
+
+- **Port**: 5173（`vite.config.ts` 固定 `port: 5173`）
+- **PID**: 2502721（`node .../vite.js --host 0.0.0.0`）
+- **LAN IP**: `10.121.2.78`（eno1 /24，`hostname -I` 实测）
+- API 8001 在回环监听（`python`, PID 2042875）— `/xr/*` 不依赖 API
+
+## 7. URLs
+
+| 用途 | 地址 | 说明 |
+|---|---|---|
+| PC 本机 | `http://localhost:5173/xr/test`<br>`http://127.0.0.1:5173/xr/test` | PC 浏览器调试 UI（localhost 是 secure context） |
+| LAN 页面连通性 | `http://10.121.2.78:5173/xr/test`<br>`http://10.121.2.78:5173/xr/local-garden` | **仅用于检查头显能否连到电脑、页面能否打开。HTTP + 非 localhost 不是 secure context，不能保证创建 WebXR immersive-vr session。** |
+| Quest/PICO WebXR | **NOT AVAILABLE YET** | `apps/web` 无 HTTPS dev 配置，且 `deploy/nginx/gsplatform.conf` 的 `<DOMAIN>` 是占位符、尚未部署到真实域名。要做真机 WebXR 需：把当前 build 部署到现有 HTTPS 域名（`https://DOMAIN/xr/test`），或为 dev server 配置证书被头显浏览器信任的 HTTPS。 |
+
+> 注意：`apps/xr-viewer/.certs/` 下的自签证书只服务于第一轮那个独立 xr-viewer（端口 5180），`apps/web` 的 dev server 未启用 HTTPS。自签证书在 Quest/PICO 内置浏览器上默认不受信任，**不能**仅因为 URL 是 `https://` 就认为 Secure Context 有效。
+
+## 8. Hardware test status
+
+**XR HARDWARE TEST: NOT EXECUTED** —— 本机无 Quest/PICO 头显、无 OpenXR runtime（`docs/reports/PHASE_13_REPORT.md`、`PHASE_14_REPORT.md` 已记录 PICO Neo 3 不可得）。不伪造真机 PASS。
+
+真机测试需在 HTTPS 环境打开 `/xr/test`，预期诊断：
+```
+Secure Context: true
+navigator.xr: true
+Immersive VR: supported
+Viewer: READY
+Renderer: webgl2
+Scene: READY
+XR state: viewer-ready
+```
+点击 Enter VR → `XR state: xr-active`；**用头显系统菜单退出**（而非页面上的 Exit VR 按钮）→ 页面应自动变 `xr-ended`；再次 Enter VR 可重新进入。
