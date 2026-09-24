@@ -33,6 +33,7 @@ import {
     RESOLUTION_AUTO,
     ScreenComponentSystem,
     TextureHandler,
+    XrManager,
     createGraphicsDevice,
     XRTYPE_VR,
     XRSPACE_LOCALFLOOR,
@@ -103,9 +104,11 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
 
     statusEl.textContent = 'Creating graphics device…';
 
-    // --- Graphics device (WebGPU preferred, WebGL2 fallback) ---
+    // --- Graphics device (WebGL2 preferred for WebXR; WebGPU requires
+    //     browser XRGPUBinding to expose WebXR, which is not yet widely
+    //     available — see PlayCanvas XrManager._backendSupportsXr) ---
     const gfxOptions = {
-        deviceTypes: ['webgpu', 'webgl2'],
+        deviceTypes: ['webgl2', 'webgpu'],
         xrCompatible: true,
         antialias: false,
         depth: false,
@@ -141,6 +144,8 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
         ElementComponentSystem,
     ];
     createOptions.resourceHandlers = [TextureHandler, ContainerHandler, GSplatHandler];
+    // Required: without this, app.xr stays null and WebXR is unavailable.
+    createOptions.xr = XrManager;
 
     const app = new AppBase(canvas);
     app.init(createOptions);
@@ -233,8 +238,13 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
 
     statusEl.textContent = 'Checking WebXR support…';
 
+    // Diagnostic: surface navigator.xr and secure context status in page
+    const _hasXr = typeof navigator !== 'undefined' && 'xr' in navigator;
+    const _isSecure = typeof window !== 'undefined' && !!window.isSecureContext;
+    console.log(`[xr-diag] navigator.xr=${_hasXr}  secure=${_isSecure}  protocol=${location.protocol}  app.xr=${!!app.xr}`);
+
     if (!xr) {
-        statusEl.textContent = 'WebXR manager unavailable (headless).';
+        statusEl.textContent = `WebXR manager unavailable (headless). xr=${_hasXr} secure=${_isSecure}`;
         enterVrBtn.disabled = true;
         sceneInfoEl.textContent = `WebXR unavailable — desktop mode only. | ${app.graphicsDevice.width}×${app.graphicsDevice.height}`;
         // Load scene + data anyway for testing
@@ -249,16 +259,44 @@ export async function initXrApp(canvas: HTMLCanvasElement, elements: XrAppElemen
         return;
     }
 
-    const vrAvailable = xr.isAvailable(XRTYPE_VR);
-    sceneInfoEl.textContent = vrAvailable
-        ? `WebXR VR: available  |  ${app.graphicsDevice.width}×${app.graphicsDevice.height}`
-        : `WebXR VR: unavailable  |  ${app.graphicsDevice.width}×${app.graphicsDevice.height}`;
+    // PlayCanvas resolves VR availability asynchronously: XrManager starts
+    // with `_available[VR] = false` and fires `available:vr` once
+    // navigator.xr.isSessionSupported resolves. So the button must be
+    // enabled via that event, not from a one-shot isAvailable read.
+    const updateVrUi = (vrOk: boolean) => {
+        sceneInfoEl.textContent = vrOk
+            ? `WebXR VR: available  |  ${app.graphicsDevice.width}×${app.graphicsDevice.height}`
+            : `WebXR VR: unavailable  |  ${app.graphicsDevice.width}×${app.graphicsDevice.height}`;
+        statusEl.textContent = vrOk ? 'Ready — click "Enter VR"' : 'VR device not detected.';
+        enterVrBtn.disabled = !vrOk;
+        enterVrBtn.textContent = vrOk ? 'Enter VR' : 'VR Not Available';
+    };
+    updateVrUi(xr.isAvailable(XRTYPE_VR));
+    xr.on('available:vr', updateVrUi);
 
-    statusEl.textContent = vrAvailable ? 'Ready — click "Enter VR"' : 'VR device not detected.';
+    // Log full WebXR support diagnostics (also shown on-screen)
+    const _navXr = (navigator as unknown as { xr?: unknown }).xr;
+    if (_navXr) {
+        const _xrApi = _navXr as { isSessionSupported: (mode: string) => Promise<boolean> };
+        _xrApi.isSessionSupported('immersive-vr').then((v: boolean) => {
+            console.log(`[xr-diag] isSessionSupported(immersive-vr) = ${v}`);
+            sceneInfoEl.textContent += ` | immersive-vr: ${v}`;
+            _xrApi.isSessionSupported('immersive-ar').then((a: boolean) => {
+                console.log(`[xr-diag] isSessionSupported(immersive-ar) = ${a}`);
+                sceneInfoEl.textContent += ` | immersive-ar: ${a}`;
+            }).catch(() => {});
+        }).catch((e: unknown) => {
+            console.log(`[xr-diag] isSessionSupported error:`, e);
+            sceneInfoEl.textContent += ` | error: ${String(e)}`;
+        });
+        sceneInfoEl.textContent += ` | UA: ${navigator.userAgent.slice(0, 60)}...`;
+    } else {
+        sceneInfoEl.textContent += ' | navigator.xr NOT FOUND';
+    }
 
     // --- Enter VR button ---
-    enterVrBtn.disabled = !vrAvailable;
-    enterVrBtn.textContent = vrAvailable ? 'Enter VR' : 'VR Not Available';
+    enterVrBtn.disabled = !xr.isAvailable(XRTYPE_VR);
+    enterVrBtn.textContent = xr.isAvailable(XRTYPE_VR) ? 'Enter VR' : 'VR Not Available';
 
     const cameraComp = cameraEntity.camera!;
     enterVrBtn.addEventListener('click', () => {

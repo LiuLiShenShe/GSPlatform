@@ -130,6 +130,12 @@ export default defineConfig({
     fs: {
       strict: false,
     },
+    // WebXR requires a secure context; serve HTTPS with a local self-signed
+    // cert so headsets can enter VR from non-localhost IPs (e.g. LAN).
+    https: {
+      key: fs.readFileSync(path.resolve(__dirname, '.certs/key.pem')),
+      cert: fs.readFileSync(path.resolve(__dirname, '.certs/cert.pem')),
+    },
   },
   plugins: [serveLocalScenes()],
 })
