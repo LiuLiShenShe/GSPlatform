@@ -12,7 +12,9 @@
  * 无 iframe / postMessage / setTimeout 中间跳。
  */
 import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useSuperSplatXR } from '../features/viewer-official/useSuperSplatXR';
+import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 
 export default function XRViewerPage() {
@@ -21,6 +23,13 @@ export default function XRViewerPage() {
   useDocumentTitle(effectiveSceneId ? `XR 场景 ${effectiveSceneId}` : 'XR 场景');
 
   const state = useSuperSplatXR(effectiveSceneId);
+
+  // SSV-06：媒体 Overlay（关闭不清除官方 selection；切换标注自动更新）。
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const selectedAnnotation = state.selectedGsplatformAnnotation;
+  useEffect(() => {
+    if (selectedAnnotation) setOverlayOpen(true);
+  }, [selectedAnnotation]);
 
   const canEnter = state.status === 'ready' || state.status === 'xr-ended';
   // 运行态真相驱动按钮；浏览器能力诊断仅展示。
@@ -108,7 +117,13 @@ export default function XRViewerPage() {
         </tbody>
       </table>
 
-      <div className="xr-page__mount" ref={state.containerRef} data-testid="xr-mount" />
+      <div className="xr-page__mount" ref={state.containerRef} data-testid="xr-mount">
+        <AnnotationMediaOverlay
+          annotation={overlayOpen ? selectedAnnotation : null}
+          descriptor={state.descriptor}
+          onClose={() => setOverlayOpen(false)}
+        />
+      </div>
 
       {state.status === 'error' && (
         <div className="xr-page__err" data-testid="xr-load-error">{state.error}</div>

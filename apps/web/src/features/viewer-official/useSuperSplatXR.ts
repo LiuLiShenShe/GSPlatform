@@ -20,6 +20,7 @@ import {
   renderedSplatCount,
   runtimeRenderer,
   SuperSplatRuntime,
+  type GsplatformAnnotationRef,
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
@@ -65,6 +66,11 @@ export interface OfficialXRViewerState {
   startVR: () => Promise<void>;
   /** 结束当前 XR 会话。 */
   endXR: () => Promise<void>;
+  /**
+   * 官方当前选中 annotation 的 GSPlatform extras 引用（SSV-06）。
+   * 经 annotationId 解析 SceneAnnotation / 打开媒体 Overlay。
+   */
+  selectedGsplatformAnnotation: GsplatformAnnotationRef | null;
 }
 
 const STATS_POLL_MS = 1000;
@@ -106,6 +112,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
   const [descriptor, setDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
   const [isManifestFallback, setIsManifestFallback] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedGsplatformAnnotation, setSelectedGsplatformAnnotation] =
+    useState<GsplatformAnnotationRef | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // 进入过 XR 标记（用 ref 避免闭包捕获旧 state）：用于「系统退出 → xr-ended」判定
   const hadXRRef = useRef(false);
@@ -145,6 +153,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
       setLoaded(false);
       setGsplats(0);
       setXrMode(null);
+      setSelectedGsplatformAnnotation(null);
       try {
         // 1) 描述：sceneId → DB 合同 (404 回退 manifest)；否则直接用传入的
         //    descriptor（/xr/test 的 URL 调试场景合成最小描述，仍走同一条
@@ -170,6 +179,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
         if (cancelled) return;
 
         // 3) 官方 SuperSplat Runtime（mode:'xr' → renderer 强制 'webgl'）
+        //    ui:true = 官方 annotation hotspots/tooltip 层（SSV-06）。
         const runtime = await SuperSplatRuntime.create({
           container: mount,
           contentUrl: desc.content.url,
@@ -177,6 +187,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
           posterUrl: desc.scene.posterUrl ?? undefined,
           collisionUrl: desc.collision?.url ?? undefined,
           mode: 'xr',
+          ui: true,
         });
         if (cancelled) {
           runtime.destroy();
@@ -222,6 +233,11 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
             } else if (hadXRRef.current) {
               setStatus('xr-ended');
             }
+          }),
+          // SSV-06：官方选中标注变化 → extras.gsplatform.annotationId。
+          runtime.onSelectedAnnotationChanged(() => {
+            if (cancelled) return;
+            setSelectedGsplatformAnnotation(runtime.selectedGsplatformAnnotation);
           }),
         );
 
@@ -320,6 +336,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     frameScene,
     startVR,
     endXR,
+    selectedGsplatformAnnotation,
   };
 }
 

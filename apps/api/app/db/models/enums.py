@@ -69,6 +69,7 @@ class AssetKind(enum.StrEnum):
     STREAM_CHUNK = "STREAM_CHUNK"
     LOG_SUMMARY = "LOG_SUMMARY"
     COLLISION_GLB = "COLLISION_GLB"
+    ANNOTATION_MEDIA = "ANNOTATION_MEDIA"
 
 
 class UploadSessionStatus(enum.StrEnum):

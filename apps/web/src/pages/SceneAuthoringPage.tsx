@@ -54,6 +54,10 @@ export default function SceneAuthoringPage() {
   const [loading, setLoading] = useState(true);
   const [viewerReady, setViewerReady] = useState(false);
 
+  // SSV-06 §七：标注创建/更新/删除后递增，预览 runtime 用最新 descriptor 重建，
+  // 官方 hotspot 才出现（预览必须使用官方 hotspot）。
+  const [annotationRevision, setAnnotationRevision] = useState(0);
+
   // Annotations (Phase 11)
   const [annotations, setAnnotations] = useState<SceneAnnotation[]>([]);
   const [pickingAnnotation, setPickingAnnotation] = useState(false);
@@ -85,6 +89,9 @@ export default function SceneAuthoringPage() {
           posterUrl: descriptor.scene.posterUrl ?? undefined,
           collisionUrl: descriptor.collision?.url ?? undefined,
           mode: 'desktop',
+          // SSV-06：官方 annotation hotspots/tooltip 层（多余 chrome 由 wrapper
+          // scoped CSS 隐藏），预览必须使用官方 hotspot。
+          ui: true,
         });
         if (cancelled) {
           runtime.destroy();
@@ -119,7 +126,7 @@ export default function SceneAuthoringPage() {
       runtime?.destroy();
       runtimeRef.current = null;
     };
-  }, [effectiveSceneId, authoring.settingsRevision]);
+  }, [effectiveSceneId, authoring.settingsRevision, annotationRevision]);
 
   // Load annotations on mount (Phase 11)
   useEffect(() => {
@@ -159,6 +166,7 @@ export default function SceneAuthoringPage() {
     const [anchorX, anchorY, anchorZ] = hit.position;
     const ann = await apiCreateAnnotation(effectiveSceneId, { anchorX, anchorY, anchorZ });
     setAnnotations((prev) => [...prev, ann]);
+    setAnnotationRevision((n) => n + 1);
     setPickingAnnotation(false);
     message.success('注解已创建');
   }, [pickingAnnotation, effectiveSceneId, viewerReady]);
@@ -166,11 +174,13 @@ export default function SceneAuthoringPage() {
   const handleUpdateAnnotation = useCallback(async (id: string, patch: Partial<SceneAnnotation>) => {
     const updated = await apiUpdateAnnotation(effectiveSceneId, id, patch);
     setAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
+    setAnnotationRevision((n) => n + 1);
   }, [effectiveSceneId]);
 
   const handleDeleteAnnotation = useCallback(async (id: string) => {
     await apiDeleteAnnotation(effectiveSceneId, id);
     setAnnotations((prev) => prev.filter((a) => a.id !== id));
+    setAnnotationRevision((n) => n + 1);
   }, [effectiveSceneId]);
 
   // 当前相机 pose —— 经 SuperSplatRuntime 封装读取（页面不触碰 app）。
@@ -310,7 +320,10 @@ export default function SceneAuthoringPage() {
           picking={pickingAnnotation}
           onCreate={(x, y, z) => {
             void apiCreateAnnotation(effectiveSceneId, { anchorX: x, anchorY: y, anchorZ: z })
-              .then((ann) => setAnnotations((prev) => [...prev, ann]));
+              .then((ann) => {
+                setAnnotations((prev) => [...prev, ann]);
+                setAnnotationRevision((n) => n + 1);
+              });
           }}
           onUpdate={handleUpdateAnnotation}
           onDelete={handleDeleteAnnotation}

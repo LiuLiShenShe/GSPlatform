@@ -51,6 +51,23 @@ logger = logging.getLogger("gsplatform.authoring")
 _COVER_MIME = {"image/jpeg", "image/png", "image/webp"}
 _COVER_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# Allowed annotation media MIME types per content type (SSV-06).
+_ANNOTATION_MEDIA_MIME: dict[str, set[str]] = {
+    "IMAGE": {"image/jpeg", "image/png", "image/webp"},
+    "PANORAMA": {"image/jpeg", "image/png", "image/webp"},
+    "VIDEO": {"video/mp4", "video/webm", "video/quicktime"},
+    "AUDIO": {
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/aac",
+    },
+}
+_ANNOTATION_MEDIA_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
 
 def _validate_owner(scene: Scene, owner_id: uuid.UUID) -> None:
     if scene.owner_id != owner_id:
@@ -768,3 +785,94 @@ class AuthoringService:
             existing[a_id].order_index = index + 1
         self._session.flush()
         return self.list_annotations(slug_or_id, owner_id)
+
+    def set_annotation_media(
+        self,
+        slug_or_id: str,
+        owner_id: uuid.UUID,
+        annotation_id: str,
+        data: bytes,
+        mime: str,
+    ) -> SceneAnnotationOut:
+        """Store media for an IMAGE/VIDEO/AUDIO/PANORAMA annotation.
+
+        The stored asset's kind is ``ANNOTATION_MEDIA`` and its storage key is
+        ``annotations/{scene_id}/{annotation_id}`` so re-uploads replace the
+        previous file for that annotation. TEXT annotations reject uploads.
+        """
+        scene = self._get_owned_scene(slug_or_id, owner_id)
+        try:
+            ann_uuid = uuid.UUID(annotation_id)
+        except ValueError:
+            raise NotFoundError("注解不存在") from None
+        ann = self._annotations.get_by_scene(scene.id, ann_uuid)
+        if ann is None:
+            raise NotFoundError("注解不存在")
+
+        allowed = _ANNOTATION_MEDIA_MIME.get(ann.content_type)
+        if allowed is None:
+            raise ConflictError(f"{ann.content_type} 注解不支持媒体上传")
+        if mime not in allowed:
+            raise ConflictError(f"{ann.content_type} 注解仅支持 {sorted(allowed)}，收到: {mime}")
+        if len(data) > _ANNOTATION_MEDIA_MAX_BYTES:
+            raise ConflictError("注解媒体文件不能超过 50MB")
+
+        digest = hashlib.sha256(data).hexdigest()
+        key = f"annotations/{scene.id}/{ann.id}"
+        self._storage.write(key, data)
+
+        asset = Asset(
+            scene_id=scene.id,
+            version_id=None,
+            kind=AssetKind.ANNOTATION_MEDIA.value,
+            storage_key=key,
+            mime_type=mime,
+            byte_size=len(data),
+            sha256=digest,
+            metadata_={"mime": mime, "contentType": ann.content_type},
+        )
+        self._session.add(asset)
+        self._session.flush()
+
+        ann.media_asset_id = asset.id
+        self._session.flush()
+
+        return SceneAnnotationOut(
+            id=str(ann.id),
+            title=ann.title,
+            description=ann.description,
+            anchorX=ann.anchor_x,
+            anchorY=ann.anchor_y,
+            anchorZ=ann.anchor_z,
+            style=ann.style,
+            contentType=ann.content_type,
+            textContent=ann.text_content,
+            mediaAssetId=str(ann.media_asset_id),
+            textColor=ann.text_color,
+            textSize=ann.text_size,
+            fov=ann.fov,
+            orderIndex=ann.order_index,
+            enabled=ann.enabled,
+        )
+
+    def serve_annotation_media(self, slug_or_id: str, annotation_id: str) -> tuple[bytes, str]:
+        """Return annotation media bytes + mime (or raise NotFound)."""
+        from app.repositories.scenes import SceneRepository
+
+        scene = SceneRepository(self._session).get_by_slug(slug_or_id)
+        if scene is None:
+            raise NotFoundError(f"场景 {slug_or_id} 不存在")
+        try:
+            ann_uuid = uuid.UUID(annotation_id)
+        except ValueError:
+            raise NotFoundError("注解不存在") from None
+        ann = self._annotations.get_by_scene(scene.id, ann_uuid)
+        if ann is None:
+            raise NotFoundError("注解不存在")
+        if ann.media_asset_id is None:
+            raise NotFoundError("该注解尚未设置媒体")
+        asset = self._session.get(Asset, ann.media_asset_id)
+        if asset is None:
+            raise NotFoundError("媒体资源不存在")
+        data = self._storage.read(asset.storage_key)
+        return data, asset.mime_type

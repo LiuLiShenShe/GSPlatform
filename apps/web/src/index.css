@@ -703,3 +703,102 @@ a {
 .gs-topbar__search {
   min-width: 200px;
 }
+
+/* ------------------------------------------------------------------ *
+ * Annotation Media Overlay（SSV-06 §五）
+ * ------------------------------------------------------------------ */
+.gs-annotation-media-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 10, 22, 0.55);
+  padding: 24px;
+}
+
+.gs-annotation-media-overlay__card {
+  width: min(760px, 92vw);
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0d1830;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.gs-annotation-media-overlay__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.gs-annotation-media-overlay__badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #9fb6e8;
+  background: rgba(74, 144, 217, 0.18);
+  border: 1px solid rgba(74, 144, 217, 0.4);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.gs-annotation-media-overlay__title {
+  flex: 1;
+  font-weight: 600;
+  color: #e8eefb;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-annotation-media-overlay__close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: #c8d3eb;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.gs-annotation-media-overlay__close:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.gs-annotation-media-overlay__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  align-items: center;
+}
+
+.gs-annotation-media-overlay__media {
+  max-width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  border-radius: 8px;
+  background: #000;
+}
+
+.gs-annotation-media-overlay__desc {
+  margin: 0;
+  color: #a8b4cd;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.gs-annotation-media-overlay__missing {
+  padding: 32px;
+  color: #8a97b5;
+  text-align: center;
+}

@@ -72,6 +72,23 @@ export interface SuperSplatRuntimeOptions {
   collisionUrl?: string;
   /** 运行模式 → renderer 策略。 */
   mode: RuntimeMode;
+  /**
+   * 是否启用官方 UI 层（SSV-06：官方 annotation hotspots / tooltip 只在
+   * ``ui:true`` 时由 initUI 构建）。默认 false = headless，宿主自绘 UI。
+   * 开启后本层注入作用域 CSS，隐藏官方冗余 chrome（.sse-ui），只保留标注层
+   * （.sse-sceneLayer）—— 官方控件不重复渲染。
+   */
+  ui?: boolean;
+}
+
+/** 选中官方 annotation 中带 GSPlatform extras 协议的引用（SSV-06 §二）。 */
+export interface GsplatformAnnotationRef {
+  /** 官方 settings.annotations 数组下标（仅事件定位用，禁止当数据库 ID）。 */
+  index: number;
+  /** extras.gsplatform.annotationId —— 数据库 SceneAnnotation.id。 */
+  annotationId: string;
+  /** extras.gsplatform.contentType —— TEXT|IMAGE|VIDEO|AUDIO|PANORAMA。 */
+  contentType: string;
 }
 
 /** 事件回调参数（与官方 `<key>:changed` 的 (value, previous) 对齐）。 */
@@ -121,6 +138,9 @@ export class SuperSplatRuntime {
    * @returns resolve 为已就绪的 SuperSplatRuntime（场景尚在加载，loaded 可能为 false）。
    */
   static async create(options: SuperSplatRuntimeOptions): Promise<SuperSplatRuntime> {
+    if (options.ui) {
+      applyUiScopeStyles(options.container);
+    }
     const viewerOptions = toCreateViewerOptions(options);
     const handle = await createViewer(viewerOptions);
     return new SuperSplatRuntime(handle, viewerOptions);
@@ -170,6 +190,29 @@ export class SuperSplatRuntime {
 
   get selectedAnnotation(): number | null {
     return this.requiredState().selectedAnnotation;
+  }
+
+  /**
+   * 当前选中官方 annotation 的 GSPlatform extras 引用（SSV-06 §二）。
+   *
+   * 读取官方 annotation.extras.gsplatform.annotationId —— 页面用它解析数据库
+   * SceneAnnotation，**禁止**用官方数组 index 当数据库 ID。无选中 / 非
+   * GSPlatform 标注（无 extras 协议）返回 null。
+   */
+  get selectedGsplatformAnnotation(): GsplatformAnnotationRef | null {
+    const index = this.requiredState().selectedAnnotation;
+    if (index === null || index < 0) return null;
+    const ann = this.annotations[index];
+    const extras = ann?.extras as
+      | { gsplatform?: { annotationId?: unknown; contentType?: unknown } }
+      | undefined;
+    const annotationId = extras?.gsplatform?.annotationId;
+    if (typeof annotationId !== 'string' || annotationId.length === 0) return null;
+    const contentType =
+      typeof extras?.gsplatform?.contentType === 'string'
+        ? (extras.gsplatform.contentType as string)
+        : 'TEXT';
+    return { index, annotationId, contentType };
   }
 
   get isFullscreen(): boolean {
@@ -522,13 +565,39 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
     settings: options.settings,
     posterUrl: options.posterUrl,
     collisionUrl: options.collisionUrl,
-    // headless：UI 由宿主绘制（诊断面板 / 控件）
-    ui: false,
+    // SSV-03 起 headless：默认不渲染官方控件（宿主自绘）。
+    // SSV-06 起可选 ui:true：官方 annotation hotspots / tooltip 需要官方 UI 层，
+    // 开启后由 applyUiScopeStyles 隐藏多余 chrome，只保留 .sse-sceneLayer。
+    ui: options.ui ?? false,
     // Renderer Policy：
     //   desktop → undefined（官方默认 webgpu，引擎自动 fallback WebGL，即“auto”）
     //   xr      → 'webgl'（禁止 XR 默认走 WebGPU）
     renderer: rendererForMode(options.mode),
   } as CreateViewerOptions;
+}
+
+/**
+ * 官方 UI 作用域（SSV-06）：
+ *
+ * 官方 annotation hotspots / tooltip（Annotations 类）只在官方 UI 层
+ * （initUI）内构建，因此开启 ui:true；同时给容器打上作用域 class 并注入一次性
+ * CSS，隐藏官方冗余 chrome（.sse-ui：控件栏 / 海报 / 加载条 / annotation 导航 /
+ * 设置面板 / 帮助），只保留 .sse-sceneLayer（标注热点 + tooltip）与 canvas。
+ * 这样宿主自绘控件，而官方标注层独立工作，且不 fork viewer。
+ */
+const UI_SCOPE_CLASS = 'gs-supersplat-host';
+let uiScopeStyle: HTMLStyleElement | null = null;
+
+function applyUiScopeStyles(container: HTMLElement): void {
+  container.classList.add(UI_SCOPE_CLASS);
+  if (uiScopeStyle) return;
+  uiScopeStyle = document.createElement('style');
+  uiScopeStyle.id = 'gs-supersplat-ui-scope';
+  uiScopeStyle.textContent = [
+    `.${UI_SCOPE_CLASS} .sse-ui { display: none !important; }`,
+    `.${UI_SCOPE_CLASS} .sse-sceneLayer { display: block !important; }`,
+  ].join('\n');
+  document.head.appendChild(uiScopeStyle);
 }
 
 // ------------------------------------------------------------------ #

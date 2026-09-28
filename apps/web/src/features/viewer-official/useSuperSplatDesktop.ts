@@ -19,6 +19,7 @@ import {
   renderedSplatCount,
   runtimeRenderer,
   SuperSplatRuntime,
+  type GsplatformAnnotationRef,
   type RuntimeCameraMode,
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
@@ -66,6 +67,12 @@ export interface OfficialDesktopViewerState {
   togglePerformanceMode: () => void;
   /** 切换 annotation 可见性（官方 state 写入）。 */
   toggleAnnotationsVisibility: () => void;
+  /**
+   * 官方当前选中 annotation 的 GSPlatform extras 引用（SSV-06）。
+   * 页面用它经 annotationId 解析 SceneAnnotation / 打开媒体 Overlay；
+   * 关闭 Overlay 不清除本值（不清除官方 selection）。
+   */
+  selectedGsplatformAnnotation: GsplatformAnnotationRef | null;
 }
 
 const STATS_POLL_MS = 1000;
@@ -98,6 +105,8 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
   const [canStartVR, setCanStartVR] = useState(false);
   const [descriptor, setDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
   const [isManifestFallback, setIsManifestFallback] = useState(false);
+  const [selectedGsplatformAnnotation, setSelectedGsplatformAnnotation] =
+    useState<GsplatformAnnotationRef | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   // create / destroy-on-change / destroy-on-unmount（StrictMode-safe）
@@ -112,6 +121,7 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
       setProgress(0);
       setLoaded(false);
       setGsplats(0);
+      setSelectedGsplatformAnnotation(null);
       try {
         // 1) 描述：DB 合同优先，仓库级场景 manifest 回退
         const { descriptor: desc, fromManifest } = await resolveSceneRuntimeDescriptor(sceneIdRef.current);
@@ -130,6 +140,8 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
         if (cancelled) return;
 
         // 3) 官方 SuperSplat Runtime（desktop → auto renderer，无 iframe）
+        //    ui:true = 官方 annotation hotspots/tooltip 层（SSV-06；多余 chrome
+        //    由 wrapper 的 scoped CSS 隐藏）。
         const runtime = await SuperSplatRuntime.create({
           container: mount,
           contentUrl: desc.content.url,
@@ -137,6 +149,7 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
           posterUrl: desc.scene.posterUrl ?? undefined,
           collisionUrl: desc.collision?.url ?? undefined,
           mode: 'desktop',
+          ui: true,
         });
         if (cancelled) {
           runtime.destroy();
@@ -179,6 +192,12 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
           runtime.onCameraModeChanged((m) => {
             if (cancelled) return;
             setCameraModeState(m);
+          }),
+          // SSV-06：官方选中标注变化 → 读取 extras.gsplatform.annotationId
+          // （页面经 annotationId 解析，不用数组 index 当数据库 ID）。
+          runtime.onSelectedAnnotationChanged(() => {
+            if (cancelled) return;
+            setSelectedGsplatformAnnotation(runtime.selectedGsplatformAnnotation);
           }),
         );
 
@@ -291,5 +310,6 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     setCameraMode,
     togglePerformanceMode,
     toggleAnnotationsVisibility,
+    selectedGsplatformAnnotation,
   };
 }

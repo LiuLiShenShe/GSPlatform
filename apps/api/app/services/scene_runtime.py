@@ -363,6 +363,7 @@ class SceneRuntimeService:
         ]
 
     def _build_annotations(self, scene: Scene) -> list[RuntimeAnnotation]:
+        base = PRESENTATION_SERVE_BASE.format(slug=scene.slug)
         return [
             RuntimeAnnotation(
                 id=str(ann.id),
@@ -372,7 +373,9 @@ class SceneRuntimeService:
                 style=ann.style,
                 contentType=ann.content_type,
                 textContent=ann.text_content,
-                mediaAssetUrl=None,
+                mediaAssetUrl=(
+                    f"{base}/annotations/{ann.id}/media" if ann.media_asset_id else None
+                ),
                 textColor=ann.text_color,
                 textSize=ann.text_size,
                 fov=ann.fov,

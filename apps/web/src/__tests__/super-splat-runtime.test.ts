@@ -13,6 +13,7 @@ vi.mock('@playcanvas/supersplat-viewer/viewer', () => ({
 
 import { createViewer, type ViewerHandle } from '@playcanvas/supersplat-viewer/viewer';
 import {
+  ANNOTATION_LIMITS,
   CAMERA_FOV_RANGE,
   validateSettings,
 } from '@playcanvas/supersplat-viewer/settings';
@@ -251,6 +252,133 @@ describe('Experience Adapter V1', () => {
     const settings = buildExperienceSettings(runtimeDescriptorFixture);
     expect(settings.background.skyboxUrl).toBeUndefined();
   });
+
+  // ─── SSV-06 —— annotations / soundUrl 映射 ──────────────────────────────
+
+  it('backgroundAudio enabled → 官方 soundUrl（解析为绝对 URL）', () => {
+    const settings = buildExperienceSettings(runtimeDescriptorFixture);
+    expect(settings.soundUrl).toBe(
+      'http://localhost:8001/api/v1/scenes/r-8c4e2264e86a/presentation/background-audio',
+    );
+  });
+
+  it('backgroundAudio 未启用/无 url → 不写 soundUrl', () => {
+    const disabled: SceneRuntimeDescriptorV1 = {
+      ...runtimeDescriptorFixture,
+      backgroundAudio: { url: '/x.mp3', volume: 1, loop: true, enabled: false },
+    };
+    expect(buildExperienceSettings(disabled).soundUrl).toBeUndefined();
+
+    const noUrl: SceneRuntimeDescriptorV1 = {
+      ...runtimeDescriptorFixture,
+      backgroundAudio: { url: null, volume: 1, loop: true, enabled: true },
+    };
+    expect(buildExperienceSettings(noUrl).soundUrl).toBeUndefined();
+  });
+
+  it('annotations → 官方 annotations[]（position/title/text/camera/extras 协议）', () => {
+    const settings = buildExperienceSettings(runtimeDescriptorFixture);
+    const official = settings.annotations;
+    expect(official).toHaveLength(1);
+    const first = official[0];
+    expect(first.position).toEqual([-1.2, 0.3, 0.4]);
+    expect(first.title).toBe('水井');
+    expect(first.text).toBe('清代古井');
+    // extras 固定协议：annotationId 才是数据库 ID（禁止依赖数组 index）。
+    expect(first.extras).toEqual({
+      gsplatform: { annotationId: 'ann-1', contentType: 'TEXT' },
+    });
+    // camera = 场景初始视角构图；fov 用标注自身值（clamp 进官方界）。
+    expect(first.camera.initial.fov).toBe(60);
+  });
+
+  it('annotation 文本 HTML 被 sanitize（剥离标签/脚本），title/text 截断进官方 limits', () => {
+    const desc: SceneRuntimeDescriptorV1 = {
+      ...emptyRuntimeDescriptorFixture,
+      presentation: { ...emptyRuntimeDescriptorFixture.presentation },
+      annotations: [
+        {
+          id: 'ann-xss',
+          title: '标题<script>alert(1)</script>',
+          description: '',
+          anchor: { x: 0, y: 1, z: 0 },
+          style: 'LEADER_TEXT',
+          contentType: 'TEXT',
+          textContent: '<b>加粗</b><em>斜体</em><!-- 注释 --><img src=x onerror=alert(2)> 正文',
+          mediaAssetUrl: null,
+          textColor: '#fff',
+          textSize: 14,
+          fov: 999, // 越界 → clamp
+          orderIndex: 0,
+          enabled: true,
+        },
+      ],
+      backgroundAudio: null,
+    };
+    const settings = buildExperienceSettings(desc);
+    expect(() => validateSettings(settings, { limits: true })).not.toThrow();
+    const official = settings.annotations[0];
+    expect(official.title).toBe('标题');
+    expect(official.text).not.toContain('<');
+    expect(official.text).not.toContain('alert');
+    expect(official.text).toContain('加粗斜体 正文'); // 标签剥除后相邻文本拼接
+    expect(official.camera.initial.fov).toBe(CAMERA_FOV_RANGE.max);
+  });
+
+  it('长 title/text 截断进官方 ANNOTATION_LIMITS（titleMax/textMax）', () => {
+    const longTitle = '字'.repeat(200);
+    const longText = '长'.repeat(500);
+    const settings = buildExperienceSettings({
+      ...emptyRuntimeDescriptorFixture,
+      annotations: [
+        {
+          id: 'ann-long',
+          title: longTitle,
+          description: '',
+          anchor: { x: 0, y: 1, z: 0 },
+          style: 'LEADER_TEXT',
+          contentType: 'TEXT',
+          textContent: longText,
+          mediaAssetUrl: null,
+          textColor: '#fff',
+          textSize: 14,
+          fov: 60,
+          orderIndex: 0,
+          enabled: true,
+        },
+      ],
+      backgroundAudio: null,
+    });
+    expect(() => validateSettings(settings, { limits: true })).not.toThrow();
+    expect(settings.annotations[0].title.length).toBeLessThanOrEqual(ANNOTATION_LIMITS.titleMax);
+    expect(settings.annotations[0].text.length).toBeLessThanOrEqual(ANNOTATION_LIMITS.textMax);
+  });
+
+  it('disabled 标注不进入官方 annotations；数量 cap 进官方 maxCount', () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      id: `ann-${i}`,
+      title: `标注 ${i}`,
+      description: '',
+      anchor: { x: i, y: 0, z: 0 },
+      style: 'LEADER_TEXT' as const,
+      contentType: 'TEXT' as const,
+      textContent: '',
+      mediaAssetUrl: null,
+      textColor: '#fff',
+      textSize: 14,
+      fov: 60,
+      orderIndex: i,
+      enabled: i !== 39, // 最后一个 disabled
+    }));
+    const settings = buildExperienceSettings({
+      ...emptyRuntimeDescriptorFixture,
+      annotations: many,
+      backgroundAudio: null,
+    });
+    expect(() => validateSettings(settings, { limits: true })).not.toThrow();
+    expect(settings.annotations).toHaveLength(25); // maxCount
+    expect(settings.annotations.some((a) => a.title === '标注 39')).toBe(false);
+  });
 });
 
 describe('Renderer Policy', () => {
@@ -289,6 +417,79 @@ describe('Renderer Policy', () => {
     expect(opts.collisionUrl).toBe('/api/v1/scenes/x/collision/mesh');
     expect(opts.posterUrl).toBe('/local-scenes/x/poster.webp');
     expect(opts.ui).toBe(false);
+  });
+
+  it('ui:true 透传官方 ui 选项，并给容器打作用域 class + 注入 scoped CSS', async () => {
+    const fake = makeFakeHandle();
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const container = document.createElement('div');
+    await SuperSplatRuntime.create(defaultOptions({ container, ui: true }));
+    const opts = mockedCreateViewer.mock.calls[0][0];
+    expect(opts.ui).toBe(true);
+    expect(container.classList.contains('gs-supersplat-host')).toBe(true);
+    const style = document.getElementById('gs-supersplat-ui-scope');
+    expect(style).not.toBeNull();
+    expect(style!.textContent).toContain('.sse-ui');
+    expect(style!.textContent).toContain('.sse-sceneLayer');
+  });
+});
+
+describe('SSV-06 官方选中标注 extras 解析', () => {
+  it('selectedGsplatformAnnotation 读取 extras.gsplatform.annotationId（不用数组 index 当 ID）', async () => {
+    const fake = makeFakeHandle();
+    (fake as unknown as { annotations: unknown[] }).annotations = [
+      {
+        position: [0, 0, 0],
+        title: '媒体标注',
+        text: '',
+        camera: { initial: { position: [0, 0, 0], target: [0, 0, 1], fov: 60 } },
+        extras: { gsplatform: { annotationId: 'ann-uuid-1', contentType: 'VIDEO' } },
+      },
+      {
+        position: [1, 0, 0],
+        title: '纯文本',
+        text: '',
+        camera: { initial: { position: [0, 0, 0], target: [0, 0, 1], fov: 60 } },
+        extras: { gsplatform: { annotationId: 'ann-uuid-2', contentType: 'TEXT' } },
+      },
+    ];
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.selectedGsplatformAnnotation).toBeNull();
+
+    const fire = (fake.events as unknown as { fire: (e: string, ...a: unknown[]) => void }).fire;
+    const setSelected = (v: number | null) => {
+      // 官方 State.selectedAnnotation 声明为只读（须经 selectAnnotation），
+      // 测试里直接改底层 state 快照模拟事件来源。
+      (fake.state as { selectedAnnotation: number | null }).selectedAnnotation = v;
+    };
+    setSelected(0);
+    fire('selectedAnnotation:changed', 0);
+    expect(runtime.selectedGsplatformAnnotation).toEqual({
+      index: 0,
+      annotationId: 'ann-uuid-1',
+      contentType: 'VIDEO',
+    });
+
+    setSelected(1);
+    fire('selectedAnnotation:changed', 1);
+    expect(runtime.selectedGsplatformAnnotation?.annotationId).toBe('ann-uuid-2');
+
+    // 清除选中 → null（页面据此关闭 Overlay；关闭 Overlay 不清除 selection）。
+    setSelected(null);
+    fire('selectedAnnotation:changed', null);
+    expect(runtime.selectedGsplatformAnnotation).toBeNull();
+  });
+
+  it('选中非 GSPlatform 标注（无 extras 协议）→ null', async () => {
+    const fake = makeFakeHandle();
+    (fake as unknown as { annotations: unknown[] }).annotations = [
+      { position: [0, 0, 0], title: 'x', text: '', camera: { initial: { position: [0, 0, 0], target: [0, 0, 1], fov: 60 } } },
+    ];
+    (fake.state as { selectedAnnotation: number | null }).selectedAnnotation = 0;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.selectedGsplatformAnnotation).toBeNull();
   });
 });
 

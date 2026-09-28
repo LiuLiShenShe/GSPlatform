@@ -1,11 +1,11 @@
 /**
- * Experience Adapter V2（SSV-05）—— 把 SceneRuntimeDescriptorV1 完整映射为官方
+ * Experience Adapter V2（SSV-05/06）—— 把 SceneRuntimeDescriptorV1 完整映射为官方
  * ExperienceSettings v2。
  *
  * 官方 schema（defaultSettings() / validateSettings()）是唯一 runtime schema，
  * 不新建 ViewerSettingsV3 / XRSettings / DesktopSettings。
  *
- * 本阶段映射 ScenePresentation 全部渲染字段：
+ * SSV-05 映射 ScenePresentation 全部渲染字段：
  *   - initial camera        → cameras[0].initial（fov clamp 进官方 authoring 界）
  *   - background color      → background.color
  *   - equirectangular 全景  → background.skyboxUrl
@@ -14,10 +14,17 @@
  *   - post effects（单一结构化 JSONB）→ postEffectSettings（每个数值 clamp 进官方
  *     POST_EFFECT_RANGES，保证 limits: true 校验通过）
  *
+ * SSV-06 映射标注 / 背景音频：
+ *   - annotations           → settings.annotations[]（position/title/text/camera/extras；
+ *     extras 固定协议 { gsplatform: { annotationId, contentType } }；HTML sanitize；
+ *     title/text 截断进官方 ANNOTATION_LIMITS；数量 cap 25）
+ *   - backgroundAudio       → settings.soundUrl（官方能力；禁止第二套同时播放的音频）
+ *
  * 旧场景缺失的字段一律落在 defaultSettings() 官方默认上 —— 绝不产生非法 settings；
  * 产物始终能通过官方 validateSettings(settings, { limits: true })。
  */
 import {
+  ANNOTATION_LIMITS,
   CAMERA_FOV_RANGE,
   DEFAULT_CAMERA_FOV,
   POST_EFFECT_RANGES,
@@ -27,6 +34,7 @@ import {
   type PostEffectSettings,
 } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from './types';
+import { resolveRuntimeAssetUrl } from './assetUrl';
 
 const TONEMAPPING_VALUES = [
   'none',
@@ -165,9 +173,84 @@ export function buildExperienceSettings(
     ];
   }
 
-  // 7) sound / annotations / anim —— 不在本阶段映射（保持官方默认）。
+  // 7) background audio —— 官方 soundUrl 能力（唯一播放来源）；仅 enabled 且有 url 才写。
+  //    解析为绝对 URL（跨源/开发时相对路径会 404）。官方自带 autoplay 解锁策略，
+  //    不绕过浏览器权限。
+  const audio = descriptor.backgroundAudio;
+  const soundUrl = resolveRuntimeAssetUrl(audio?.url);
+  if (audio && audio.enabled && soundUrl) {
+    settings.soundUrl = soundUrl;
+  }
+
+  // 8) annotations —— SSV-06：官方 annotations[]（position/title/text/camera/extras）。
+  //    每个 annotation 都带 extras 固定协议 { gsplatform: { annotationId, contentType } }，
+  //    页面依据 annotationId 解析（禁止用数组 index 当数据库 ID）。
+  settings.annotations = buildAnnotations(descriptor, settings);
 
   // 官方校验：作者侧限值全开，任何字段越界立即抛错。
   validateSettings(settings, { limits: true });
   return settings;
+}
+
+/**
+ * 把 descriptor.annotations 映射为官方 settings.annotations（SSV-06）。
+ *
+ * - 仅保留 enabled 标注，数量 cap 进官方 ANNOTATION_LIMITS.maxCount。
+ * - title / text 做 HTML sanitize（剥标签成纯文本）后截断进官方
+ *   ANNOTATION_LIMITS.titleMax / textMax —— 满足“TEXT 直接由官方 panel 显示，
+ *   HTML 必须 sanitize”。
+ * - extras 为固定协议 { gsplatform: { annotationId, contentType } }。
+ * - camera 复用 settings.cameras[0].initial（初始视角构图），fov 用标注自身的
+ *   fov（若合法则覆盖，clamp 进官方界）——官方 hotspot 点击后 camera navigation
+ *   仍由官方执行（fly 到该 camera）。
+ */
+export function buildAnnotations(
+  descriptor: SceneRuntimeDescriptorV1,
+  settings: Pick<ExperienceSettings, 'cameras'>,
+): {
+  position: [number, number, number];
+  title: string;
+  text: string;
+  extras: { gsplatform: { annotationId: string; contentType: string } };
+  camera: { initial: { position: [number, number, number]; target: [number, number, number]; fov: number } };
+}[] {
+  const base = settings.cameras[0]?.initial;
+  const basePosition: [number, number, number] = base
+    ? [base.position[0], base.position[1], base.position[2]]
+    : [0, 2, 0];
+  const baseTarget: [number, number, number] = base
+    ? [base.target[0], base.target[1], base.target[2]]
+    : [2, 2, 0];
+  const baseFov = base ? base.fov : DEFAULT_CAMERA_FOV;
+
+  return descriptor.annotations
+    .filter((a) => a.enabled !== false)
+    .slice(0, ANNOTATION_LIMITS.maxCount)
+    .map((a) => {
+      const title = sanitizeAnnotationText(a.title).slice(0, ANNOTATION_LIMITS.titleMax);
+      const text = sanitizeAnnotationText(a.textContent).slice(0, ANNOTATION_LIMITS.textMax);
+      const fov =
+        typeof a.fov === 'number' && Number.isFinite(a.fov)
+          ? clamp(a.fov, CAMERA_FOV_RANGE.min, CAMERA_FOV_RANGE.max)
+          : baseFov;
+      return {
+        position: [a.anchor.x, a.anchor.y, a.anchor.z],
+        title: title || '标注',
+        text,
+        extras: { gsplatform: { annotationId: a.id, contentType: a.contentType } },
+        camera: { initial: { position: basePosition, target: baseTarget, fov } },
+      };
+    });
+}
+
+/** 剥掉 HTML 标签（含 script/style/注释），返回纯文本 —— TEXT 标注内容必须 sanitize。 */
+function sanitizeAnnotationText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/<style[\s\S]*?<\/style\s*>/gi, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

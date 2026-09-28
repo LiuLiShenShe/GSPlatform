@@ -360,6 +360,107 @@ class TestAnnotations:
         assert _get(public_scene.slug).json()["annotations"] == []
 
 
+# ─── SSV-06. annotation media upload / serve ────────────────────────────────
+class TestAnnotationMedia:
+    """SSV-06 — per-annotation media upload, replace, MIME gate, serve."""
+
+    @staticmethod
+    def _create(slug: str, *, content_type: str) -> dict:
+        resp = client.post(
+            f"/api/v1/scenes/{slug}/annotations",
+            json={
+                "title": "媒体标注",
+                "anchorX": 1.0,
+                "anchorY": 2.0,
+                "anchorZ": 3.0,
+                "contentType": content_type,
+            },
+        )
+        assert resp.status_code == 201
+        return resp.json()
+
+    def test_upload_and_serve_image_media(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="IMAGE")
+        media = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
+        resp = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("shot.png", media, "image/png")},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["mediaAssetId"] is not None
+
+        descriptor = _get(public_scene.slug).json()
+        runtime_ann = descriptor["annotations"][0]
+        assert runtime_ann["mediaAssetUrl"] == (
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media"
+        )
+        serve = client.get(runtime_ann["mediaAssetUrl"])
+        assert serve.status_code == 200
+        assert serve.content == media
+        assert serve.headers["content-type"] == "image/png"
+
+    def test_upload_replaces_previous_asset(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="AUDIO")
+        r1 = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("a.wav", b"\xff\xf3" + b"\x01" * 32, "audio/wav")},
+        )
+        assert r1.status_code == 200
+        second = b"\xff\xf3" + b"\x02" * 32
+        r2 = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("b.wav", second, "audio/wav")},
+        )
+        assert r2.status_code == 200
+        assert r2.json()["mediaAssetId"] != r1.json()["mediaAssetId"]
+        serve = client.get(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media"
+        )
+        assert serve.status_code == 200
+        assert serve.content == second
+
+    def test_video_media_accepted(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="VIDEO")
+        media = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64
+        resp = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("clip.mp4", media, "video/mp4")},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["mediaAssetId"] is not None
+
+    def test_mime_mismatch_rejected(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="IMAGE")
+        resp = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("song.mp3", b"\xff\xf3" * 16, "audio/mpeg")},
+        )
+        assert resp.status_code == 409
+
+    def test_text_annotation_media_rejected(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="TEXT")
+        resp = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("pic.png", b"png-bytes", "image/png")},
+        )
+        assert resp.status_code == 409
+
+    def test_oversized_media_rejected(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="IMAGE")
+        resp = client.post(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media",
+            files={"file": ("big.png", b"\x00" * (50 * 1024 * 1024 + 1), "image/png")},
+        )
+        assert resp.status_code == 422
+
+    def test_serve_404_without_media(self, db, public_scene):
+        ann = self._create(public_scene.slug, content_type="PANORAMA")
+        resp = client.get(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}/media"
+        )
+        assert resp.status_code == 404
+
+
 # ─── 8-9. collision ─────────────────────────────────────────────────────────
 class TestCollision:
     def test_collision_null_by_default(self, public_scene):

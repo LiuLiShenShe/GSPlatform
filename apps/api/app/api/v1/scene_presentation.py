@@ -59,6 +59,10 @@ router = APIRouter()
 _COVER_MIME = {"image/jpeg", "image/png", "image/webp"}
 _COVER_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 
+# Annotation media size cap (per-contentType MIME allowlist lives in the
+# authoring service, since allowed types depend on the annotation type).
+_ANNOTATION_MEDIA_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
 
 def _storage(settings: Settings = Depends(get_settings)) -> LocalDiskStorage:
     return LocalDiskStorage(settings.storage_root)
@@ -372,3 +376,43 @@ def delete_annotation(
     """Delete an annotation."""
     svc.delete_annotation(slug, identity.user_id, str(annotation_id))
     return {"message": "注解已删除"}
+
+
+@router.post(
+    "/{slug}/annotations/{annotation_id}/media",
+    response_model=SceneAnnotationOut,
+)
+async def upload_annotation_media(
+    slug: str,
+    annotation_id: uuid.UUID,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: AuthoringService = Depends(_service),
+    file: UploadFile = File(...),
+) -> SceneAnnotationOut:
+    """Upload media for an IMAGE/VIDEO/AUDIO/PANORAMA annotation (multipart)."""
+    data = await file.read()
+    if len(data) > _ANNOTATION_MEDIA_MAX_BYTES:
+        msg = _VALIDATION_ERR % "注解媒体文件不能超过 50MB"
+        return Response(status_code=422, content=msg.encode())
+    return svc.set_annotation_media(
+        slug,
+        identity.user_id,
+        str(annotation_id),
+        data,
+        file.content_type or "application/octet-stream",
+    )
+
+
+@router.get("/{slug}/annotations/{annotation_id}/media")
+def serve_annotation_media(
+    slug: str,
+    annotation_id: uuid.UUID,
+    svc: AuthoringService = Depends(_service),
+) -> Response:
+    """Serve annotation media. No auth required (public)."""
+    data, mime = svc.serve_annotation_media(slug, str(annotation_id))
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
