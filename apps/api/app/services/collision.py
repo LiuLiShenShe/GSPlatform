@@ -91,6 +91,24 @@ class CollisionService:
             updated_at=collision.updated_at,
         )
 
+    def serve_collision_mesh(self, slug: str) -> tuple[bytes, str]:
+        """Return collision mesh bytes + mime (or raise NotFound).
+
+        Serves the built GLB so the runtime contract's ``collision.url`` is a
+        real viewer-accessible URL. Public like the presentation serve routes.
+        """
+        from app.db.models.asset import Asset
+
+        scene = self._get_scene(slug)
+        collision = self._repo.get_by_scene_id(scene.id)
+        if collision is None or collision.asset_id is None:
+            raise NotFoundError(f"场景 {slug} 没有碰撞网格")
+        asset = self._session.get(Asset, collision.asset_id)
+        if asset is None:
+            raise NotFoundError("碰撞网格资源不存在")
+        data = self._storage.read(asset.storage_key)
+        return data, asset.mime_type
+
     def create_and_build(
         self,
         slug: str,

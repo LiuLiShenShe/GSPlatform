@@ -3,7 +3,7 @@
 - 状态：ACTIVE（顺序 FROZEN）
 - 日期：2026-09-28
 - 架构依据：`docs/adr/ADR_SUPERSPLAT_RUNTIME.md`
-- 当前阶段：**SSV-00 — Architecture Freeze（已完成）**
+- 当前阶段：**SSV-01 — Runtime Contract（已完成）**
 
 ---
 

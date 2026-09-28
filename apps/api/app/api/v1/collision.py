@@ -3,6 +3,7 @@
 Routes:
   POST   /{slug}/collision/build  — create & dispatch collision build
   GET    /{slug}/collision        — get collision status
+  GET    /{slug}/collision/mesh   — serve collision GLB (SSV-01 runtime contract)
   PATCH  /{slug}/collision        — update physics params
   POST   /{slug}/collision/rebuild — rebuild collision
   DELETE /{slug}/collision        — delete collision asset
@@ -10,7 +11,7 @@ Routes:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -52,6 +53,20 @@ def get_collision(
 ) -> CollisionAssetOut:
     """Get collision asset status for a scene."""
     return svc.get_collision(slug, identity.user_id if identity else None)
+
+
+@router.get("/{slug}/collision/mesh")
+def serve_collision_mesh(
+    slug: str,
+    svc: CollisionService = Depends(_service),
+) -> Response:
+    """Serve the built collision GLB. Public (viewer fetches it directly)."""
+    data, mime = svc.serve_collision_mesh(slug)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 # ------------------------------------------------------------------ #

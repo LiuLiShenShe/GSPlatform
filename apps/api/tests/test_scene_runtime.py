@@ -1,0 +1,401 @@
+"""SSV-01 — SceneRuntimeDescriptorV1 endpoint tests.
+
+Covers: existing scene → 200, not found → 404, SOG / PLY / lod-meta formats,
+presentation serialization, annotations serialization, collision null /
+populated, authorization (public / private owner / private other / anon 401).
+"""
+
+from __future__ import annotations
+
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+client = TestClient(app)
+
+
+def _make_scene(db, *, slug=None, status="PUBLISHED", visibility="PUBLIC", owner_id=None):
+    """Create a scene without a current version (for full control)."""
+    from app.core.config import settings
+    from app.core.identity import _resolve_dev_user_id
+    from app.db.models.scene import Scene
+
+    scene = Scene(
+        owner_id=owner_id or _resolve_dev_user_id(settings),
+        slug=slug or f"rt-{uuid.uuid4().hex[:8]}",
+        title="运行时测试场景",
+        description="runtime contract test",
+        category="experiment",
+        visibility=visibility,
+        status=status,
+        views=0,
+        likes=0,
+    )
+    db.add(scene)
+    db.flush()
+    db.commit()
+    db.refresh(scene)
+    return scene
+
+
+def _attach_version(db, scene, *, fmt, manifest):
+    """Attach a current version to the scene and commit."""
+    from app.db.models.scene import SceneVersion
+
+    version = SceneVersion(
+        scene_id=scene.id,
+        asset_version=uuid.uuid4().hex[:40],
+        format=fmt,
+        size_bytes=1024,
+        manifest=manifest,
+    )
+    db.add(version)
+    db.flush()
+    scene.current_version_id = version.id
+    db.commit()
+    db.refresh(scene)
+    return version
+
+
+def _get(slug_or_id: str):
+    return client.get(f"/api/v1/scenes/{slug_or_id}/runtime")
+
+
+# ─── 1. existing scene → 200 ────────────────────────────────────────────────
+class TestBasic:
+    def test_existing_public_scene_returns_200(self, public_scene):
+        resp = _get(public_scene.slug)
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["schemaVersion"] == 1
+        assert body["scene"]["id"] == public_scene.slug
+        assert body["scene"]["name"] == "测试场景"
+        assert body["scene"]["posterUrl"] == f"/local-scenes/{public_scene.slug}/poster.webp"
+        # default fixture version is streamed-sog without entryUrl → lod-meta fallback
+        assert body["content"]["url"] == f"/local-scenes/{public_scene.slug}/current/lod-meta.json"
+        assert body["content"]["format"] == "lod-meta"
+
+    def test_not_found_returns_404(self):
+        resp = _get("no-such-scene-xyz")
+        assert resp.status_code == 404
+
+    def test_content_null_when_no_version(self, db):
+        scene = _make_scene(db, status="DRAFT", visibility="PRIVATE")
+        resp = _get(scene.slug)
+        assert resp.status_code == 200
+        assert resp.json()["content"]["url"] is None
+        assert resp.json()["content"]["format"] is None
+
+
+# ─── 3-5. content formats ──────────────────────────────────────────────────
+class TestContentFormats:
+    def test_sog_format(self, db):
+        from tests.conftest_scenes import create_scene
+
+        scene = create_scene(session=db, with_version=False)
+        _attach_version(
+            db,
+            scene,
+            fmt="sog",
+            manifest={"format": "sog", "assetUrl": f"/local-scenes/{scene.slug}/scene.sog"},
+        )
+        body = _get(scene.slug).json()
+        assert body["content"]["url"] == f"/local-scenes/{scene.slug}/scene.sog"
+        assert body["content"]["format"] == "sog"
+
+    def test_ply_format_relative_asset_url(self, db):
+        from tests.conftest_scenes import create_scene
+
+        scene = create_scene(session=db, with_version=False)
+        _attach_version(
+            db,
+            scene,
+            fmt="ply",
+            manifest={"format": "ply", "assetUrl": "./model.ply"},
+        )
+        body = _get(scene.slug).json()
+        assert body["content"]["url"] == f"/local-scenes/{scene.slug}/model.ply"
+        assert body["content"]["format"] == "ply"
+
+    def test_lod_meta_format_streamed_entry(self, db):
+        from tests.conftest_scenes import create_scene
+
+        scene = create_scene(session=db, with_version=False)
+        _attach_version(
+            db,
+            scene,
+            fmt="streamed-sog",
+            manifest={
+                "format": "streamed-sog",
+                "schemaVersion": 1,  # must NOT influence the format decision
+                "stream": {
+                    "entryUrl": f"versions/{uuid.uuid4().hex[:8]}/lod-meta.json",
+                    "counts": [179, 536, 1788],
+                },
+            },
+        )
+        body = _get(scene.slug).json()
+        assert body["content"]["format"] == "lod-meta"
+        assert body["content"]["url"].endswith("/lod-meta.json")
+        assert body["content"]["url"].startswith(f"/local-scenes/{scene.slug}/versions/")
+
+    def test_compressed_ply_extension_recognised(self):
+        from app.services.scene_runtime import content_format_from_filename
+
+        assert content_format_from_filename("model.compressed.ply") == "compressed-ply"
+        assert content_format_from_filename("model.lod-meta.json") == "lod-meta"
+        assert content_format_from_filename("chunk.meta.json") == "meta"
+        assert content_format_from_filename("scene.sog") == "sog"
+        assert content_format_from_filename("scene.ply") == "ply"
+        assert content_format_from_filename("scene.jpg") is None
+
+
+# ─── 6. presentation serialization ─────────────────────────────────────────
+class TestPresentation:
+    def test_presentation_serialized_from_db(self, db, public_scene):
+        from app.db.models.asset import Asset
+        from app.db.models.scene_presentation import ScenePresentation
+
+        bg_asset = Asset(
+            scene_id=public_scene.id,
+            kind="SOURCE",
+            storage_key=f"presentation/{public_scene.id}/bg.jpg",
+            mime_type="image/jpeg",
+            byte_size=2048,
+        )
+        db.add(bg_asset)
+        db.flush()
+        db.add(
+            ScenePresentation(
+                scene_id=public_scene.id,
+                world_position={"x": 1.0, "y": 2.0, "z": 3.0},
+                world_rotation={"x": 0.0, "y": 0.0, "z": 0.0},
+                world_scale={"x": 1.0, "y": 1.0, "z": 1.0},
+                initial_camera_position={"x": 0.0, "y": 1.2, "z": 3.5},
+                initial_camera_target={"x": 0.0, "y": 0.8, "z": 0.0},
+                initial_camera_fov=55.0,
+                background_type="equirectangular",
+                background_color={"x": 0.1, "y": 0.2, "z": 0.3},
+                background_asset_id=bg_asset.id,
+            )
+        )
+        db.commit()
+        body = _get(public_scene.slug).json()
+        pres = body["presentation"]
+        assert pres["worldTransform"]["position"] == {"x": 1.0, "y": 2.0, "z": 3.0}
+        assert pres["worldTransform"]["scale"] == {"x": 1.0, "y": 1.0, "z": 1.0}
+        assert pres["initialCamera"]["fov"] == 55.0
+        assert pres["initialCamera"]["position"]["z"] == 3.5
+        assert pres["background"]["type"] == "equirectangular"
+        assert pres["background"]["color"] == {"x": 0.1, "y": 0.2, "z": 0.3}
+        assert pres["background"]["url"] == (
+            f"/api/v1/scenes/{public_scene.slug}/presentation/background"
+        )
+
+    def test_presentation_defaults_when_no_row(self, public_scene):
+        body = _get(public_scene.slug).json()
+        pres = body["presentation"]
+        assert pres["worldTransform"]["position"] is None
+        assert pres["initialCamera"]["position"] is None
+        assert pres["background"]["type"] == "color"
+        assert pres["background"]["url"] is None
+
+
+# ─── 7. annotations serialization ──────────────────────────────────────────
+class TestAnnotations:
+    def test_annotations_serialized_from_db(self, db, public_scene):
+        from app.db.models.scene_annotation import SceneAnnotation
+
+        db.add_all(
+            [
+                SceneAnnotation(
+                    scene_id=public_scene.id,
+                    title="入口",
+                    description="大门",
+                    anchor_x=1.0,
+                    anchor_y=2.0,
+                    anchor_z=3.0,
+                    style="LEADER_TEXT",
+                    content_type="TEXT",
+                    text_content="正门",
+                    text_color="#00FF00",
+                    text_size=18,
+                    fov=60.0,
+                    order_index=0,
+                    enabled=True,
+                ),
+                SceneAnnotation(
+                    scene_id=public_scene.id,
+                    title="水井",
+                    anchor_x=-1.0,
+                    anchor_y=0.0,
+                    anchor_z=0.0,
+                    style="NUMBER_POPUP",
+                    content_type="IMAGE",
+                    order_index=1,
+                    enabled=True,
+                ),
+            ]
+        )
+        db.commit()
+        body = _get(public_scene.slug).json()
+        annotations = body["annotations"]
+        assert len(annotations) == 2
+        first = annotations[0]
+        assert first["title"] == "入口"
+        assert first["anchor"] == {"x": 1.0, "y": 2.0, "z": 3.0}
+        assert first["style"] == "LEADER_TEXT"
+        assert first["contentType"] == "TEXT"
+        assert first["textContent"] == "正门"
+        assert first["mediaAssetUrl"] is None  # media serving wired in SSV-06
+        assert first["textColor"] == "#00FF00"
+        assert first["orderIndex"] == 0
+        assert annotations[1]["contentType"] == "IMAGE"
+        assert annotations[1]["orderIndex"] == 1
+
+    def test_annotations_empty_default(self, public_scene):
+        assert _get(public_scene.slug).json()["annotations"] == []
+
+
+# ─── 8-9. collision ─────────────────────────────────────────────────────────
+class TestCollision:
+    def test_collision_null_by_default(self, public_scene):
+        assert _get(public_scene.slug).json()["collision"] is None
+
+    def test_collision_populated(self, db, public_scene):
+        from app.db.models.asset import Asset
+        from app.db.models.collision_asset import CollisionAsset
+        from app.db.models.scene_presentation import ScenePresentation
+
+        asset = Asset(
+            scene_id=public_scene.id,
+            kind="COLLISION_GLB",
+            storage_key=f"collision/{public_scene.id}/mesh.glb",
+            mime_type="model/gltf-binary",
+            byte_size=1024,
+        )
+        db.add(asset)
+        db.flush()
+        db.add(
+            CollisionAsset(
+                scene_id=public_scene.id,
+                mode="OUTDOOR",
+                asset_id=asset.id,
+                status="SUCCEEDED",
+                gravity=9.81,
+                slope_limit_degrees=45.0,
+                step_offset=0.3,
+                player_height=1.8,
+            )
+        )
+        db.add(
+            ScenePresentation(
+                scene_id=public_scene.id, collision_enabled=True
+            )
+        )
+        db.commit()
+
+        body = _get(public_scene.slug).json()
+        collision = body["collision"]
+        assert collision is not None
+        assert collision["url"] == f"/api/v1/scenes/{public_scene.slug}/collision/mesh"
+        assert collision["format"] == "glb"
+        assert collision["mode"] == "OUTDOOR"
+        assert collision["gravity"] == 9.81
+        assert collision["slopeLimitDegrees"] == 45.0
+        assert collision["stepOffset"] == 0.3
+        assert collision["playerHeight"] == 1.8
+        assert collision["enabled"] is True
+
+
+# ─── 10. authorization ─────────────────────────────────────────────────────
+class TestAuthorization:
+    def test_public_scene_ok_without_login(self, db):
+        # anonymous: TestClient without the dev cookie; dev bypass is on in
+        # tests so identity == dev user; public + published is readable anyway.
+        from tests.conftest_scenes import create_scene
+
+        scene = create_scene(session=db, visibility="PUBLIC", status="PUBLISHED")
+        assert _get(scene.slug).status_code == 200
+
+    def test_private_owner_ok(self, private_scene):
+        assert _get(private_scene.slug).status_code == 200
+
+    def test_private_other_user_returns_403(self, db, dev_user_id):
+        from app.db.models.user import User
+
+        other = User(email=f"rt-other-{uuid.uuid4().hex[:8]}@example.com", display_name="他人")
+        db.add(other)
+        db.flush()
+        scene = _make_scene(
+            db,
+            visibility="PRIVATE",
+            status="PUBLISHED",
+            owner_id=other.id,
+        )
+        _attach_version(
+            db,
+            scene,
+            fmt="streamed-sog",
+            manifest={"format": "streamed-sog", "stream": {}},
+        )
+        assert _get(scene.slug).status_code == 403
+
+    def test_unlisted_other_user_returns_403(self, db, dev_user_id):
+        from app.db.models.user import User
+
+        other = User(email=f"rt-ul-{uuid.uuid4().hex[:8]}@example.com", display_name="他人")
+        db.add(other)
+        db.flush()
+        scene = _make_scene(
+            db,
+            visibility="UNLISTED",
+            status="PUBLISHED",
+            owner_id=other.id,
+        )
+        _attach_version(db, scene, fmt="sog", manifest={"format": "sog"})
+        assert _get(scene.slug).status_code == 403
+
+    def test_anon_private_returns_401_service_level(self, db):
+        """HTTP dev bypass always authenticates; the 401 path is exercised at
+        the service boundary where identity is explicitly None."""
+        from app.core.errors import UnauthorizedError
+        from app.db.models.user import User
+        from app.services.scene_runtime import SceneRuntimeService
+
+        other = User(email=f"rt-anon-{uuid.uuid4().hex[:8]}@example.com", display_name="他人")
+        db.add(other)
+        db.flush()
+        scene = _make_scene(db, visibility="PRIVATE", status="PUBLISHED", owner_id=other.id)
+        _attach_version(db, scene, fmt="sog", manifest={"format": "sog"})
+
+        svc = SceneRuntimeService(db)
+        with pytest.raises(UnauthorizedError):
+            svc.get_descriptor(scene.slug, None)
+
+    def test_private_other_returns_403_service_level(self, db):
+        from app.core.config import settings
+        from app.core.errors import ForbiddenError
+        from app.core.identity import RequestIdentity
+        from app.db.models.user import User
+        from app.services.scene_runtime import SceneRuntimeService
+
+        other = User(email=f"rt-403-{uuid.uuid4().hex[:8]}@example.com", display_name="他人")
+        db.add(other)
+        db.flush()
+        scene = _make_scene(db, visibility="PRIVATE", status="PUBLISHED", owner_id=other.id)
+        _attach_version(db, scene, fmt="sog", manifest={"format": "sog"})
+
+        from app.core.identity import _resolve_dev_user_id
+
+        identity = RequestIdentity(
+            user_id=_resolve_dev_user_id(settings),
+            email="dev@gsplatform.local",
+            display_name="dev",
+        )
+        svc = SceneRuntimeService(db)
+        with pytest.raises(ForbiddenError):
+            svc.get_descriptor(scene.slug, identity)
