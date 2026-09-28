@@ -33,6 +33,14 @@ export interface XRViewerRuntime {
    * startXR/endXR 的 promise。返回 unsubscribe 函数。
    */
   onXRModeChanged(callback: (mode: XRMode) => void): () => void;
+  /**
+   * 将相机取景到整个场景（官方 handle.frameScene()）：
+   * 以场景 bbox 为中心自动计算相机（沿 (2,1,2) 方向、距离由
+   * bbox.halfExtents 与 fov 得出），切换到 orbit 模式并启动过渡。
+   * 必须在 state.loaded 之后调用。用于修正 DEFAULT_SETTINGS 不提供
+   * 固定相机时（cameras: []）初始相机的兜底，以及用户手动重新取景。
+   */
+  frameScene: () => void;
   /** 用户手势内调用：请求 immersive-vr 会话。 */
   startVR: () => Promise<void>;
   /** 结束当前 XR 会话。 */
@@ -52,7 +60,16 @@ export interface CreateXRRuntimeOptions {
   settings?: object;
 }
 
-/** 最小 settings 对象：默认相机视角 + 黑色背景，无后处理。 */
+/**
+ * 最小 settings 对象：黑色背景，无后处理。
+ *
+ * 重要：cameras 为空数组（不提供固定 initial camera）。官方 supersplat-viewer
+ * 在 `settings.cameras[0]` 缺失时回退到 `createFrameCamera(bbox, fov)` —— 自动
+ * 以场景 bounding box 计算相机（viewer.js CameraManager 构造：`resetCamera =
+ * camera0 ? 固定相机 : frameCamera`）。固定的 initial camera 会把所有场景都
+ * 放到同一个视角，bbox 不在该位置附近时直接黑屏。因此让官方按 bbox 自动取景，
+ * 并在 loaded 后调用 frameScene() 由官方把相机对准整个场景。
+ */
 const DEFAULT_SETTINGS: object = {
   version: 2,
   tonemapping: 'none',
@@ -66,11 +83,8 @@ const DEFAULT_SETTINGS: object = {
     fringing: { enabled: false, intensity: 0.5 },
   },
   animTracks: [],
-  cameras: [
-    {
-      initial: { position: [0, 1.2, 3.5], target: [0, 0.8, 0], fov: 55 },
-    },
-  ],
+  // 不提供固定相机 → supersplat-viewer 按场景 bbox 自动取景（见上方说明）。
+  cameras: [],
   annotations: [],
   startMode: 'default',
 };
@@ -129,6 +143,7 @@ export async function createXRRuntime(
     events: handle.events,
     loadedPromise,
     onXRModeChanged,
+    frameScene: () => handle.frameScene(),
     startVR: () => handle.startXR('vr'),
     endXR: () => handle.endXR(),
     destroy: () => handle.destroy(),
@@ -139,4 +154,14 @@ export async function createXRRuntime(
 export function runtimeRenderer(app: XRViewerRuntime['app']): string {
   const deviceType = app?.graphicsDevice?.deviceType;
   return deviceType ?? 'unknown';
+}
+
+/**
+ * 当前已渲染的 Gaussian 数量（PlayCanvas `app.stats.frame.gsplats`）。
+ * 引擎每帧更新：首帧渲染完成前为 0。用于区分「场景已加载但 camera/frustum
+ * 不对（gsplats 停在 0 或很小）」与「场景内容为空」。
+ */
+export function renderedSplatCount(app: XRViewerRuntime['app']): number {
+  const gsplats = app?.stats?.frame?.gsplats;
+  return typeof gsplats === 'number' && Number.isFinite(gsplats) ? gsplats : 0;
 }

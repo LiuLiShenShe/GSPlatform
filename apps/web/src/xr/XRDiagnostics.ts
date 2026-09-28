@@ -1,8 +1,14 @@
 /**
  * WebXR 修复任务 — 浏览器 WebXR 能力诊断（§7）。
  *
- * 只做能力探测，不做任何渲染。结果同时 console 输出 + 页面可视化，
+ * 只做浏览器侧能力探测，不做任何渲染。结果同时 console 输出 + 页面可视化，
  * 因为用户需要在 Quest / PICO 头显内直接看到状态。
+ *
+ * 注意：Viewer / Renderer / loaded 等**渲染器运行时状态**不在这里收集 ——
+ * 浏览器能力探测发生在 runtime 创建之前，此时这些值必然为 false/null，
+ * 静态写入会在 Viewer 已经 READY 后与页面真实状态形成矛盾的两组显示。
+ * 渲染器状态由页面在 runtime 创建完成后直接读取（runtimeRenderer /
+ * state.loaded / state.canStartVR / renderedSplatCount）并单独展示。
  */
 import type { XRDiagnostics } from './xrTypes';
 
@@ -21,8 +27,6 @@ export async function collectDiagnostics(): Promise<XRDiagnostics> {
     topLevel: window.self === window.top,
     immersiveVrSupported: false,
     immersiveArSupported: false,
-    renderer: null,
-    viewerLoaded: false,
   };
 
   if (navigatorAny.xr) {
@@ -53,7 +57,5 @@ export function formatDiagnostics(d: XRDiagnostics): Array<[string, string]> {
     ['Protocol', d.protocol],
     ['Origin', d.origin],
     ['Top-level', d.topLevel ? 'true' : 'false'],
-    ['Viewer', d.viewerLoaded ? 'READY' : 'loading'],
-    ['Renderer', d.renderer ?? '—'],
   ];
 }

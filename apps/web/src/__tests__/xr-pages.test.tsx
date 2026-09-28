@@ -22,6 +22,7 @@ import { appRouter } from '../app/router';
 /** createXRRuntime 的可控 mock：可触发 xrMode 变化。 */
 const startVRMock = vi.fn(async () => {});
 const endXRMock = vi.fn(async () => {});
+const frameSceneMock = vi.fn(() => {});
 /** 捕获 runtime 上注册的 xrMode 回调，测试中手动触发。 */
 const xrModeCallbacks: Array<(mode: string | null) => void> = [];
 let triggerXrMode: (mode: string | null) => void = () => {};
@@ -40,6 +41,7 @@ vi.mock('../xr/XRViewerRuntime', () => ({
           if (i >= 0) xrModeCallbacks.splice(i, 1);
         };
       },
+      frameScene: frameSceneMock,
       startVR: startVRMock,
       endXR: endXRMock,
       destroy: vi.fn(),
@@ -73,6 +75,7 @@ beforeEach(() => {
   xrModeCallbacks.length = 0;
   startVRMock.mockClear();
   endXRMock.mockClear();
+  frameSceneMock.mockClear();
   mockNavigatorXR({ exists: true, immersiveVr: true });
 });
 
@@ -218,5 +221,30 @@ describe('WebXR 修复任务（第二轮）— XR 页面', () => {
     const text = screen.getByTestId('xr-session-error').textContent ?? '';
     expect(text).toContain('SecurityError');
     expect(startVRMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('Test 9: 场景加载完成后自动调用一次 frameScene 取景', async () => {
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('VIEWER-READY');
+    });
+    // boot 流程在 loadedPromise resolve 后调用官方 frameScene() 取景整个场景。
+    expect(frameSceneMock).toHaveBeenCalled();
+  });
+
+  it('Test 10: Frame Scene 调试按钮手动再次触发 frameScene', async () => {
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(screen.getByTestId('frame-scene-btn')).toBeEnabled();
+    });
+    const before = frameSceneMock.mock.calls.length;
+    act(() => {
+      screen.getByTestId('frame-scene-btn').click();
+    });
+    expect(frameSceneMock.mock.calls.length).toBeGreaterThan(before);
+    // Frame Scene runs 计数在诊断面板递增。
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-frame-scene-count').textContent).toBe(String(before + 1));
+    });
   });
 });

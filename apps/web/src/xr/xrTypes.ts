@@ -29,8 +29,10 @@ export interface XRDiagnostics {
   topLevel: boolean;
   immersiveVrSupported: boolean;
   immersiveArSupported: boolean;
-  renderer: string | null;
-  viewerLoaded: boolean;
+  // 注意：Viewer/Renderer/loaded 是渲染器运行时状态，在 runtime 创建前
+  // 必然是 false/null，不属于浏览器能力诊断；由页面在 runtime 创建后
+  // 直接读取并单独展示（runtimeRenderer / state.loaded / canStartVR /
+  // renderedSplatCount）。
 }
 
 /**
