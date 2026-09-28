@@ -62,6 +62,35 @@ export async function resolveSceneRuntimeDescriptor(
   }
 }
 
+/**
+ * 由直接给定的 splat URL 合成最小描述（/xr/test 的 URL 调试入口用）。
+ *
+ * 仍返回同一结构的 SceneRuntimeDescriptorV1，随后与 DB 合同场景走**完全相同**
+ * 的 buildExperienceSettings → SuperSplatRuntime.create 链路 —— 不构成第二套
+ * Viewer 创建逻辑。sceneId 仅作为描述中的展示 ID。
+ */
+export function descriptorFromSceneUrl(sceneId: string, url: string): SceneRuntimeDescriptorV1 {
+  const filename = url.split('?')[0].split('/').pop() ?? '';
+  const format = formatFromFilename(filename);
+  if (!format) {
+    throw new ManifestFallbackError('ASSET_INVALID', `无法从 URL 推断 splat 格式: ${url}`);
+  }
+  return {
+    schemaVersion: 1,
+    scene: { id: sceneId, name: sceneId, posterUrl: null },
+    content: { url, format },
+    presentation: {
+      worldTransform: { position: null, rotation: null, scale: null },
+      initialCamera: { position: null, target: null, fov: null },
+      background: { type: 'color', color: null, url: null },
+    },
+    viewpoints: [],
+    annotations: [],
+    backgroundAudio: null,
+    collision: null,
+  };
+}
+
 /** 从 /local-scenes/<id>/manifest.json 组装最小描述（仓库级开发场景）。 */
 async function resolveFromManifest(sceneId: string): Promise<SceneRuntimeDescriptorV1> {
   const url = manifestUrl(sceneId);

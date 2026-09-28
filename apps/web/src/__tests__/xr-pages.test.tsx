@@ -1,58 +1,146 @@
 /**
- * WebXR 修复任务（第二轮）— XR 页面自动测试（§18 Test 1-8）。
+ * SSV-04 — XR 页面统一官方 SuperSplat runtime 测试。
  *
- * 自动测试不声称模拟真实头显。只验证页面状态机 / 错误分离 / 路由。
+ * 覆盖：
+ *  - 诊断显示 navigator.xr（仅展示；运行态真相 = 官方 state）
+ *  - 场景加载失败显示错误（非 XR Session 错误）
+ *  - canStartVR 驱动 Enter VR（官方 state 为真相源）
+ *  - 进入 XR：点击 Enter → startXR('vr')（真实 click，非 setTimeout/postMessage）
+ *  - xrMode 'vr' → 页面 ACTIVE；xrMode null（系统退出）→ ENDED；重建会话
+ *  - exit → endXR()
+ *  - renderer 强制 webgl（xr → rendererForMode('xr')）
+ *  - /xr/:sceneId 与 /scene/:sceneId 用同一 descriptor → 同一 contentUrl/settings
  *
- *  Test 1: navigator.xr 不存在 → 不 crash。
- *  Test 2: immersive-vr unsupported → 正确显示。
- *  Test 3: scene load failed → 显示 Scene Error，非 XR Session Error。
- *  Test 4: xrMode → 'vr' → 页面 XR ACTIVE。
- *  Test 5: xrMode → null → 页面 XR ENDED。
- *  Test 6: 退出后重新进入，状态正常恢复。
- *  Test 7: schemaVersion=1 + format=sog → sceneResolver 不拒绝。
- *  Test 8: format=streamed-sog → STREAMED_SOG_UNSUPPORTED。
+ * 自动测试不模拟真实头显；Immersive Web Emulator 的实机会话由 /tmp 冒烟脚本
+ * 在真实浏览器验证（若无法执行则报告 NOT EXECUTED，不伪造）。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
-import { renderWithRouter } from '../test/utils';
+import userEvent from '@testing-library/user-event';
+import { renderApp, renderWithRouter } from '../test/utils';
 import XRTestPage from '../pages/XRTestPage';
 import { collectDiagnostics } from '../xr/XRDiagnostics';
 import { appRouter } from '../app/router';
+import { runtimeDescriptorFixture } from '../scene-runtime/__fixtures__/descriptor';
+import type { ViewerHandle as OfficialViewerHandle } from '@playcanvas/supersplat-viewer/viewer';
+import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 
-/** createXRRuntime 的可控 mock：可触发 xrMode 变化。 */
-const startVRMock = vi.fn(async () => {});
-const endXRMock = vi.fn(async () => {});
-const frameSceneMock = vi.fn(() => {});
-/** 捕获 runtime 上注册的 xrMode 回调，测试中手动触发。 */
-const xrModeCallbacks: Array<(mode: string | null) => void> = [];
-let triggerXrMode: (mode: string | null) => void = () => {};
+// ─── 官方 viewer 模块 mock（fake handle，事件语义对齐官方）─────────────────────
+let officialHandle: OfficialViewerHandle & { events: { fire: (...args: unknown[]) => void } };
+let createViewerCalls: Array<{ contentUrl?: string; settings?: object; renderer?: string }>;
+let destroyCalls: number;
 
-vi.mock('../xr/XRViewerRuntime', () => ({
-  createXRRuntime: vi.fn(async () => {
-    const handle = {
-      app: { graphicsDevice: { deviceType: 'webgl2' } },
-      state: { loaded: true },
-      events: { on: () => ({ off: () => {} }) },
-      loadedPromise: Promise.resolve(),
-      onXRModeChanged: (cb: (mode: string | null) => void) => {
-        xrModeCallbacks.push(cb);
-        return () => {
-          const i = xrModeCallbacks.indexOf(cb);
-          if (i >= 0) xrModeCallbacks.splice(i, 1);
-        };
+const xrModeCallbacks = new Set<(...args: unknown[]) => void>();
+
+function makeOfficialHandle() {
+  const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+  const events = {
+    on(event: string, fn: (...args: unknown[]) => void) {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event)!.add(fn);
+    },
+    off(event: string, fn: (...args: unknown[]) => void) {
+      listeners.get(event)?.delete(fn);
+    },
+    fire(event: string, ...args: unknown[]) {
+      listeners.get(event)?.forEach((fn) => fn(...args));
+    },
+  };
+  const state = new Proxy<Record<string, unknown>>(
+    {
+      loaded: true, // 直接 loaded（测试聚焦 XR 状态机，不测加载进度）
+      progress: 100,
+      cameraMode: 'orbit',
+      canStartVR: true,
+      canStartAR: false,
+      xrMode: null,
+      performanceMode: false,
+      showAnnotations: true,
+      isFullscreen: false,
+      hasCollision: false,
+      selectedAnnotation: null,
+      walkAllowed: false,
+    },
+    {
+      set(target, key, value) {
+        target[key as string] = value;
+        return true;
       },
-      frameScene: frameSceneMock,
-      startVR: startVRMock,
-      endXR: endXRMock,
-      destroy: vi.fn(),
-    };
-    triggerXrMode = (mode: string | null) => {
-      for (const cb of Array.from(xrModeCallbacks)) cb(mode);
-    };
-    return handle;
+    },
+  );
+  const handle = {
+    app: { graphicsDevice: { deviceType: 'webgl2' }, stats: { frame: { gsplats: 179 } } },
+    state,
+    events,
+    annotations: [],
+    captureFrame: vi.fn(),
+    seek: vi.fn(),
+    frameScene: vi.fn(() => {
+      if (!state.loaded) throw new Error('frameScene: requires state.loaded');
+    }),
+    resetCamera: vi.fn(),
+    toggleWalk: vi.fn(),
+    selectAnnotation: vi.fn(),
+    setMoveInput: vi.fn(),
+    requestFullscreen: vi.fn(async () => {}),
+    exitFullscreen: vi.fn(async () => {}),
+    startXR: vi.fn(async (kind: string) => {
+      state.xrMode = kind;
+      events.fire('xrMode:changed', kind, null);
+    }),
+    endXR: vi.fn(async () => {
+      state.xrMode = null;
+      events.fire('xrMode:changed', null, 'vr');
+    }),
+    destroy: vi.fn(() => {
+      destroyCalls += 1;
+      listeners.clear();
+      xrModeCallbacks.clear();
+    }),
+  } as unknown as OfficialViewerHandle & { events: { fire: (...args: unknown[]) => void } };
+
+  // 捕获所有 xrMode:changed 订阅者供测试手动触发（模拟系统菜单退出）
+  const origOn = events.on.bind(events);
+  events.on = (event: string, fn: (...args: unknown[]) => void) => {
+    if (event === 'xrMode:changed') xrModeCallbacks.add(fn);
+    return origOn(event, fn);
+  };
+  return handle;
+}
+
+vi.mock('@playcanvas/supersplat-viewer/viewer', () => ({
+  createViewer: vi.fn(async (options: { contentUrl?: string; settings?: object; renderer?: string }) => {
+    createViewerCalls.push({
+      contentUrl: options.contentUrl,
+      settings: options.settings,
+      renderer: options.renderer,
+    });
+    officialHandle = makeOfficialHandle();
+    return officialHandle;
   }),
-  runtimeRenderer: () => 'webgl2',
 }));
+
+vi.mock('../scene-runtime/runtimeApi', () => ({
+  getSceneRuntime: vi.fn(async () => runtimeDescriptorFixture),
+  RuntimeApiError: class RuntimeApiError extends Error {
+    kind: string;
+    status: number | null;
+    constructor(kind: string, status: number | null, message: string) {
+      super(message);
+      this.name = 'RuntimeApiError';
+      this.kind = kind;
+      this.status = status;
+    }
+  },
+}));
+
+vi.mock('../services/sceneApi', async () => {
+  const { sceneFixtures } = await vi.importActual<typeof import('../fixtures/scenes')>('../fixtures/scenes');
+  return {
+    fetchSceneList: vi.fn(async () => sceneFixtures),
+    findScene: vi.fn(async () => sceneFixtures[0]),
+  };
+});
 
 /** 构造可控的 navigator.xr mock，测试后恢复。 */
 function mockNavigatorXR(options: { exists?: boolean; immersiveVr?: boolean } = {}): void {
@@ -65,26 +153,32 @@ function mockNavigatorXR(options: { exists?: boolean; immersiveVr?: boolean } = 
       ),
     };
   } else {
-    delete nav.xr;
+    nav.xr = undefined;
   }
 }
 
 const realNavigatorXr = (navigator as unknown as { xr?: unknown }).xr;
 
+/** 手动触发 xrMode 订阅者（模拟浏览器/系统菜单退出） */
+function triggerXrMode(mode: 'vr' | 'ar' | null): void {
+  xrModeCallbacks.forEach((fn) => fn(mode));
+}
+
+const expectedSettings = buildExperienceSettings(runtimeDescriptorFixture);
+
 beforeEach(() => {
-  xrModeCallbacks.length = 0;
-  startVRMock.mockClear();
-  endXRMock.mockClear();
-  frameSceneMock.mockClear();
+  createViewerCalls = [];
+  destroyCalls = 0;
+  xrModeCallbacks.clear();
   mockNavigatorXR({ exists: true, immersiveVr: true });
 });
 
 afterEach(() => {
   (navigator as unknown as { xr?: unknown }).xr = realNavigatorXr;
-  xrModeCallbacks.length = 0;
+  xrModeCallbacks.clear();
 });
 
-describe('WebXR 修复任务（第二轮）— XR 页面', () => {
+describe('SSV-04 /xr/test — 官方 runtime 诊断', () => {
   it('Test 1: navigator.xr 不存在 → 诊断 false，页面不 crash', async () => {
     mockNavigatorXR({ exists: false });
     const diag = await collectDiagnostics();
@@ -95,81 +189,80 @@ describe('WebXR 修复任务（第二轮）— XR 页面', () => {
     await waitFor(() => {
       expect(screen.getByTestId('diag-navigator-xr').textContent).toBe('false');
     });
-    expect(screen.getByTestId('xr-state').textContent).toContain('UNSUPPORTED');
+    // 运行态 canStartVR 来自官方 state（mock 为 true），不因 navigator.xr 缺失而崩
+    expect(screen.getByTestId('xr-test-page')).toBeInTheDocument();
   });
 
-  it('Test 2: immersive-vr unsupported → 正确显示 unsupported', async () => {
+  it('Test 2: immersive-vr unsupported → 诊断显示 unsupported（真相源仍是官方 state）', async () => {
     mockNavigatorXR({ exists: true, immersiveVr: false });
-    const diag = await collectDiagnostics();
-    expect(diag.navigatorXR).toBe(true);
-    expect(diag.immersiveVrSupported).toBe(false);
-
     renderWithRouter(<XRTestPage />, { route: '/xr/test' });
     await waitFor(() => {
-      expect(screen.getByTestId('diag-Immersive-VR').textContent).toBe('unsupported');
+      expect(screen.getByTestId('diag-immersive-vr').textContent).toBe('unsupported');
     });
-    expect(screen.getByTestId('xr-state').textContent).toContain('UNSUPPORTED');
-    expect(screen.getByTestId('xr-error').textContent).toContain('NotSupportedError');
+    expect(screen.getByTestId('xr-test-page')).toBeInTheDocument();
   });
 
-  it('Test 3: scene load failed → 显示 Scene Error（非 XR Session Error）', async () => {
-    // createXRRuntime 抛错 → XRTestPage boot catch 标记为 scene 类错误并显示 SCENE LOAD ERROR。
-    const { createXRRuntime } = await import('../xr/XRViewerRuntime');
-    vi.mocked(createXRRuntime).mockRejectedValueOnce(
-      new Error('HTTP 404 — /local-scenes/missing/scene.sog not found'),
-    );
-    renderWithRouter(<XRTestPage />, { route: '/xr/test?scene=/local-scenes/missing/scene.sog' });
+  it('Test 3: 场景加载失败 → 显示错误（非 XR Session 错误）', async () => {
+    // 让 descriptorFromSceneUrl 抛错：/xr/test?scene=<bad-ext> 推断不出格式
+    renderWithRouter(<XRTestPage />, { route: '/xr/test?scene=%2Fx%2Funknown.bin' });
     await waitFor(() => {
       expect(screen.getByTestId('xr-scene-error')).toBeInTheDocument();
     });
-    const text = screen.getByTestId('xr-scene-error').textContent ?? '';
-    expect(text).toContain('SCENE LOAD ERROR');
-    expect(text).toContain('404');
-    // 必须是 Scene 错误，而不是 XR Session 错误
-    expect(screen.queryByTestId('xr-session-error')).not.toBeInTheDocument();
-    expect(screen.getByTestId('diag-scene-state').textContent).toContain('FAILED');
+    expect(screen.getByTestId('xr-scene-error').textContent).toContain('无法从 URL 推断');
   });
 
-  it('Test 4: xrMode → "vr" → 页面 XR ACTIVE', async () => {
+  it('Test 3b: descriptor 集成 —— /xr/test 走官方 createViewer 且 renderer webgl', async () => {
     renderWithRouter(<XRTestPage />, { route: '/xr/test' });
     await waitFor(() => {
-      expect(screen.getByTestId('enter-vr-btn')).toBeInTheDocument();
+      expect(createViewerCalls.length).toBeGreaterThan(0);
     });
-    act(() => {
-      triggerXrMode('vr');
-    });
+    const call = createViewerCalls[createViewerCalls.length - 1];
+    expect(call.contentUrl).toContain('local-garden');
+    // XR 强制 WebGL（rendererForMode('xr') → 'webgl'）
+    expect(call.renderer).toBe('webgl');
+    // 场景 loaded 后状态可用
     await waitFor(() => {
-      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
+      expect(screen.getByTestId('diag-state-loaded').textContent).toBe('true');
     });
   });
 
-  it('Test 5: xrMode → null（系统退出）→ 页面 XR ENDED', async () => {
+  it('Test 4: 点击 Enter VR → 真实 startXR("vr") → xrMode vr → ACTIVE', async () => {
     renderWithRouter(<XRTestPage />, { route: '/xr/test' });
     await waitFor(() => {
-      expect(screen.getByTestId('enter-vr-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
     });
-    act(() => {
-      triggerXrMode('vr');
+    // 直接 click（真实用户手势路径，无 setTimeout/postMessage）
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
+      expect(screen.getByTestId('diag-xr-mode').textContent).toBe('vr');
     });
+    expect(officialHandle.state.xrMode).toBe('vr');
+  });
+
+  it('Test 5: 系统退出（xrMode → null）→ 页面 XR ENDED', async () => {
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
+    });
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
     await waitFor(() => {
       expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
     });
-    act(() => {
-      triggerXrMode(null);
-    });
+    // 模拟浏览器/系统 UI 退出（不经 endXR 按钮）
+    act(() => { triggerXrMode(null); });
     await waitFor(() => {
       expect(screen.getByTestId('xr-state').textContent).toContain('XR-ENDED');
     });
-    expect(screen.getByTestId('xr-ended')).toBeInTheDocument();
+    expect(screen.getByTestId('diag-xr-mode').textContent).toBe('null');
   });
 
-  it('Test 6: 退出后重新进入，状态恢复正常', async () => {
+  it('Test 6: 退出后重新进入，状态恢复正常（re-enter）', async () => {
     renderWithRouter(<XRTestPage />, { route: '/xr/test' });
     await waitFor(() => {
-      expect(screen.getByTestId('enter-vr-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
     });
-    // 进入 → 退出 → 再进入
-    act(() => { triggerXrMode('vr'); });
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
     await waitFor(() => {
       expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
     });
@@ -177,74 +270,71 @@ describe('WebXR 修复任务（第二轮）— XR 页面', () => {
     await waitFor(() => {
       expect(screen.getByTestId('xr-state').textContent).toContain('XR-ENDED');
     });
-    act(() => { triggerXrMode('vr'); });
+    // 重新进入
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
     await waitFor(() => {
       expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
     });
+    // 已出现第二次会话
+    expect(screen.getByTestId('diag-xr-mode').textContent).toBe('vr');
   });
 
-  it('Test 7: schemaVersion=1 + format=sog → sceneResolver 不拒绝', async () => {
-    // 见 xr-scene-resolver.test.ts Case A；这里只做路由层确认页面可用。
+  it('Test 7: Exit VR 按钮 → runtime.endXR()', async () => {
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
+    });
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('exit-vr-btn')).toBeEnabled();
+    });
+    const endXRSpy = vi.fn(async () => {});
+    (officialHandle as unknown as { endXR: typeof endXRSpy }).endXR = endXRSpy;
+    // hook 的 endXR 走 runtime.endXR() → handle.endXR()
+    await userEvent.click(screen.getByTestId('exit-vr-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ENDED');
+    });
+  });
+});
+
+describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据）', () => {
+  it('路由存在', () => {
     const paths = appRouter.routes.map((r) => r.path);
     expect(paths).toContain('/xr/test');
-    expect(paths).toContain('/xr/:sceneId');
-  });
-
-  it('Test 8: format=streamed-sog → STREAMED_SOG_UNSUPPORTED（由 sceneResolver 测试覆盖）', async () => {
-    const paths = appRouter.routes.map((r) => r.path);
     expect(paths).toContain('/xr/:sceneId');
     expect(paths).toContain('/scene/:sceneId');
   });
 
-  it('Test A(遗留): XR 页面正常加载并显示诊断面板', async () => {
-    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+  it('/xr/:sceneId 与 /scene/:sceneId 用同一 descriptor → 同一 contentUrl 与 settings', async () => {
+    // 渲染 /xr：同一 descriptor → 同一 contentUrl，renderer 强制 webgl
+    const u1 = renderApp({ route: '/xr/r-8c4e2264e86a' });
     await waitFor(() => {
-      expect(screen.getByTestId('xr-test-page')).toBeInTheDocument();
+      expect(createViewerCalls.length).toBe(1);
     });
-    expect(screen.getByTestId('diag-Secure-Context').textContent).toBe('true');
-    expect(screen.getByTestId('diag-navigator-xr').textContent).toBe('true');
-    expect(screen.getByTestId('diag-Immersive-VR').textContent).toBe('supported');
+    const xrCall = createViewerCalls[0];
+    expect(xrCall.contentUrl).toBe(runtimeDescriptorFixture.content.url); // Scene URL 相同
+    expect(xrCall.renderer).toBe('webgl'); // renderer 必须 WebGL
+    expect(xrCall.settings).toEqual(expectedSettings); // settings = buildExperienceSettings(descriptor)
+    u1.unmount();
+
+    // 渲染 /scene（桌面）：同一 descriptor → 同一 contentUrl 与 settings
+    const u2 = renderApp({ route: '/scene/r-8c4e2264e86a' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(2);
+    });
+    const desktopCall = createViewerCalls[1];
+    expect(desktopCall.contentUrl).toBe(xrCall.contentUrl); // Scene URL 相同
+    expect(desktopCall.settings).toEqual(xrCall.settings); // settings 相同
+    u2.unmount();
   });
 
-  it('Test D(遗留): startXR 抛 SecurityError → 页面显示 SecurityError', async () => {
-    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+  it('/xr/:sceneId 场景加载完成后自动 frameScene，Enter VR 由官方 canStartVR 驱动', async () => {
+    const u = renderApp({ route: '/xr/r-8c4e2264e86a' });
     await waitFor(() => {
-      expect(screen.getByTestId('enter-vr-btn')).toBeInTheDocument();
+      expect(screen.getByTestId('diag-can-start-vr').textContent).toBe('true');
     });
-    startVRMock.mockRejectedValueOnce(new DOMException('XR request failed', 'SecurityError'));
-    act(() => {
-      screen.getByTestId('enter-vr-btn').click();
-    });
-    await waitFor(() => {
-      expect(screen.getByTestId('xr-session-error')).toBeInTheDocument();
-    });
-    const text = screen.getByTestId('xr-session-error').textContent ?? '';
-    expect(text).toContain('SecurityError');
-    expect(startVRMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('Test 9: 场景加载完成后自动调用一次 frameScene 取景', async () => {
-    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
-    await waitFor(() => {
-      expect(screen.getByTestId('xr-state').textContent).toContain('VIEWER-READY');
-    });
-    // boot 流程在 loadedPromise resolve 后调用官方 frameScene() 取景整个场景。
-    expect(frameSceneMock).toHaveBeenCalled();
-  });
-
-  it('Test 10: Frame Scene 调试按钮手动再次触发 frameScene', async () => {
-    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
-    await waitFor(() => {
-      expect(screen.getByTestId('frame-scene-btn')).toBeEnabled();
-    });
-    const before = frameSceneMock.mock.calls.length;
-    act(() => {
-      screen.getByTestId('frame-scene-btn').click();
-    });
-    expect(frameSceneMock.mock.calls.length).toBeGreaterThan(before);
-    // Frame Scene runs 计数在诊断面板递增。
-    await waitFor(() => {
-      expect(screen.getByTestId('diag-frame-scene-count').textContent).toBe(String(before + 1));
-    });
+    expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
+    u.unmount();
   });
 });

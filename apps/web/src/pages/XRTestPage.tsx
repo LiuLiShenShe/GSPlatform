@@ -1,35 +1,22 @@
 /**
- * WebXR 修复任务（第二轮）— /xr/test 诊断页。
+ * Official XR 诊断页（SSV-04）—— `/xr/test`。
  *
- * 显示真实浏览器 WebXR 能力 + 场景加载状态 + real XR session 状态。
+ * 保留作为 diagnostics 页面，但同样必须调用 SuperSplatRuntime(mode='xr')，
+ * 禁止第二套 Viewer 创建逻辑（旧 createXRRuntime 已删除）。
  *
- * 场景 URL 解析优先级（§7）：
- *   1. URL query `?scene=<url>`
- *   2. env VITE_XR_TEST_SCENE_URL
- *   3. fallback /local-scenes/local-garden/scene.sog
- *
- * XR 状态真实同步（§3/§4）：订阅 supersplat-viewer 的 xrMode:changed，
- * 用户从头显系统菜单 / 浏览器 UI 退出 XR 时自动变回 xr-ended。
- *
- * 黑屏修复（第三轮）：创建 viewer 时 settings.cameras 为空数组，官方按场景
- * bbox 自动取景；loaded 后再调用官方 frameScene() 把相机对准整个场景。
- * Frame Scene 按钮可随时重新取景。
+ * 运行态真相来自官方 state：canStartVR / canStartAR / xrMode / loaded。
+ * 场景：?scene=<url> ?? env VITE_XR_TEST_SCENE_URL ?? /local-scenes/local-garden/scene.sog
+ * 无 iframe / postMessage / setTimeout 中间跳。
  */
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { collectDiagnostics, formatDiagnostics } from '../xr/XRDiagnostics';
-import {
-  createXRRuntime,
-  renderedSplatCount,
-  runtimeRenderer,
-  type XRViewerRuntime,
-} from '../xr/XRViewerRuntime';
-import type { XRState } from '../xr/xrTypes';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { descriptorFromSceneUrl } from '../scene-runtime/descriptorResolver';
+import { useSuperSplatXR } from '../features/viewer-official/useSuperSplatXR';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 
-/** 场景 URL 解析：query ?? env ?? fallback（§7）。 */
-function resolveTestScene(): string {
-  const params = new URLSearchParams(window.location.search);
+/** 场景 URL 解析：query ?? env ?? fallback（与旧 /xr/test 一致，读当前 location）。 */
+function resolveTestScene(search: string): string {
+  const params = new URLSearchParams(search);
   const queryScene = params.get('scene');
   if (queryScene && queryScene.trim().length > 0) {
     return queryScene.trim();
@@ -41,239 +28,33 @@ function resolveTestScene(): string {
   return '/local-scenes/local-garden/scene.sog';
 }
 
-const TEST_SCENE = resolveTestScene();
-
-/** 场景加载状态（§9）。 */
-type SceneLoadingState =
-  | { status: 'loading' }
-  | { status: 'ready' }
-  | { status: 'failed'; error: string };
-
-/** 渲染器运行时实时状态（与浏览器能力诊断分离展示，避免相互矛盾）。 */
-interface RendererRuntimeInfo {
-  stateLoaded: boolean;
-  canStartVR: boolean;
-  gsplats: number;
-}
-
 export default function XRTestPage() {
   useDocumentTitle('XR 测试');
-  const mountRef = useRef<HTMLDivElement | null>(null);
-  const runtimeRef = useRef<XRViewerRuntime | null>(null);
-  // 订阅句柄：组件卸载时必须 unsubscribe，避免 listener leak（§4）。
-  const unsubRef = useRef<(() => void) | null>(null);
-  // 进入过 XR 的标志，用 ref 避免闭包捕获旧 state。
-  const hadXRRef = useRef(false);
-  // gsplats 轮询定时器句柄。
-  const pollRef = useRef<number | null>(null);
+  const location = useLocation();
+  const testScene = useMemo(() => resolveTestScene(location.search), [location.search]);
 
-  const [state, setState] = useState<XRState>('checking');
-  const [lines, setLines] = useState<{ key: string; value: string }[]>([]);
-  const [viewerLoaded, setViewerLoaded] = useState(false);
-  const [renderer, setRenderer] = useState<string | null>(null);
-  const [runtimeInfo, setRuntimeInfo] = useState<RendererRuntimeInfo>({
-    stateLoaded: false,
-    canStartVR: false,
-    gsplats: 0,
-  });
-  const [lastError, setLastError] = useState<{
-    kind: 'scene' | 'webxr' | 'session';
-    name: string;
-    message: string;
-  } | null>(null);
-  const [sceneState, setSceneState] = useState<SceneLoadingState>({ status: 'loading' });
-  const [xrMode, setXrMode] = useState<string | null>(null);
+  // URL 调试场景：能推断格式就合成描述走官方链路，否则给 hook 传 null 显示错误。
+  const testDescriptor = useMemo(() => {
+    try {
+      return descriptorFromSceneUrl('xr-test', testScene);
+    } catch {
+      return null;
+    }
+  }, [testScene]);
+  const { containerRef, ...state } = useSuperSplatXR(testDescriptor);
+
   const [frameSceneCount, setFrameSceneCount] = useState(0);
+  const prevLoadedRef = useRef(false);
 
-  // ---- 步骤 0:能力诊断 ----
+  // 自动取景计数展示（框架在 onLoaded 内已 frameScene）
   useEffect(() => {
-    void collectDiagnostics().then((diag) => {
-      setLines(formatDiagnostics(diag).map(([key, value]) => ({ key, value })));
-    });
-  }, []);
-
-  // ---- 轮询渲染器实时状态（loaded / canStartVR / gsplats）----
-  useEffect(() => {
-    const tick = () => {
-      const runtime = runtimeRef.current;
-      if (!runtime) return;
-      // 避免 React 频繁重渲染：值不变就跳过。
-      setRuntimeInfo((prev) => {
-        const next = {
-          stateLoaded: runtime.state.loaded,
-          canStartVR: runtime.state.canStartVR,
-          gsplats: renderedSplatCount(runtime.app),
-        };
-        return prev.stateLoaded === next.stateLoaded &&
-          prev.canStartVR === next.canStartVR &&
-          prev.gsplats === next.gsplats
-          ? prev
-          : next;
-      });
-    };
-    tick();
-    pollRef.current = window.setInterval(tick, 1000);
-    return () => {
-      if (pollRef.current !== null) {
-        window.clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, []);
-
-  // ---- 步骤 1:加载 viewer（场景 + 订阅真实 XR 状态）----
-  useEffect(() => {
-    let cancelled = false;
-    const mount = mountRef.current;
-    if (!mount) return;
-
-    const boot = async () => {
-      try {
-        const diag = await collectDiagnostics();
-        if (cancelled) return;
-        if (!diag.secureContext) {
-          setState('unsupported');
-          setLastError({
-            kind: 'webxr',
-            name: 'SecurityError',
-            message: 'WebXR requires a secure context. Please access this page over HTTPS.',
-          });
-          return;
-        }
-        if (!diag.immersiveVrSupported) {
-          setState('unsupported');
-          setLastError({
-            kind: 'webxr',
-            name: 'NotSupportedError',
-            message: 'immersive-vr not supported by this browser / device.',
-          });
-          return;
-        }
-
-        setState('loading-viewer');
-        setSceneState({ status: 'loading' });
-        const runtime = await createXRRuntime({
-          container: mount,
-          contentUrl: TEST_SCENE,
-          contentFilename: 'scene.sog',
-        });
-        if (cancelled) {
-          runtime.destroy();
-          return;
-        }
-        runtimeRef.current = runtime;
-        setRenderer(runtimeRenderer(runtime.app));
-        setViewerLoaded(true);
-
-        // 真实 XR 状态订阅：系统菜单退出同样触发（mode → null）。
-        const unsub = runtime.onXRModeChanged((mode) => {
-          if (cancelled) return;
-          setXrMode(mode);
-          if (mode === 'vr' || mode === 'ar') {
-            hadXRRef.current = true;
-            setState('xr-active');
-          } else if (hadXRRef.current) {
-            setState('xr-ended');
-          }
-        });
-        unsubRef.current = unsub;
-
-        // 场景首帧渲染完成 → 官方 frameScene() 取景整个场景 → Scene READY（§9）。
-        await runtime.loadedPromise;
-        if (cancelled) return;
-        try {
-          runtime.frameScene();
-        } catch (frameErr) {
-          console.error('[xr-test] frameScene failed after load', frameErr);
-        }
-        setFrameSceneCount((n) => n + 1);
-        setSceneState({ status: 'ready' });
-        setState('viewer-ready');
-      } catch (err) {
-        if (cancelled) return;
-        console.error('[xr-test] boot failed', err);
-        const message = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
-        // 区分场景加载失败 vs WebXR 失败（§8）
-        setSceneState({ status: 'failed', error: message });
-        setLastError({ kind: 'scene', name: 'SceneLoadError', message });
-        setState('error');
-      }
-    };
-
-    void boot();
-    return () => {
-      cancelled = true;
-      if (pollRef.current !== null) {
-        window.clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      unsubRef.current?.();
-      unsubRef.current = null;
-      runtimeRef.current?.destroy();
-      runtimeRef.current = null;
-    };
-  }, []);
-
-  // ---- 步骤 2:用户点击 → startXR('vr')（§16 直接用户手势）----
-  const enterVR = async () => {
-    const runtime = runtimeRef.current;
-    if (!runtime) return;
-    setLastError(null);
-    setState('starting-xr');
-    try {
-      await runtime.startVR();
-      // 完成由 onXRModeChanged 驱动：xrMode → 'vr' 时置 xr-active。
-      // 若 startXR resolve 但事件未触发（极少数），兜底置 active。
-      hadXRRef.current = true;
-      setState('xr-active');
-    } catch (err) {
-      console.error('[xr-test] XR START FAILED', err);
-      const detail =
-        err instanceof Error
-          ? { name: err.name, message: err.message }
-          : { name: 'UnknownError', message: String(err) };
-      setLastError({ kind: 'session', ...detail });
-      setState('error');
-    }
-  };
-
-  const exitVR = async () => {
-    const runtime = runtimeRef.current;
-    if (!runtime) return;
-    try {
-      await runtime.endXR();
-      setState('xr-ended');
-    } catch (err) {
-      console.error('[xr-test] XR END FAILED', err);
-      const detail =
-        err instanceof Error
-          ? { name: err.name, message: err.message }
-          : { name: 'UnknownError', message: String(err) };
-      setLastError({ kind: 'session', ...detail });
-      setState('error');
-    }
-  };
-
-  /** 手动重新取景：官方 frameScene()（相机对准整个场景 bbox）。 */
-  const frameScene = () => {
-    const runtime = runtimeRef.current;
-    if (!runtime || !runtime.state.loaded) return;
-    try {
-      runtime.frameScene();
+    if (state.loaded && !prevLoadedRef.current) {
       setFrameSceneCount((n) => n + 1);
-    } catch (err) {
-      console.error('[xr-test] manual frameScene failed', err);
-      setLastError({
-        kind: 'scene',
-        name: 'FrameSceneError',
-        message: err instanceof Error ? err.message : String(err),
-      });
     }
-  };
+    prevLoadedRef.current = state.loaded;
+  }, [state.loaded]);
 
-  // Enter VR 启用条件：Viewer READY + Scene READY + WebXR supported（§15）。
-  const sceneReady = sceneState.status === 'ready';
-  const canEnter = state === 'viewer-ready' && viewerLoaded && sceneReady;
+  const canEnter = (state.status === 'ready' || state.status === 'xr-ended') && state.canStartVR;
 
   return (
     <div className="xr-page" data-testid="xr-test-page">
@@ -293,95 +74,77 @@ export default function XRTestPage() {
 
       <h1>WebXR Diagnostic (/xr/test)</h1>
       <div className="xr-page__state" data-testid="xr-state">
-        WebXR state: {state.toUpperCase()} | XR mode: {xrMode ?? 'null'}
+        WebXR state: {state.status.toUpperCase()} | XR mode: {state.xrMode ?? 'null'}
       </div>
 
       <table className="xr-page__table">
         <tbody>
-          {lines.map((line) => (
-            <tr key={line.key}>
-              <td>{line.key}</td>
-              <td data-testid={`diag-${line.key.replace(/[^a-z0-9]/gi, '-')}`}>{line.value}</td>
-            </tr>
-          ))}
+          <tr>
+            <td>Secure Context</td>
+            <td data-testid="diag-secure-context">{state.diagnostics.secureContext ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
+            <td>navigator.xr</td>
+            <td data-testid="diag-navigator-xr">{state.diagnostics.navigatorXR ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
+            <td>Immersive VR (browser)</td>
+            <td data-testid="diag-immersive-vr">{state.diagnostics.immersiveVrSupported ? 'supported' : 'unsupported'}</td>
+          </tr>
+          <tr>
+            <td>Immersive AR (browser)</td>
+            <td data-testid="diag-immersive-ar">{state.diagnostics.immersiveArSupported ? 'supported' : 'unsupported'}</td>
+          </tr>
           <tr>
             <td>Test Scene URL</td>
-            <td data-testid="diag-scene-url">{TEST_SCENE}</td>
+            <td data-testid="diag-scene-url">{testScene}</td>
           </tr>
           <tr>
             <td>Scene</td>
             <td data-testid="diag-scene-state">
-              {sceneState.status === 'loading' && 'LOADING'}
-              {sceneState.status === 'ready' && 'READY'}
-              {sceneState.status === 'failed' && `FAILED — ${sceneState.error}`}
-            </td>
-          </tr>
-          <tr>
-            <td>Viewer loaded</td>
-            <td data-testid="diag-viewer-loaded">
-              {viewerLoaded ? 'READY' : 'loading'}
+              {state.descriptor
+                ? `${state.descriptor.scene.name} (${state.descriptor.content.format ?? '—'})${state.isManifestFallback ? ' [manifest]' : ''}`
+                : state.status === 'error'
+                  ? `FAILED — ${state.error}`
+                  : 'LOADING'}
             </td>
           </tr>
           <tr>
             <td>actual renderer</td>
-            <td data-testid="diag-renderer">{renderer ?? '—'}</td>
+            <td data-testid="diag-renderer">{state.renderer}</td>
           </tr>
           <tr>
             <td>state.loaded</td>
-            <td data-testid="diag-state-loaded">{runtimeInfo.stateLoaded ? 'true' : 'false'}</td>
+            <td data-testid="diag-state-loaded">{state.loaded ? 'true' : 'false'}</td>
           </tr>
           <tr>
             <td>state.canStartVR</td>
-            <td data-testid="diag-can-start-vr">{runtimeInfo.canStartVR ? 'true' : 'false'}</td>
+            <td data-testid="diag-can-start-vr">{state.canStartVR ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
+            <td>state.xrMode</td>
+            <td data-testid="diag-xr-mode">{state.xrMode ?? 'null'}</td>
           </tr>
           <tr>
             <td>frame.gsplats</td>
-            <td data-testid="diag-gsplats">{runtimeInfo.gsplats}</td>
+            <td data-testid="diag-gsplats">{state.gsplats}</td>
           </tr>
           <tr>
             <td>Frame Scene runs</td>
             <td data-testid="diag-frame-scene-count">{frameSceneCount}</td>
           </tr>
-          <tr>
-            <td>Last XR error</td>
-            <td data-testid="diag-last-error">
-              {lastError ? `${lastError.kind} :: ${lastError.name}: ${lastError.message}` : 'none'}
-            </td>
-          </tr>
         </tbody>
       </table>
 
-      <div className="xr-page__mount" ref={mountRef} data-testid="xr-mount" />
+      <div className="xr-page__mount" ref={containerRef} data-testid="xr-mount" />
 
-      {state === 'unsupported' && lastError?.kind === 'webxr' && (
-        <div className="xr-page__err" data-testid="xr-error">
-          WebXR support failure
-          {'\n'}
-          {lastError.name}: {lastError.message}
-        </div>
-      )}
-
-      {sceneState.status === 'failed' && (
-        <div className="xr-page__err" data-testid="xr-scene-error">
-          SCENE LOAD ERROR
-          {'\n'}
-          Scene URL: {TEST_SCENE}
-          {'\n'}
-          Error: {sceneState.error}
-        </div>
-      )}
-
-      {(state === 'error' || state === 'starting-xr') && lastError?.kind === 'session' && (
-        <div className="xr-page__err" data-testid="xr-session-error">
-          XR SESSION START FAILED
-          {'\n'}
-          {lastError.name}: {lastError.message}
-        </div>
+      {state.status === 'error' && (
+        <div className="xr-page__err" data-testid="xr-scene-error">{state.error}</div>
       )}
 
       <button
         className="xr-page__btn"
-        onClick={() => void enterVR()}
+        onClick={() => void state.startVR().catch(() => undefined)}
         disabled={!canEnter}
         data-testid="enter-vr-btn"
       >
@@ -389,23 +152,22 @@ export default function XRTestPage() {
       </button>
       <button
         className="xr-page__btn"
-        onClick={frameScene}
-        disabled={!(state === 'viewer-ready' || state === 'xr-ended')}
+        onClick={state.frameScene}
+        disabled={!(state.status === 'ready' || state.status === 'xr-ended')}
         data-testid="frame-scene-btn"
       >
         Frame Scene
       </button>
-      {state === 'xr-active' && (
-        <button
-          className="xr-page__btn"
-          onClick={() => void exitVR()}
-          data-testid="exit-vr-btn"
-        >
-          Exit VR
-        </button>
-      )}
+      <button
+        className="xr-page__btn"
+        onClick={() => void state.endXR().catch(() => undefined)}
+        disabled={state.xrMode === null}
+        data-testid="exit-vr-btn"
+      >
+        Exit VR
+      </button>
 
-      {state === 'xr-ended' && (
+      {state.status === 'xr-ended' && (
         <div className="xr-page__ok" data-testid="xr-ended">
           XR SESSION ENDED — click Enter VR to re-enter
         </div>
