@@ -204,6 +204,106 @@ class TestPresentation:
         assert pres["background"]["url"] is None
 
 
+# ─── 6b. experience settings v2 (SSV-05) ───────────────────────────────────
+class TestExperienceSettings:
+    def test_old_scene_without_settings_returns_official_defaults(self, public_scene):
+        """A scene that never authored experience settings must still expose
+        legal defaults (never break the runtime contract)."""
+        pres = _get(public_scene.slug).json()["presentation"]
+        assert pres["tonemapping"] == "aces"
+        assert pres["highPrecisionRendering"] is False
+        assert pres["postEffects"] is None
+
+    def test_settings_serialized_from_db(self, db, public_scene):
+        from app.db.models.scene_presentation import ScenePresentation
+
+        db.add(
+            ScenePresentation(
+                scene_id=public_scene.id,
+                tonemapping="neutral",
+                high_precision_rendering=True,
+                post_effects={
+                    "sharpness": {"enabled": True, "amount": 0.6},
+                    "bloom": {"enabled": True, "intensity": 0.02, "blurLevel": 3},
+                    "grading": {"enabled": False, "brightness": 1.0},
+                    "vignette": {"enabled": True, "intensity": 0.4},
+                    "fringing": {"enabled": False, "intensity": 0.1},
+                },
+            )
+        )
+        db.commit()
+
+        pres = _get(public_scene.slug).json()["presentation"]
+        assert pres["tonemapping"] == "neutral"
+        assert pres["highPrecisionRendering"] is True
+        fx = pres["postEffects"]
+        assert fx["sharpness"] == {"enabled": True, "amount": 0.6}
+        assert fx["bloom"] == {"enabled": True, "intensity": 0.02, "blurLevel": 3.0}
+        assert fx["fringing"] == {"enabled": False, "intensity": 0.1}
+        # Missing fields in a partially authored doc are filled with the
+        # official defaults so the result always validates.
+        assert fx["grading"]["contrast"] == 1.0
+        assert fx["vignette"]["outer"] == 0.75
+
+    def test_partial_post_effects_document_is_normalized(self, db, public_scene):
+        from app.db.models.scene_presentation import ScenePresentation
+
+        db.add(
+            ScenePresentation(
+                scene_id=public_scene.id,
+                post_effects={"vignette": {"enabled": True}},  # only one key
+            )
+        )
+        db.commit()
+
+        fx = _get(public_scene.slug).json()["presentation"]["postEffects"]
+        assert set(fx) == {
+            "sharpness",
+            "bloom",
+            "grading",
+            "vignette",
+            "fringing",
+        }
+        assert fx["vignette"]["enabled"] is True
+        assert fx["vignette"]["intensity"] == 0.5
+        assert fx["sharpness"]["enabled"] is False
+
+    def test_settings_survive_save_and_reload(self, db, public_scene):
+        """PATCH presentation → runtime descriptor reflects the saved values."""
+        resp = client.patch(
+            f"/api/v1/scenes/{public_scene.slug}/presentation",
+            json={
+                "tonemapping": "hejl",
+                "highPrecisionRendering": True,
+                "postEffects": {"bloom": {"enabled": True, "intensity": 0.05}},
+            },
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["tonemapping"] == "hejl"
+        assert body["highPrecisionRendering"] is True
+
+        pres = _get(public_scene.slug).json()["presentation"]
+        assert pres["tonemapping"] == "hejl"
+        assert pres["highPrecisionRendering"] is True
+        assert pres["postEffects"]["bloom"]["enabled"] is True
+        assert pres["postEffects"]["bloom"]["intensity"] == 0.05
+
+    def test_invalid_tonemapping_rejected(self, public_scene):
+        resp = client.patch(
+            f"/api/v1/scenes/{public_scene.slug}/presentation",
+            json={"tonemapping": "not-a-curve"},
+        )
+        assert resp.status_code == 422
+
+    def test_post_effect_out_of_range_rejected(self, public_scene):
+        resp = client.patch(
+            f"/api/v1/scenes/{public_scene.slug}/presentation",
+            json={"postEffects": {"sharpness": {"enabled": True, "amount": 99}}},
+        )
+        assert resp.status_code == 422
+
+
 # ─── 7. annotations serialization ──────────────────────────────────────────
 class TestAnnotations:
     def test_annotations_serialized_from_db(self, db, public_scene):

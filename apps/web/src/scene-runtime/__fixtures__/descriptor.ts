@@ -34,6 +34,16 @@ export const runtimeDescriptorFixture: SceneRuntimeDescriptorV1 = {
       color: { x: 0.02, y: 0.02, z: 0.02 },
       url: null,
     },
+    // 官方 ExperienceSettings v2 渲染字段（SSV-05）
+    tonemapping: 'aces',
+    highPrecisionRendering: false,
+    postEffects: {
+      sharpness: { enabled: true, amount: 0.35 },
+      bloom: { enabled: false, intensity: 0.02, blurLevel: 2 },
+      grading: { enabled: false, brightness: 1, contrast: 1, saturation: 1, tint: [1, 1, 1] },
+      vignette: { enabled: false, intensity: 0.5, inner: 0.3, outer: 0.75, curvature: 1 },
+      fringing: { enabled: false, intensity: 0.5 },
+    },
   },
   viewpoints: [
     {
@@ -90,6 +100,9 @@ export const emptyRuntimeDescriptorFixture: SceneRuntimeDescriptorV1 = {
     worldTransform: { position: null, rotation: null, scale: null },
     initialCamera: { position: null, target: null, fov: null },
     background: { type: 'color', color: null, url: null },
+    tonemapping: 'aces',
+    highPrecisionRendering: false,
+    postEffects: null,
   },
   viewpoints: [],
   annotations: [],

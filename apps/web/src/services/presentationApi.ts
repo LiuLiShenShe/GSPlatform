@@ -5,6 +5,7 @@
  * and viewpoints for a given scene.
  */
 import { httpClient } from './http';
+import type { RuntimePostEffects, RuntimeTonemapping } from '../scene-runtime/types';
 
 export interface Vec3 {
   x: number;
@@ -29,6 +30,10 @@ export interface ScenePresentation {
   backgroundAudioVolume: number;
   backgroundAudioLoop: boolean;
   backgroundAudioEnabled: boolean;
+  // Experience settings v2（SSV-05）—— 与官方 ExperienceSettings 一一对应。
+  tonemapping?: RuntimeTonemapping;
+  highPrecisionRendering?: boolean;
+  postEffects?: RuntimePostEffects | null;
 }
 
 export interface SceneViewpoint {

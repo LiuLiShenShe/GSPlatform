@@ -8,6 +8,8 @@ assembled from the existing DB models, never invented for the DTO.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -68,11 +70,22 @@ class RuntimeBackground(BaseModel):
 
 
 class RuntimePresentation(BaseModel):
-    """Presentation settings block — from ScenePresentation model."""
+    """Presentation settings block — from ScenePresentation model.
+
+    The rendering fields map 1:1 onto the official SuperSplat
+    ExperienceSettings v2 (SSV-05). Old scenes that never authored them read
+    as the official defaults; the front-end adapter always starts from
+    ``defaultSettings()`` so a missing value is never invalid.
+    """
 
     worldTransform: RuntimeWorldTransform = Field(alias="worldTransform")
     initialCamera: RuntimeInitialCamera = Field(alias="initialCamera")
     background: RuntimeBackground
+    # Official ExperienceSettings v2 scalars.
+    tonemapping: str = "aces"  # none | linear | filmic | hejl | aces | aces2 | neutral
+    highPrecisionRendering: bool = False
+    # Structured post-processing document (null = official defaults).
+    postEffects: dict[str, Any] | None = None
 
     model_config = {"populate_by_name": True}
 

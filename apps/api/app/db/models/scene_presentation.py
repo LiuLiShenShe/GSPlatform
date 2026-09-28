@@ -82,6 +82,25 @@ class ScenePresentation(Base):
         nullable=False, default=False
     )
 
+    # ---- Experience rendering settings (SSV-05) --------------------------
+    # These map to the official SuperSplat ExperienceSettings v2
+    # (`tonemapping` / `highPrecisionRendering`). Kept as scalars (not JSON)
+    # because they are single primitive values validated against the official
+    # enum; see app.schemas.scene_presentation for the enum.
+    tonemapping: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="aces"
+    )  # none | linear | filmic | hejl | aces | aces2 | neutral
+    high_precision_rendering: Mapped[bool] = mapped_column(
+        nullable=False, default=False
+    )
+
+    # Post-processing: one structured JSONB document (NOT one DB column per
+    # effect), validated by PostEffects Pydantic schema. Mirrors the official
+    # `postEffectSettings` object: {sharpness, bloom, grading, vignette, fringing}.
+    post_effects: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True
+    )
+
     # Collision settings (Phase 12)
     collision_mode: Mapped[str | None] = mapped_column(
         String(20), nullable=True

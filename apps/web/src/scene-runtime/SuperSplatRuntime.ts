@@ -20,7 +20,32 @@ import {
 // 官方 viewer 样式（.sse-viewer 根容器 100%×100%、canvas 绝对定位填充）。
 // 不导入则官方根容器无尺寸，画布停留在默认 300×150，场景只在左上角一小块显示。
 import '@playcanvas/supersplat-viewer/viewer.css';
+import {
+  CAMERA_FOV_RANGE,
+  DEFAULT_CAMERA_FOV,
+  type CameraPose,
+} from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from './runtimeErrors';
+
+/**
+ * 相机封装（SSV-05 §5）目标距离策略。
+ *
+ * 官方引擎相机实体不暴露 orbit 焦点距离（距离存在内部 CameraManager 中），
+ * 但实际 view 完全由 position + forward 方向 + fov 决定 —— target 距离只影响
+ * 重新进入时的 orbit 半径。这里取「相机到场景包围盒中心的距离」作为焦点深度，
+ * 沿真实 forward 方向重建 target（等价于官方 calcFocusPoint 的语义），
+ * 未加载/未找到时回退固定距离。见 {@link CameraPose}。
+ */
+const CAMERA_POSE_FALLBACK_DISTANCE = 3;
+
+/** 场景 gsplat 包围盒访问器（避免依赖 playcanvas 具体类型）。 */
+interface GsplatAabbLike {
+  center?: { x: number; y: number; z: number };
+}
+
+interface GsplatEntityLike {
+  gsplat?: { instance?: { aabb?: GsplatAabbLike } };
+}
 
 /** 运行模式：决定 Renderer Policy。 */
 export type RuntimeMode = 'desktop' | 'xr';
@@ -223,6 +248,123 @@ export class SuperSplatRuntime {
   }
 
   // ------------------------------------------------------------------ #
+  // 相机封装（SSV-05 §5）—— 页面禁止直接触碰 PlayCanvas app，
+  // 相机数据一律经本层读取/写入
+  // ------------------------------------------------------------------ #
+
+  /**
+   * 当前相机 pose（position / target / fov）。
+   *
+   * position 与 fov 直接从引擎相机实体读取（可公开获得的真实数据）；
+   * target 沿真实 forward 方向、深度取「相机到场景包围盒中心的距离」
+   * （未加载时回退固定距离），与官方 calcFocusPoint 语义一致 ——
+   * 不自行发明相机姿态。场景未加载 / 相机实体缺失时返回 null。
+   */
+  getCameraPose(): CameraPose | null {
+    const camera = this.cameraEntity();
+    if (!camera?.camera) return null;
+    const position = camera.getPosition();
+    const forward = camera.getForward();
+    const distance = this.cameraFocusDistance(position);
+    return {
+      position: [position.x, position.y, position.z],
+      target: [
+        position.x + forward.x * distance,
+        position.y + forward.y * distance,
+        position.z + forward.z * distance,
+      ],
+      fov: clampFov(camera.camera.fov),
+    };
+  }
+
+  /**
+   * 直接把相机摆到给定 pose（position + lookAt target + fov）。
+   *
+   * 用于编辑页视角导航 / 恢复已保存视角。注意：官方 OrbitController 在下一次
+   * 输入时会重新接管相机；本方法只负责一次性摆放，不承诺接管控制器。
+   */
+  setCameraPose(pose: CameraPose): void {
+    const camera = this.cameraEntity();
+    if (!camera?.camera) return;
+    camera.setPosition(pose.position[0], pose.position[1], pose.position[2]);
+    camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
+    camera.camera.fov = clampFov(pose.fov);
+  }
+
+  /**
+   * 拾取 NDC 坐标（-1..1，x 向右、y 向上）对应的 3D 世界位置。
+   *
+   * 实现：从相机位置沿解投影后的视线方向取「场景包围盒中心深度」的点 ——
+   * 作为标注锚点的合理近似（精确到 splat 表面的 GPU 拾取不在官方公开 API 内，
+   * SSV-06 标注迁移时按需增强）。相机缺失/未就绪返回 null。
+   */
+  pickWorldPosition(x: number, y: number): { position: [number, number, number] } | null {
+    const camera = this.cameraEntity();
+    if (!camera?.camera) return null;
+    const position = camera.getPosition();
+    const forward = camera.getForward();
+    const right = camera.getRight();
+    const up = camera.getUp();
+    const tanY = Math.tan((clampFov(camera.camera.fov) * Math.PI) / 360);
+    const tanX = tanY * this.canvasAspect();
+    const dx = forward.x + right.x * (x * tanX) + up.x * (y * tanY);
+    const dy = forward.y + right.y * (x * tanX) + up.y * (y * tanY);
+    const dz = forward.z + right.z * (x * tanX) + up.z * (y * tanY);
+    const len = Math.hypot(dx, dy, dz);
+    if (!len || !Number.isFinite(len)) return null;
+    const scale = this.cameraFocusDistance(position) / len;
+    return {
+      position: [
+        position.x + dx * scale,
+        position.y + dy * scale,
+        position.z + dz * scale,
+      ],
+    };
+  }
+
+  /**
+   * 离屏渲染当前场景（含 post effects）并返回 base64 dataURL。
+   *
+   * 底层走官方 handle.captureFrame()（官方 supersample 缩样管线）；官方返回
+   * 原始 RGBA base64，本层经 2D canvas 转成浏览器可解码的图片 dataURL。
+   * 场景未加载返回 null（不抛错）。
+   */
+  async captureScreenshot(options?: {
+    width?: number;
+    height?: number;
+    supersample?: number;
+    format?: 'image/webp' | 'image/png' | 'image/jpeg';
+    quality?: number;
+  }): Promise<{ dataUrl: string } | null> {
+    const handle = this.requireLive();
+    if (!handle.state.loaded) return null;
+    try {
+      const result = await handle.captureFrame({
+        width: options?.width,
+        height: options?.height,
+        supersample: options?.supersample,
+      });
+      // 官方 captureFrame 返回 btoa 的原始 RGBA 字节（非 PNG 编码）。
+      const binary = atob(result.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = result.width;
+      canvas.height = result.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx || typeof ctx.createImageData !== 'function') return null;
+      const image = ctx.createImageData(result.width, result.height);
+      image.data.set(bytes);
+      ctx.putImageData(image, 0, 0);
+      return { dataUrl: canvas.toDataURL(options?.format ?? 'image/webp', options?.quality ?? 0.9) };
+    } catch {
+      return null;
+    }
+  }
+
+  // ------------------------------------------------------------------ #
   // 事件订阅（页面禁止直接监听底层 events）
   // ------------------------------------------------------------------ #
 
@@ -278,6 +420,85 @@ export class SuperSplatRuntime {
   private requiredState(): ViewerState {
     return this.requireLive().state;
   }
+
+  /** 引擎相机实体（官方 viewer 固定命名为 'camera'）。缺失/已销毁返回 null。 */
+  private cameraEntity(): {
+    camera?: { fov: number };
+    getPosition(): { x: number; y: number; z: number };
+    getForward(): { x: number; y: number; z: number };
+    getRight(): { x: number; y: number; z: number };
+    getUp(): { x: number; y: number; z: number };
+    setPosition(x: number, y: number, z: number): void;
+    lookAt(x: number, y: number, z: number): void;
+  } | null {
+    try {
+      const root = this.requireLive().app?.root as
+        | { findByName(name: string): unknown | null }
+        | undefined;
+      const entity = root?.findByName('camera') as
+        | {
+            camera?: { fov: number };
+            getPosition(): { x: number; y: number; z: number };
+            getForward(): { x: number; y: number; z: number };
+            getRight(): { x: number; y: number; z: number };
+            getUp(): { x: number; y: number; z: number };
+            setPosition(x: number, y: number, z: number): void;
+            lookAt(x: number, y: number, z: number): void;
+          }
+        | null
+        | undefined;
+      return entity?.camera ? entity : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** 相机到场景 gsplat 包围盒中心的距离（焦点深度）；缺失时回退固定距离。 */
+  private cameraFocusDistance(from: { x: number; y: number; z: number }): number {
+    try {
+      const root = this.requireLive().app?.root as
+        | { findByName(name: string): unknown | null }
+        | undefined;
+      const splat = root?.findByName('gsplat') as GsplatEntityLike | null | undefined;
+      const center = splat?.gsplat?.instance?.aabb?.center;
+      if (center && Number.isFinite(center.x + center.y + center.z)) {
+        const dx = center.x - from.x;
+        const dy = center.y - from.y;
+        const dz = center.z - from.z;
+        const dist = Math.hypot(dx, dy, dz);
+        if (Number.isFinite(dist) && dist > 0) return dist;
+      }
+    } catch {
+      // 未加载 / 已销毁 —— 走回退距离。
+    }
+    return CAMERA_POSE_FALLBACK_DISTANCE;
+  }
+
+  /** 画布宽高比（用于解投影）；不可用时回退 1。 */
+  private canvasAspect(): number {
+    try {
+      const device = this.requireLive().app?.graphicsDevice as
+        | { width?: number; height?: number }
+        | undefined;
+      if (
+        device &&
+        typeof device.width === 'number' &&
+        typeof device.height === 'number' &&
+        device.width > 0 &&
+        device.height > 0
+      ) {
+        return device.width / device.height;
+      }
+    } catch {
+      // 已销毁 —— 回退 1。
+    }
+    return 1;
+  }
+}
+
+function clampFov(fov: number): number {
+  const value = Number.isFinite(fov) ? fov : DEFAULT_CAMERA_FOV;
+  return Math.min(Math.max(value, CAMERA_FOV_RANGE.min), CAMERA_FOV_RANGE.max);
 }
 
 // ------------------------------------------------------------------ #

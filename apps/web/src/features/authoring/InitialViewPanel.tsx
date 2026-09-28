@@ -5,14 +5,14 @@
 import { Button, Space, Typography, Tag } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ScenePresentation } from '../../services/presentationApi';
-import type { ViewerCameraPose } from '@gsplatform/viewer';
+import type { AuthoringCameraPose } from './authoringTypes';
 
 const { Text } = Typography;
 
 interface Props {
   presentation: ScenePresentation | null;
-  onSetInitialView: (pose: ViewerCameraPose) => Promise<void>;
-  onGetCurrentPose: () => Promise<ViewerCameraPose | null>;
+  onSetInitialView: (pose: AuthoringCameraPose) => Promise<void>;
+  onGetCurrentPose: () => Promise<AuthoringCameraPose | null>;
 }
 
 export function InitialViewPanel({ presentation, onSetInitialView, onGetCurrentPose }: Props) {

@@ -34,6 +34,7 @@ from app.schemas.scene_annotation import (
     SceneAnnotationUpdateRequest,
 )
 from app.schemas.scene_presentation import (
+    PostEffects,
     ScenePresentationOut,
     ScenePresentationUpdateRequest,
     SceneViewpointCreateRequest,
@@ -97,6 +98,13 @@ def _presentation_out(
         backgroundAudioVolume=pres.background_audio_volume,
         backgroundAudioLoop=pres.background_audio_loop,
         backgroundAudioEnabled=pres.background_audio_enabled,
+        tonemapping=pres.tonemapping,  # type: ignore[arg-type]
+        highPrecisionRendering=pres.high_precision_rendering,
+        postEffects=(
+            PostEffects.model_validate(pres.post_effects)
+            if pres.post_effects
+            else None
+        ),
         collisionMode=pres.collision_mode,
         collisionAssetId=str(pres.collision_asset_id) if pres.collision_asset_id else None,
         collisionGravity=pres.collision_gravity,
@@ -264,6 +272,20 @@ class AuthoringService:
             pres.cover_asset_id = cover_uuid
         elif overwrite:
             pres.cover_asset_id = None
+
+        # ---- Experience settings v2 (SSV-05) ----
+        if body.tonemapping is not None:
+            # Literal validation already happened at the schema layer.
+            pres.tonemapping = body.tonemapping
+
+        if body.highPrecisionRendering is not None:
+            pres.high_precision_rendering = body.highPrecisionRendering
+
+        if body.postEffects is not None:
+            # Pydantic PostEffects validated ranges; persist the canonical dump.
+            pres.post_effects = body.postEffects.model_dump(mode="json")
+        elif overwrite:
+            pres.post_effects = None
 
         self._session.flush()
         return _presentation_out(pres, self._storage)

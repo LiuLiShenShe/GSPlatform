@@ -83,6 +83,10 @@ export function descriptorFromSceneUrl(sceneId: string, url: string): SceneRunti
       worldTransform: { position: null, rotation: null, scale: null },
       initialCamera: { position: null, target: null, fov: null },
       background: { type: 'color', color: null, url: null },
+      // 与后端 ScenePresentation 模型默认对齐；adapter 允许缺失时回落官方默认。
+      tonemapping: 'aces',
+      highPrecisionRendering: false,
+      postEffects: null,
     },
     viewpoints: [],
     annotations: [],
@@ -157,6 +161,9 @@ async function resolveFromManifest(sceneId: string): Promise<SceneRuntimeDescrip
           }
         : { position: null, target: null, fov: null },
       background: { type: 'color', color: null, url: null },
+      tonemapping: 'aces',
+      highPrecisionRendering: false,
+      postEffects: null,
     },
     viewpoints: [],
     annotations: [],

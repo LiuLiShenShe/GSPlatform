@@ -54,11 +54,52 @@ export interface RuntimeBackground {
   url: string | null;
 }
 
-/** 展示设置块 —— 来自 ScenePresentation 模型。 */
+/** 官方 tonemapping 曲线枚举（ExperienceSettings.tonemapping）。 */
+export type RuntimeTonemapping =
+  | 'none'
+  | 'linear'
+  | 'filmic'
+  | 'hejl'
+  | 'aces'
+  | 'aces2'
+  | 'neutral';
+
+/** 官方 postEffectSettings 结构（five effects，独立开关）。 */
+export interface RuntimePostEffects {
+  sharpness: { enabled: boolean; amount: number };
+  bloom: { enabled: boolean; intensity: number; blurLevel: number };
+  grading: {
+    enabled: boolean;
+    brightness: number;
+    contrast: number;
+    saturation: number;
+    tint: [number, number, number];
+  };
+  vignette: {
+    enabled: boolean;
+    intensity: number;
+    inner: number;
+    outer: number;
+    curvature: number;
+  };
+  fringing: { enabled: boolean; intensity: number };
+}
+
+/**
+ * 展示设置块 —— 来自 ScenePresentation 模型。
+ * SSV-05：增加 tonemapping / highPrecisionRendering / postEffects，
+ * 与官方 ExperienceSettings v2 一一对应（旧场景缺失时为官方默认）。
+ */
 export interface RuntimePresentation {
   worldTransform: RuntimeWorldTransform;
   initialCamera: RuntimeInitialCamera;
   background: RuntimeBackground;
+  /** 官方 tonemapping。defaultSettings() 起底后在 adapter 中覆盖。 */
+  tonemapping: RuntimeTonemapping;
+  /** 官方 highPrecisionRendering。 */
+  highPrecisionRendering: boolean;
+  /** 结构化 post effects（null = 官方默认）。 */
+  postEffects: RuntimePostEffects | null;
 }
 
 /** 已保存相机视角。 */

@@ -81,6 +81,73 @@ def _vec3(raw: Any) -> RuntimeVec3 | None:
     return None
 
 
+def _post_effects_json(raw: Any) -> dict[str, Any] | None:
+    """Normalise a stored post-effects document to the official shape.
+
+    The official ``postEffectSettings`` object has five effects, each with a
+    fixed field set. Anything missing (older scenes, partially authored docs)
+    falls back to the official defaults, so the front-end adapter can pass the
+    result straight to ``validateSettings(settings, { limits: true })``.
+    Returns None when the document is not usable at all.
+    """
+    if not isinstance(raw, dict):
+        return None
+
+    def merged(
+        name: str, defaults: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Official defaults for `name`, overridden by whatever was stored."""
+        base = {"enabled": False, **defaults}
+        value = raw.get(name)
+        if not isinstance(value, dict):
+            return base
+        out: dict[str, Any] = {"enabled": bool(value.get("enabled", False))}
+        for key, default in defaults.items():
+            num = value.get(key, default)
+            try:
+                out[key] = type(default)(num)  # type: ignore[call-overload]
+            except (TypeError, ValueError):
+                out[key] = default
+        return out
+
+    return {
+        "sharpness": merged("sharpness", {"amount": 0.0}),
+        "bloom": merged("bloom", {"intensity": 1.0, "blurLevel": 2.0}),
+        "grading": _grading(raw),
+        "vignette": merged(
+            "vignette",
+            {"intensity": 0.5, "inner": 0.3, "outer": 0.75, "curvature": 1.0},
+        ),
+        "fringing": merged("fringing", {"intensity": 0.5}),
+    }
+
+
+def _grading(raw: dict[str, Any]) -> dict[str, Any]:
+    """Grading with a validated 3-tuple tint (official default [1,1,1])."""
+    out = {
+        "enabled": False,
+        "brightness": 1.0,
+        "contrast": 1.0,
+        "saturation": 1.0,
+        "tint": [1.0, 1.0, 1.0],
+    }
+    value = raw.get("grading")
+    if not isinstance(value, dict):
+        return out
+    out["enabled"] = bool(value.get("enabled", False))
+    for key in ("brightness", "contrast", "saturation"):
+        num = value.get(key)
+        if isinstance(num, (int, float)):
+            out[key] = float(num)
+    tint = value.get("tint")
+    if isinstance(tint, (list, tuple)) and len(tint) == 3:
+        try:
+            out["tint"] = [float(c) for c in tint]
+        except (TypeError, ValueError):
+            out["tint"] = [1.0, 1.0, 1.0]
+    return out
+
+
 def content_format_from_filename(name: str) -> str | None:
     """Map an asset filename to a runtime content format.
 
@@ -254,6 +321,12 @@ class SceneRuntimeService:
             base = PRESENTATION_SERVE_BASE.format(slug=scene.slug)
             background_url = f"{base}/presentation/background"
 
+        post_effects = (
+            _post_effects_json(pres.post_effects)
+            if pres.post_effects
+            else None
+        )
+
         return RuntimePresentation(
             worldTransform=RuntimeWorldTransform(
                 position=_vec3(pres.world_position),
@@ -270,6 +343,9 @@ class SceneRuntimeService:
                 color=_vec3(pres.background_color),
                 url=background_url,
             ),
+            tonemapping=pres.tonemapping,
+            highPrecisionRendering=pres.high_precision_rendering,
+            postEffects=post_effects,
         )
 
     def _build_viewpoints(self, scene: Scene) -> list[RuntimeViewpoint]:

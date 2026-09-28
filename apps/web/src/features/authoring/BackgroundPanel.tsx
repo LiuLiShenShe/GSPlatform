@@ -90,6 +90,11 @@ export function BackgroundPanel({
 
         {type === 'equirectangular' && (
           <>
+            {presentation?.backgroundAssetId && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                已设置全景背景（重新上传将替换）
+              </Text>
+            )}
             <input
               ref={fileInputRef}
               type="file"

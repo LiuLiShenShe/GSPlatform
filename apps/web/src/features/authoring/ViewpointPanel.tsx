@@ -10,19 +10,19 @@ import {
   EyeInvisibleOutlined,
 } from '@ant-design/icons';
 import type { SceneViewpoint } from '../../services/presentationApi';
-import type { ViewerCameraPose } from '@gsplatform/viewer';
+import type { AuthoringCameraPose } from './authoringTypes';
 
 const { Text } = Typography;
 
 interface Props {
   viewpoints: SceneViewpoint[];
   activeViewpointId: string | null;
-  onAdd: (name: string, pose: ViewerCameraPose) => Promise<void>;
+  onAdd: (name: string, pose: AuthoringCameraPose) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onRename: (id: string, name: string) => Promise<void>;
   onToggleEnabled: (id: string, enabled: boolean) => Promise<void>;
   onSetActive: (id: string | null) => void;
-  onGetCurrentPose: () => Promise<ViewerCameraPose | null>;
+  onGetCurrentPose: () => Promise<AuthoringCameraPose | null>;
   onNavigateToViewpoint: (vp: SceneViewpoint) => void;
 }
 

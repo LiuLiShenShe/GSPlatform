@@ -6,12 +6,14 @@
  * interaction (respecting browser autoplay policies).
  */
 import { useCallback, useRef, useState } from 'react';
-import { Card, Button, Slider, Switch, Space, Tag, Upload, message } from 'antd';
+import { Card, Button, Slider, Switch, Space, Tag, Upload, message, Typography } from 'antd';
 import { UploadOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
 import type { ScenePresentation } from '../../services/presentationApi';
 import {
   updateBackgroundAudio as apiUpdateBackgroundAudio,
 } from '../../services/annotationApi';
+
+const { Text } = Typography;
 
 interface BackgroundMusicPanelProps {
   presentation: ScenePresentation | null;
@@ -140,7 +142,7 @@ export function BackgroundMusicPanel({
           </Button>
         </Upload>
         <Space style={{ width: '100%' }}>
-          <Text label="音量" />
+          <Text>音量</Text>
           <Slider
             min={0}
             max={1}
