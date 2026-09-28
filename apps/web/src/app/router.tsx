@@ -16,6 +16,7 @@ import State403 from '../components/State403';
 import HealthUI from '../pages/HealthUI';
 import XRViewerPage from '../pages/XRViewerPage';
 import XRTestPage from '../pages/XRTestPage';
+import RuntimeTestPage from '../pages/RuntimeTestPage';
 
 /**
  * 应用路由（React Router v7 data router）。
@@ -45,6 +46,7 @@ export const appRouter = createBrowserRouter([
   },
   { path: '/xr/test', element: <XRTestPage /> },
   { path: '/xr/:sceneId', element: <XRViewerPage /> },
+  { path: '/runtime-test/:sceneId', element: <RuntimeTestPage /> },
   { path: '/s/:token', element: <ShareRedirectPage /> },
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
