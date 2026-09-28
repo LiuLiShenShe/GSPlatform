@@ -245,6 +245,10 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false,
+    // Quest/PICO WebXR 真机测试入口：允许 Cloudflare quick tunnel
+    // （*.trycloudflare.com，每次启动子域名随机）穿过 Vite 的 DNS 重绑保护
+    // 到达 dev server。仅 dev 环境；生产由 nginx 转发，不受影响。
+    allowedHosts: ['.trycloudflare.com'],
   },
   build: {
     outDir: 'dist',
