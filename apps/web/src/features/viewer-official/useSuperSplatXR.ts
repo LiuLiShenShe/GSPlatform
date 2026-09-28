@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveSceneRuntimeDescriptor } from '../../scene-runtime/descriptorResolver';
 import { buildExperienceSettings } from '../../scene-runtime/experienceAdapter';
+import { resolveRuntimeAssetUrl } from '../../scene-runtime/assetUrl';
 import {
   renderedSplatCount,
   runtimeRenderer,
@@ -41,6 +42,10 @@ export interface OfficialXRViewerState {
   loaded: boolean;
   canStartVR: boolean;
   canStartAR: boolean;
+  /** 官方 state.hasCollision —— 碰撞资产已加载（SSV-07 §8，不破坏 XR）。 */
+  hasCollision: boolean;
+  /** 官方 state.walkAllowed（VR 中同样为碰撞+尺度判定）。 */
+  walkAllowed: boolean;
   /** 官方 state.xrMode（vr / ar / null）——运行态真相。 */
   xrMode: 'vr' | 'ar' | null;
   /** 内容加载进度 0..100（官方 onProgress）。 */
@@ -99,6 +104,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
   const [loaded, setLoaded] = useState(false);
   const [canStartVR, setCanStartVR] = useState(false);
   const [canStartAR, setCanStartAR] = useState(false);
+  const [hasCollision, setHasCollision] = useState(false);
+  const [walkAllowed, setWalkAllowed] = useState(false);
   const [xrMode, setXrMode] = useState<'vr' | 'ar' | null>(null);
   const [progress, setProgress] = useState(0);
   const [renderer, setRenderer] = useState('—');
@@ -180,12 +187,16 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
 
         // 3) 官方 SuperSplat Runtime（mode:'xr' → renderer 强制 'webgl'）
         //    ui:true = 官方 annotation hotspots/tooltip 层（SSV-06）。
+        //    collisionUrl 解析为绝对 URL（同 Desktop，SSV-07 §8：碰撞资产
+        //    不得破坏 XR 加载 —— 官方 VR 路径同样消费碰撞数据）。
         const runtime = await SuperSplatRuntime.create({
           container: mount,
           contentUrl: desc.content.url,
           settings,
           posterUrl: desc.scene.posterUrl ?? undefined,
-          collisionUrl: desc.collision?.url ?? undefined,
+          collisionUrl: desc.collision?.enabled
+            ? resolveRuntimeAssetUrl(desc.collision.url) ?? undefined
+            : undefined,
           mode: 'xr',
           ui: true,
         });
@@ -200,6 +211,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
           setLoaded(runtime.state.loaded);
           setCanStartVR(runtime.state.canStartVR);
           setCanStartAR(runtime.state.canStartAR);
+          setHasCollision(runtime.state.hasCollision);
+          setWalkAllowed(runtime.state.walkAllowed);
           setXrMode(runtime.state.xrMode);
           setProgress(runtime.state.progress);
           setGsplats(renderedSplatCount(runtime.app));
@@ -323,6 +336,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     loaded,
     canStartVR,
     canStartAR,
+    hasCollision,
+    walkAllowed,
     xrMode,
     progress,
     renderer,

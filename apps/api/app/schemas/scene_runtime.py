@@ -138,10 +138,14 @@ class RuntimeBackgroundAudio(BaseModel):
 
 
 class RuntimeCollision(BaseModel):
-    """Collision runtime block — populated only when a built mesh exists."""
+    """Collision runtime block — populated only when a built artifact exists.
 
-    url: str | None = None  # served via GET /api/v1/scenes/{scene_id}/collision/mesh
-    format: str  # glb | voxel (voxel reserved; only glb emitted today)
+    ``format`` is ``voxel`` (native octree; preferred) or ``glb`` (mesh
+    fallback). The official viewer routes by the served url extension.
+    """
+
+    url: str | None = None  # served via GET /api/v1/scenes/{scene_id}/collision/*
+    format: str  # glb | voxel
     mode: str  # INDOOR | OUTDOOR
     gravity: float
     slopeLimitDegrees: float = Field(alias="slopeLimitDegrees")

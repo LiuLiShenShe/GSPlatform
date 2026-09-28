@@ -26,6 +26,7 @@ import {
   type CameraPose,
 } from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from './runtimeErrors';
+import type { SceneBounds } from './sceneScale';
 
 /**
  * 相机封装（SSV-05 §5）目标距离策略。
@@ -41,10 +42,14 @@ const CAMERA_POSE_FALLBACK_DISTANCE = 3;
 /** 场景 gsplat 包围盒访问器（避免依赖 playcanvas 具体类型）。 */
 interface GsplatAabbLike {
   center?: { x: number; y: number; z: number };
+  halfExtents?: { x: number; y: number; z: number };
 }
 
 interface GsplatEntityLike {
-  gsplat?: { instance?: { aabb?: GsplatAabbLike } };
+  // 官方 1.35.0：场景包围盒取 gsplatComponent.customAabb（经实体世界变换），
+  // 不是 instance.aabb —— instance.aabb 在 playcanvas 2.22 下为 null。
+  gsplat?: { customAabb?: GsplatAabbLike };
+  getWorldTransform?: () => { data: ArrayLike<number> };
 }
 
 /** 运行模式：决定 Renderer Policy。 */
@@ -296,6 +301,30 @@ export class SuperSplatRuntime {
   // ------------------------------------------------------------------ #
 
   /**
+   * 场景 gsplat 世界包围盒（SSV-07 §4 尺度诊断）。
+   *
+   * 1 Scene Unit = 1 meter；页面用 {@link assessSceneScale} 判断尺度是否
+   * 明显异常，异常时提示「Scene scale needs calibration」并禁走。
+   * 未加载 / 实体缺失返回 null。
+   */
+  getSceneBounds(): SceneBounds | null {
+    const aabb = this.gsplatAabb();
+    if (!aabb?.center || !aabb.halfExtents) return null;
+    const cx = aabb.center.x;
+    const cy = aabb.center.y;
+    const cz = aabb.center.z;
+    const hx = aabb.halfExtents.x;
+    const hy = aabb.halfExtents.y;
+    const hz = aabb.halfExtents.z;
+    if (![cx, cy, cz, hx, hy, hz].every(Number.isFinite)) return null;
+    return {
+      min: [cx - hx, cy - hy, cz - hz],
+      max: [cx + hx, cy + hy, cz + hz],
+      size: [hx * 2, hy * 2, hz * 2],
+    };
+  }
+
+  /**
    * 当前相机 pose（position / target / fov）。
    *
    * position 与 fov 直接从引擎相机实体读取（可公开获得的真实数据）；
@@ -307,7 +336,7 @@ export class SuperSplatRuntime {
     const camera = this.cameraEntity();
     if (!camera?.camera) return null;
     const position = camera.getPosition();
-    const forward = camera.getForward();
+    const forward = camera.forward;
     const distance = this.cameraFocusDistance(position);
     return {
       position: [position.x, position.y, position.z],
@@ -345,9 +374,9 @@ export class SuperSplatRuntime {
     const camera = this.cameraEntity();
     if (!camera?.camera) return null;
     const position = camera.getPosition();
-    const forward = camera.getForward();
-    const right = camera.getRight();
-    const up = camera.getUp();
+    const forward = camera.forward;
+    const right = camera.right;
+    const up = camera.up;
     const tanY = Math.tan((clampFov(camera.camera.fov) * Math.PI) / 360);
     const tanX = tanY * this.canvasAspect();
     const dx = forward.x + right.x * (x * tanX) + up.x * (y * tanY);
@@ -467,10 +496,12 @@ export class SuperSplatRuntime {
   /** 引擎相机实体（官方 viewer 固定命名为 'camera'）。缺失/已销毁返回 null。 */
   private cameraEntity(): {
     camera?: { fov: number };
+    // 方向/上/右在 Entity 上是 Vec3 只读属性（playcanvas GraphNode.forward /
+    // right / up），不是方法 —— SSV-07 探针实测修正。
+    forward: { x: number; y: number; z: number };
+    right: { x: number; y: number; z: number };
+    up: { x: number; y: number; z: number };
     getPosition(): { x: number; y: number; z: number };
-    getForward(): { x: number; y: number; z: number };
-    getRight(): { x: number; y: number; z: number };
-    getUp(): { x: number; y: number; z: number };
     setPosition(x: number, y: number, z: number): void;
     lookAt(x: number, y: number, z: number): void;
   } | null {
@@ -481,10 +512,10 @@ export class SuperSplatRuntime {
       const entity = root?.findByName('camera') as
         | {
             camera?: { fov: number };
+            forward: { x: number; y: number; z: number };
+            right: { x: number; y: number; z: number };
+            up: { x: number; y: number; z: number };
             getPosition(): { x: number; y: number; z: number };
-            getForward(): { x: number; y: number; z: number };
-            getRight(): { x: number; y: number; z: number };
-            getUp(): { x: number; y: number; z: number };
             setPosition(x: number, y: number, z: number): void;
             lookAt(x: number, y: number, z: number): void;
           }
@@ -498,23 +529,73 @@ export class SuperSplatRuntime {
 
   /** 相机到场景 gsplat 包围盒中心的距离（焦点深度）；缺失时回退固定距离。 */
   private cameraFocusDistance(from: { x: number; y: number; z: number }): number {
+    const aabb = this.gsplatAabb();
+    const center = aabb?.center;
+    if (center && Number.isFinite(center.x + center.y + center.z)) {
+      const dx = center.x - from.x;
+      const dy = center.y - from.y;
+      const dz = center.z - from.z;
+      const dist = Math.hypot(dx, dy, dz);
+      if (Number.isFinite(dist) && dist > 0) return dist;
+    }
+    return CAMERA_POSE_FALLBACK_DISTANCE;
+  }
+
+  /**
+   * gsplat 世界包围盒（官方 1.35.0 语义）。
+   *
+   * 官方 viewer 计算场景包围盒：`sceneBound.setFromTransformedAabb(
+   * gsplatComponent.customAabb, entity.getWorldTransform())` —— 用实体世界
+   * 变换把 customAabb 的 8 个角变换后重新贴合。这里复刻同一数学（不 import
+   * playcanvas BoundingBox，纯算术），供尺度诊断 / 相机焦点深度使用。
+   * 缺失或变换矩阵不可用返回 null。
+   */
+  private gsplatAabb(): GsplatAabbLike | null {
     try {
       const root = this.requireLive().app?.root as
         | { findByName(name: string): unknown | null }
         | undefined;
       const splat = root?.findByName('gsplat') as GsplatEntityLike | null | undefined;
-      const center = splat?.gsplat?.instance?.aabb?.center;
-      if (center && Number.isFinite(center.x + center.y + center.z)) {
-        const dx = center.x - from.x;
-        const dy = center.y - from.y;
-        const dz = center.z - from.z;
-        const dist = Math.hypot(dx, dy, dz);
-        if (Number.isFinite(dist) && dist > 0) return dist;
+      const box = splat?.gsplat?.customAabb;
+      if (!box?.center || !box.halfExtents) return null;
+      const { center, halfExtents } = box;
+      const { x: cx, y: cy, z: cz } = center;
+      const { x: hx, y: hy, z: hz } = halfExtents;
+      const m = splat?.getWorldTransform?.()?.data;
+      if (!m || m.length < 16) return null;
+      // pc.Mat4.data 是列主序 16 元：m[0..3]=列0 … m[12..15]=列3（平移）。
+      // 变换 8 个角 → 重新贴合最小/最大 → center/halfExtents。
+      let minX = Infinity, minY = Infinity, minZ = Infinity;
+      let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+      const corners: Array<[number, number, number]> = [
+        [cx - hx, cy - hy, cz - hz],
+        [cx + hx, cy - hy, cz - hz],
+        [cx - hx, cy + hy, cz - hz],
+        [cx + hx, cy + hy, cz - hz],
+        [cx - hx, cy - hy, cz + hz],
+        [cx + hx, cy - hy, cz + hz],
+        [cx - hx, cy + hy, cz + hz],
+        [cx + hx, cy + hy, cz + hz],
+      ];
+      for (const [px, py, pz] of corners) {
+        const ox = m[0] * px + m[4] * py + m[8] * pz + m[12];
+        const oy = m[1] * px + m[5] * py + m[9] * pz + m[13];
+        const oz = m[2] * px + m[6] * py + m[10] * pz + m[14];
+        if (ox < minX) minX = ox;
+        if (oy < minY) minY = oy;
+        if (oz < minZ) minZ = oz;
+        if (ox > maxX) maxX = ox;
+        if (oy > maxY) maxY = oy;
+        if (oz > maxZ) maxZ = oz;
       }
+      if (![minX, minY, minZ, maxX, maxY, maxZ].every(Number.isFinite)) return null;
+      return {
+        center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2, z: (minZ + maxZ) / 2 },
+        halfExtents: { x: (maxX - minX) / 2, y: (maxY - minY) / 2, z: (maxZ - minZ) / 2 },
+      };
     } catch {
-      // 未加载 / 已销毁 —— 走回退距离。
+      return null;
     }
-    return CAMERA_POSE_FALLBACK_DISTANCE;
   }
 
   /** 画布宽高比（用于解投影）；不可用时回退 1。 */

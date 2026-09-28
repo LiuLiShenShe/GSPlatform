@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveSceneRuntimeDescriptor } from '../../scene-runtime/descriptorResolver';
 import { buildExperienceSettings } from '../../scene-runtime/experienceAdapter';
+import { resolveRuntimeAssetUrl } from '../../scene-runtime/assetUrl';
 import {
   renderedSplatCount,
   runtimeRenderer,
@@ -22,7 +23,12 @@ import {
   type GsplatformAnnotationRef,
   type RuntimeCameraMode,
 } from '../../scene-runtime/SuperSplatRuntime';
+import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
+import {
+  assessSceneScale,
+  type SceneScaleAssessment,
+} from '../../scene-runtime/sceneScale';
 import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
 export type OfficialViewerStatus = 'loading' | 'ready' | 'error';
@@ -45,6 +51,15 @@ export interface OfficialDesktopViewerState {
   showAnnotations: boolean;
   isFullscreen: boolean;
   hasCollision: boolean;
+  /** 官方 walkAllowed —— 碰撞已加载且场景足够大（官方 state.walkAllowed）。 */
+  walkAllowed: boolean;
+  /** 碰撞工件格式（voxel = 官方体素，glb = 官方 mesh）。 */
+  collisionFormat: string | null;
+  /**
+   * 尺度诊断（SSV-07 §4）。`needsCalibration` 为真时 Walk 入口禁用 ——
+   * 禁止默默用错误尺度走路。
+   */
+  sceneScale: SceneScaleAssessment;
   canStartVR: boolean;
   /** 当前场景运行时描述（null = 尚未解析/失败）。 */
   descriptor: SceneRuntimeDescriptorV1 | null;
@@ -58,6 +73,8 @@ export interface OfficialDesktopViewerState {
   retry: () => void;
   frameScene: () => void;
   resetCamera: () => void;
+  /** 直接把相机摆到给定 pose（官方一次性摆放，用于测试/导航定位）。 */
+  setCameraPose: (pose: CameraPose) => void;
   requestFullscreen: () => void;
   /** 退出本 viewer 的全屏。 */
   exitFullscreen: () => void;
@@ -67,6 +84,8 @@ export interface OfficialDesktopViewerState {
   togglePerformanceMode: () => void;
   /** 切换 annotation 可见性（官方 state 写入）。 */
   toggleAnnotationsVisibility: () => void;
+  /** 进入/退出 walk 模式（官方 toggleWalk；walkAllowed 为 false 时无效）。 */
+  toggleWalk: () => void;
   /**
    * 官方当前选中 annotation 的 GSPlatform extras 引用（SSV-06）。
    * 页面用它经 annotationId 解析 SceneAnnotation / 打开媒体 Overlay；
@@ -102,6 +121,14 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
   const [showAnnotations, setShowAnnotationsState] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasCollision, setHasCollision] = useState(false);
+  const [walkAllowed, setWalkAllowed] = useState(false);
+  const [collisionFormat, setCollisionFormat] = useState<string | null>(null);
+  const [sceneScale, setSceneScale] = useState<SceneScaleAssessment>({
+    horizontalExtent: 0,
+    verticalExtent: 0,
+    status: 'too-small',
+    needsCalibration: true,
+  });
   const [canStartVR, setCanStartVR] = useState(false);
   const [descriptor, setDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
   const [isManifestFallback, setIsManifestFallback] = useState(false);
@@ -128,6 +155,7 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
         if (cancelled) return;
         setDescriptor(desc);
         setIsManifestFallback(fromManifest);
+        setCollisionFormat(desc.collision?.enabled ? desc.collision.format ?? null : null);
 
         if (!desc.content.url) {
           setStatus('error');
@@ -142,12 +170,18 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
         // 3) 官方 SuperSplat Runtime（desktop → auto renderer，无 iframe）
         //    ui:true = 官方 annotation hotspots/tooltip 层（SSV-06；多余 chrome
         //    由 wrapper 的 scoped CSS 隐藏）。
+        //    collisionUrl：仅在 collision.enabled 时传入 —— 关闭碰撞的场景
+        //    不向官方 viewer 注入碰撞数据（SSV-07 §2，避免默默开启 walk）。
+        //    且必须解析为绝对 URL（开发跨源 :5173 → :8001 无 /api 代理，官方
+        //    viewer 直接 fetch 相对路径会 404 —— SSV-06 同款问题）。
         const runtime = await SuperSplatRuntime.create({
           container: mount,
           contentUrl: desc.content.url,
           settings,
           posterUrl: desc.scene.posterUrl ?? undefined,
-          collisionUrl: desc.collision?.url ?? undefined,
+          collisionUrl: desc.collision?.enabled
+            ? resolveRuntimeAssetUrl(desc.collision.url) ?? undefined
+            : undefined,
           mode: 'desktop',
           ui: true,
         });
@@ -156,6 +190,11 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
           return;
         }
         runtimeRef.current = runtime;
+        // DEV-only 调试把柄（生产构建 import.meta.env.DEV=false，不输出）。
+        // e2e 用 window.__gsruntime 直接探查官方 app/实体树。
+        if (import.meta.env.DEV) {
+          (window as unknown as { __gsruntime?: unknown }).__gsruntime = runtime;
+        }
         const refresh = () => {
           if (cancelled) return;
           setRenderer(runtimeRenderer(runtime.app));
@@ -167,7 +206,11 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
           setShowAnnotationsState(runtime.state.showAnnotations);
           setIsFullscreen(runtime.state.isFullscreen);
           setHasCollision(runtime.state.hasCollision);
+          setWalkAllowed(runtime.state.walkAllowed);
           setCanStartVR(runtime.state.canStartVR);
+          // SSV-07 §4：每次取帧重算尺度诊断（包围盒来自 gsplat 实例）。
+          // sceneScale.needsCalibration → Walk 入口禁用 + UI 告警。
+          setSceneScale(assessSceneScale(runtime.getSceneBounds()));
           if (runtime.state.loaded && !cancelled) setStatus('ready');
         };
 
@@ -255,6 +298,16 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     }
   }, []);
 
+  const setCameraPose = useCallback((pose: CameraPose) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    try {
+      runtime.setCameraPose(pose);
+    } catch (err) {
+      console.error('[viewer] setCameraPose failed', err);
+    }
+  }, []);
+
   const requestFullscreen = useCallback(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -285,6 +338,16 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     runtime.state.showAnnotations = !runtime.state.showAnnotations; // writable key
   }, []);
 
+  const toggleWalk = useCallback(() => {
+    const runtime = runtimeRef.current;
+    if (!runtime || !runtime.loaded || !runtime.walkAllowed) return;
+    try {
+      runtime.toggleWalk(); // 官方 walk 模式（不做自建物理/控制器）
+    } catch (err) {
+      console.error('[viewer] toggleWalk failed', err);
+    }
+  }, []);
+
   return {
     status,
     error,
@@ -297,6 +360,9 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     showAnnotations,
     isFullscreen,
     hasCollision,
+    walkAllowed,
+    collisionFormat,
+    sceneScale,
     canStartVR,
     descriptor,
     isManifestFallback,
@@ -305,11 +371,13 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     retry,
     frameScene,
     resetCamera,
+    setCameraPose,
     requestFullscreen,
     exitFullscreen,
     setCameraMode,
     togglePerformanceMode,
     toggleAnnotationsVisibility,
+    toggleWalk,
     selectedGsplatformAnnotation,
   };
 }

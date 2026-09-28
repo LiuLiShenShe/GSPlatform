@@ -33,9 +33,36 @@ export function OfficialViewerToolbar({ state }: OfficialViewerToolbarProps) {
     state.setCameraMode(mode as RuntimeCameraMode);
   };
 
+  // SSV-07 §3：Walk 只走官方 toggleWalk / walkAllowed / cameraMode。
+  // §4：尺度异常（needsCalibration）时禁走 —— 不默默用错误尺度走路。
+  const walkEnabled =
+    loaded && state.walkAllowed && !state.sceneScale.needsCalibration;
+  const walking = cameraMode === 'walk';
+
   return (
     <footer className="gs-viewer__bottom-toolbar" aria-label="Official Viewer 工具条">
       <Space size={6} wrap>
+        <Tooltip
+          title={
+            walking
+              ? '退出 Walk（恢复 walk 前模式）'
+              : !state.walkAllowed
+                ? '需要碰撞数据（场景未提供碰撞或场景过小）'
+                : state.sceneScale.needsCalibration
+                  ? '场景尺度需要校准（Scene scale needs calibration）'
+                  : '进入 Walk 模式（官方碰撞 + 重力 + WASD）'
+          }
+        >
+          <Button
+            type={walking ? 'primary' : 'default'}
+            disabled={!walkEnabled}
+            onClick={state.toggleWalk}
+            data-testid="ov-walk"
+          >
+            {walking ? 'Walk ✓' : 'Walk'}
+          </Button>
+        </Tooltip>
+
         <Tooltip title="重新取景整个场景">
           <Button
             icon={<AimOutlined aria-hidden />}

@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.identity import RequestIdentity
 from app.db.models.asset import Asset
+from app.db.models.enums import AssetKind
 from app.db.models.scene import Scene, SceneVersion
 from app.repositories.authoring import (
     SceneAnnotationRepository,
@@ -402,11 +403,24 @@ class SceneRuntimeService:
         collision = self._collisions.get_by_scene_id(scene.id)
         if collision is None or collision.asset_id is None or collision.status != "SUCCEEDED":
             return None
+        base = COLLISION_SERVE_BASE.format(slug=scene.slug)
+        asset = self._session.get(Asset, collision.asset_id)
+        # The official viewer selects mesh-vs-voxel by the url extension, so the
+        # emitted url must end in .glb / .voxel.json. Voxel (native octree) is
+        # preferred when present; the GLB stays as the mesh fallback.
+        if asset is not None and asset.kind == AssetKind.COLLISION_VOXEL.value:
+            url, fmt = f"{base}/collision.voxel.json", "voxel"
+        elif asset is not None and asset.kind == AssetKind.COLLISION_GLB.value:
+            url, fmt = f"{base}/collision.glb", "glb"
+        else:
+            # Legacy single-asset layout (pre-SSV-07): serve under the contract
+            # url; the official viewer still loads it as mesh (ext 'glb').
+            url, fmt = f"{base}/mesh", "glb"
         pres = self._presentations.get_by_scene(scene.id)
         enabled = pres.collision_enabled if pres is not None else False
         return RuntimeCollision(
-            url=f"{COLLISION_SERVE_BASE.format(slug=scene.slug)}/mesh",
-            format="glb",
+            url=url,
+            format=fmt,
             mode=collision.mode,
             gravity=collision.gravity,
             slopeLimitDegrees=collision.slope_limit_degrees,

@@ -614,8 +614,7 @@ describe('动作转发', () => {
     expect(fake.setMoveInput).toHaveBeenCalledWith(0.5, -0.3);
   });
 
-  it('startVR / startAR / endXR / requestFullscreen / exitFullscreen 转发', async () => {
-    const fake = makeFakeHandle();
+  it('startVR / startAR / endXR / requestFullscreen / exitFullscreen 转发', async () => {    const fake = makeFakeHandle();
     mockedCreateViewer.mockResolvedValueOnce(fake);
     const runtime = await SuperSplatRuntime.create(defaultOptions());
     await runtime.startVR();
@@ -668,17 +667,24 @@ interface CameraEntityLike {
 function makeCameraHandle(): ViewerHandle & { cameraEntity: CameraEntityLike } {
   let pos = { x: 1, y: 2, z: 3 };
   const cameraEntity = {
+    // 方向/上/右是 Entity（GraphNode）上的 Vec3 只读属性（SSV-07 探针实测）。
     camera: { fov: 55 },
+    forward: { x: 0, y: 0, z: -1 },
+    right: { x: 1, y: 0, z: 0 },
+    up: { x: 0, y: 1, z: 0 },
     getPosition: vi.fn(() => ({ x: pos.x, y: pos.y, z: pos.z })),
-    getForward: vi.fn(() => ({ x: 0, y: 0, z: -1 })),
-    getRight: vi.fn(() => ({ x: 1, y: 0, z: 0 })),
-    getUp: vi.fn(() => ({ x: 0, y: 1, z: 0 })),
     setPosition: vi.fn((x: number, y: number, z: number) => {
       pos = { x, y, z };
     }),
     lookAt: vi.fn(),
   };
-  const gsplat = { gsplat: { instance: { aabb: { center: { x: 0, y: 1, z: 0 } } } } };
+  // 官方 1.35.0：包围盒取 gsplatComponent.customAabb（非 instance.aabb），
+  // 并经实体世界变换。身份矩阵 → 世界包围盒 = customAabb 原值。
+  const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+  const gsplat = {
+    gsplat: { customAabb: { center: { x: 0, y: 1, z: 0 }, halfExtents: { x: 1, y: 1, z: 1 } } },
+    getWorldTransform: () => ({ data: identity }),
+  };
   const root = {
     findByName: vi.fn((name: string) => {
       if (name === 'camera') return cameraEntity;
@@ -795,5 +801,100 @@ describe('captureScreenshot 封装（SSV-05 封面截取）', () => {
       spy.mockRestore();
       dataUrlSpy.mockRestore();
     }
+  });
+});
+
+describe('SSV-07 walk / collision / scale', () => {
+  it('getSceneBounds 从 gsplat customAabb + 世界变换读取世界包围盒', async () => {
+    // 身份世界变换 → 世界包围盒 = customAabb 原值。
+    const identity = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const root = {
+      findByName: (name: string) =>
+        name === 'gsplat'
+          ? {
+              gsplat: {
+                customAabb: {
+                  center: { x: 0, y: 1, z: 10 },
+                  halfExtents: { x: 4, y: 1.5, z: 3 },
+                },
+              },
+              getWorldTransform: () => ({ data: identity }),
+            }
+          : null,
+    };
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.getSceneBounds()).toEqual({
+      min: [-4, -0.5, 7],
+      max: [4, 2.5, 13],
+      size: [8, 3, 6],
+    });
+  });
+
+  it('getSceneBounds 应用 gsplat 世界变换（旋转 180° 绕 Z）', async () => {
+    // m[0..3]=列0 … m[12..15]=列3。180° 绕 Z：x→-x, y→-y, z 不变。
+    const rotZ180 = [-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+    const root = {
+      findByName: (name: string) =>
+        name === 'gsplat'
+          ? {
+              gsplat: {
+                customAabb: {
+                  center: { x: 1, y: 0, z: 10 },
+                  halfExtents: { x: 2, y: 1, z: 3 },
+                },
+              },
+              getWorldTransform: () => ({ data: rotZ180 }),
+            }
+          : null,
+    };
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    // 中心 (1,0,10) → (-1,0,10)；extents 不变 → min [-3,-1,7] max [1,1,13]。
+    expect(runtime.getSceneBounds()).toEqual({
+      min: [-3, -1, 7],
+      max: [1, 1, 13],
+      size: [4, 2, 6],
+    });
+  });
+
+  it('getSceneBounds 无 customAabb / 无世界变换 / 未加载时返回 null', async () => {
+    const fake = makeFakeHandle({
+      root: { findByName: () => null },
+    });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.getSceneBounds()).toBeNull();
+
+    // customAabb 存在但没有世界变换 → null（不伪造尺度）。
+    const noTransformRoot = {
+      findByName: (name: string) =>
+        name === 'gsplat'
+          ? { gsplat: { customAabb: { center: { x: 0, y: 1, z: 0 }, halfExtents: { x: 1, y: 1, z: 1 } } } }
+          : null,
+    };
+    const fake2 = makeFakeHandle({ root: noTransformRoot });
+    mockedCreateViewer.mockResolvedValueOnce(fake2);
+    const runtime2 = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime2.getSceneBounds()).toBeNull();
+  });
+
+  it('walkAllowed / hasCollision / cameraMode 读取官方 state', async () => {
+    const fake = makeFakeHandle();
+    const writable = fake.state as {
+      walkAllowed?: boolean;
+      hasCollision?: boolean;
+      cameraMode?: unknown;
+    };
+    writable.walkAllowed = true;
+    writable.hasCollision = true;
+    writable.cameraMode = 'walk';
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.walkAllowed).toBe(true);
+    expect(runtime.hasCollision).toBe(true);
+    expect(runtime.cameraMode).toBe('walk');
   });
 });

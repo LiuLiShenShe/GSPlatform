@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
+from app.db.models.asset import Asset
 from app.db.models.enums import JobKind, JobStatus
 from app.db.models.job import Job
 from app.db.models.scene import Scene
@@ -94,20 +95,55 @@ class CollisionService:
     def serve_collision_mesh(self, slug: str) -> tuple[bytes, str]:
         """Return collision mesh bytes + mime (or raise NotFound).
 
-        Serves the built GLB so the runtime contract's ``collision.url`` is a
-        real viewer-accessible URL. Public like the presentation serve routes.
+        Serves the built GLB (``AssetKind.COLLISION_GLB``) so the runtime
+        contract's ``collision.url`` is a real viewer-accessible URL. The
+        official viewer routes a url ending in ``.glb`` to its mesh loader.
+        Public like the presentation serve routes.
         """
-        from app.db.models.asset import Asset
-
         scene = self._get_scene(slug)
-        collision = self._repo.get_by_scene_id(scene.id)
-        if collision is None or collision.asset_id is None:
-            raise NotFoundError(f"场景 {slug} 没有碰撞网格")
-        asset = self._session.get(Asset, collision.asset_id)
+        asset = self._latest_collision_asset(scene.id, "COLLISION_GLB")
         if asset is None:
-            raise NotFoundError("碰撞网格资源不存在")
+            # Legacy single-asset layout: the collision row's asset_id itself.
+            collision = self._repo.get_by_scene_id(scene.id)
+            if collision is not None and collision.asset_id is not None:
+                asset = self._session.get(Asset, collision.asset_id)
+                if asset is not None and asset.kind != "COLLISION_GLB":
+                    asset = None
+        if asset is None:
+            raise NotFoundError(f"场景 {slug} 没有碰撞网格")
         data = self._storage.read(asset.storage_key)
         return data, asset.mime_type
+
+    def serve_collision_voxel(
+        self, slug: str, *, binary: bool
+    ) -> tuple[bytes, str]:
+        """Return the voxel collision pair byte stream.
+
+        ``binary=False`` → the ``.voxel.json`` metadata; ``binary=True`` → the
+        ``.voxel.bin`` leaf octree data. The official viewer fetches the json
+        first, then derives the bin url by replacing ``.voxel.json`` with
+        ``.voxel.bin``, so both must be served from the same scene directory.
+        """
+        scene = self._get_scene(slug)
+        asset = self._latest_collision_asset(scene.id, "COLLISION_VOXEL")
+        if asset is None:
+            raise NotFoundError(f"场景 {slug} 没有碰撞体素数据")
+        if binary:
+            bin_key = (asset.metadata_ or {}).get("binStorageKey")
+            if not bin_key:
+                raise NotFoundError(f"场景 {slug} 缺少 voxel.bin 资源")
+            return self._storage.read(bin_key), "application/octet-stream"
+        return self._storage.read(asset.storage_key), "application/json"
+
+    def _latest_collision_asset(
+        self, scene_id: uuid.UUID, kind: str
+    ) -> Asset | None:
+        return (
+            self._session.query(Asset)
+            .filter(Asset.scene_id == scene_id, Asset.kind == kind)
+            .order_by(Asset.created_at.desc())
+            .first()
+        )
 
     def create_and_build(
         self,

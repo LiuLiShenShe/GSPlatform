@@ -111,6 +111,14 @@ export default function XRViewerPage() {
             <td data-testid="diag-xr-mode">{state.xrMode ?? 'null'}</td>
           </tr>
           <tr>
+            <td>state.hasCollision</td>
+            <td data-testid="diag-has-collision">{state.hasCollision ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
+            <td>state.walkAllowed</td>
+            <td data-testid="diag-walk-allowed">{state.walkAllowed ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
             <td>frame.gsplats</td>
             <td data-testid="diag-gsplats">{state.gsplats}</td>
           </tr>

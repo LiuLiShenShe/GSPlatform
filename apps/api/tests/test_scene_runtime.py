@@ -474,7 +474,7 @@ class TestCollision:
         asset = Asset(
             scene_id=public_scene.id,
             kind="COLLISION_GLB",
-            storage_key=f"collision/{public_scene.id}/mesh.glb",
+            storage_key=f"collision/{public_scene.id}/collision.glb",
             mime_type="model/gltf-binary",
             byte_size=1024,
         )
@@ -502,7 +502,9 @@ class TestCollision:
         body = _get(public_scene.slug).json()
         collision = body["collision"]
         assert collision is not None
-        assert collision["url"] == f"/api/v1/scenes/{public_scene.slug}/collision/mesh"
+        # SSV-07: the url must end in .glb so the official viewer routes it to
+        # its mesh loader (it decides mesh-vs-voxel by url extension).
+        assert collision["url"] == f"/api/v1/scenes/{public_scene.slug}/collision/collision.glb"
         assert collision["format"] == "glb"
         assert collision["mode"] == "OUTDOOR"
         assert collision["gravity"] == 9.81
@@ -510,6 +512,177 @@ class TestCollision:
         assert collision["stepOffset"] == 0.3
         assert collision["playerHeight"] == 1.8
         assert collision["enabled"] is True
+
+    def test_collision_prefers_voxel(self, db, public_scene):
+        """SSV-07: when both artifacts exist, the voxel octree is preferred and
+        the url ends in .voxel.json (official VoxelCollision loader derives the
+        .bin url by string replace)."""
+        from app.db.models.asset import Asset
+        from app.db.models.collision_asset import CollisionAsset
+
+        glb = Asset(
+            scene_id=public_scene.id,
+            kind="COLLISION_GLB",
+            storage_key=f"collision/{public_scene.id}/collision.glb",
+            mime_type="model/gltf-binary",
+            byte_size=1024,
+        )
+        voxel = Asset(
+            scene_id=public_scene.id,
+            kind="COLLISION_VOXEL",
+            storage_key=f"collision/{public_scene.id}/collision.voxel.json",
+            mime_type="application/json",
+            byte_size=618,
+            metadata_={"binStorageKey": f"collision/{public_scene.id}/collision.voxel.bin"},
+        )
+        db.add_all([glb, voxel])
+        db.flush()
+        db.add(
+            CollisionAsset(
+                scene_id=public_scene.id,
+                mode="INDOOR",
+                asset_id=voxel.id,
+                status="SUCCEEDED",
+            )
+        )
+        db.commit()
+
+        collision = _get(public_scene.slug).json()["collision"]
+        assert collision is not None
+        assert collision["format"] == "voxel"
+        assert collision["url"] == (
+            f"/api/v1/scenes/{public_scene.slug}/collision/collision.voxel.json"
+        )
+        assert collision["mode"] == "INDOOR"
+
+    def test_collision_not_succeeded_is_null(self, db, public_scene):
+        """SSV-07: descriptor stays null unless status == SUCCEEDED (an empty /
+        placeholder indoor GLB from the old builders must not leak)."""
+        from app.db.models.asset import Asset
+        from app.db.models.collision_asset import CollisionAsset
+
+        asset = Asset(
+            scene_id=public_scene.id,
+            kind="COLLISION_GLB",
+            storage_key=f"collision/{public_scene.id}/collision.glb",
+            mime_type="model/gltf-binary",
+            byte_size=0,
+        )
+        db.add(asset)
+        db.flush()
+        db.add(
+            CollisionAsset(
+                scene_id=public_scene.id,
+                mode="INDOOR",
+                asset_id=asset.id,
+                status="FAILED",
+            )
+        )
+        db.commit()
+
+        assert _get(public_scene.slug).json()["collision"] is None
+
+
+class TestCollisionServe:
+    """SSV-07 — the runtime descriptor url is served with the official
+    extension the viewer routes on (.glb → mesh, .voxel.json → voxel)."""
+
+    @staticmethod
+    def _write(rel: str, data: bytes) -> None:
+        from app.core.config import settings
+        from app.storage import LocalDiskStorage
+
+        LocalDiskStorage(settings.storage_root).write(rel, data)
+
+    @staticmethod
+    def _delete(rel: str) -> None:
+        from app.core.config import settings
+        from app.storage import LocalDiskStorage
+
+        try:
+            LocalDiskStorage(settings.storage_root).delete(rel)
+        except Exception:  # noqa: S110 - cleanup is best-effort
+            pass
+
+    def test_serve_voxel_pair_and_glb(self, db, public_scene):
+        import json as _json
+
+        from app.db.models.asset import Asset
+        from app.db.models.collision_asset import CollisionAsset
+
+        cid = public_scene.id
+        glb_data = b"\x67\x6C\x54\x46" + b"\x00" * 40
+        voxel_json = _json.dumps(
+            {
+                "version": "1.1",
+                "gridBounds": {"min": [0, 0, 0], "max": [1, 1, 1]},
+                "voxelResolution": 0.05,
+                "leafSize": 4,
+                "treeDepth": 0,
+                "nodeCount": 0,
+                "leafDataCount": 0,
+            }
+        ).encode()
+        voxel_bin = b"\x01\x02\x03\x04" * 8
+
+        rels = [
+            f"collision/{cid}/collision.glb",
+            f"collision/{cid}/collision.voxel.json",
+            f"collision/{cid}/collision.voxel.bin",
+        ]
+        for rel, data in zip(rels, (glb_data, voxel_json, voxel_bin), strict=False):
+            self._write(rel, data)
+
+        glb_asset = Asset(
+            scene_id=public_scene.id,
+            kind="COLLISION_GLB",
+            storage_key=rels[0],
+            mime_type="model/gltf-binary",
+            byte_size=len(glb_data),
+        )
+        voxel_asset = Asset(
+            scene_id=public_scene.id,
+            kind="COLLISION_VOXEL",
+            storage_key=rels[1],
+            mime_type="application/json",
+            byte_size=len(voxel_json),
+            metadata_={"binStorageKey": rels[2]},
+        )
+        db.add_all([glb_asset, voxel_asset])
+        db.flush()
+        db.add(
+            CollisionAsset(
+                scene_id=public_scene.id,
+                mode="OUTDOOR",
+                asset_id=voxel_asset.id,
+                status="SUCCEEDED",
+            )
+        )
+        db.commit()
+        try:
+            base = f"/api/v1/scenes/{public_scene.slug}/collision"
+            glb = client.get(f"{base}/collision.glb")
+            assert glb.status_code == 200
+            assert glb.content == glb_data
+            assert glb.headers["content-type"] == "model/gltf-binary"
+
+            vj = client.get(f"{base}/collision.voxel.json")
+            assert vj.status_code == 200
+            assert vj.content == voxel_json
+            assert vj.headers["content-type"] == "application/json"
+
+            vb = client.get(f"{base}/collision.voxel.bin")
+            assert vb.status_code == 200
+            assert vb.content == voxel_bin
+            assert vb.headers["content-type"] == "application/octet-stream"
+
+            # The legacy /mesh contract route still serves the GLB.
+            legacy = client.get(f"{base}/mesh")
+            assert legacy.status_code == 200
+            assert legacy.content == glb_data
+        finally:
+            for rel in rels:
+                self._delete(rel)
 
 
 # ─── 10. authorization ─────────────────────────────────────────────────────

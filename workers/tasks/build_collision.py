@@ -1,12 +1,14 @@
-"""Celery task — collision mesh build (Phase 12).
+"""Celery task — collision build (Phase 12; SSV-07 real generator).
 
 Dispatched by the API producer (``tasks.build_collision``). Executes:
 
-1. Loads the scene's SOG asset from storage.
-2. Runs the mode-specific builder (outdoor: Gaussian means → terrain;
-   indoor: camera+depth fusion or upload-required fallback).
-3. Writes the resulting GLB to storage.
-4. Updates the CollisionAsset row (status, asset ref, error) + Job status.
+1. Loads the scene's SOG / streamed-SOG source from storage.
+2. Runs the official ``splat-transform`` generator, which voxelizes the scene
+   and writes BOTH formats the official SuperSplat viewer consumes:
+   ``collision.voxel.json`` + ``collision.voxel.bin`` (native ``VoxelCollision``)
+   and ``collision.glb`` (``MeshCollision`` fallback). INDOOR / OUTDOOR is the
+   voxel **generation policy** (carve vs floor-fill), never a runtime mode.
+3. Persists the artifact Asset rows (voxel preferred) + CollisionAsset status.
 
 Failure is journaled into the DB so the API can expose it and the user can
 rebuild (``build failure 可恢复`` / ``collision 可重建``).
@@ -18,14 +20,14 @@ import logging
 import uuid
 from pathlib import Path
 
-from workers.celery_app import celery_app
-
 from app.core.config import settings
 from app.db.models.asset import Asset
 from app.db.models.enums import AssetKind
 from app.db.models.job import Job
 from app.db.session import SessionLocal
 from app.storage.local_disk import LocalDiskStorage
+
+from workers.celery_app import celery_app
 
 logger = logging.getLogger("gsplatform.workers.build_collision")
 
@@ -81,7 +83,9 @@ def build_collision(
     storage = LocalDiskStorage(_STORAGE_ROOT)
     sid = uuid.UUID(scene_id)
 
-    def mark_status(status: str, progress: int, error: str | None = None, stage: str | None = None) -> None:
+    def mark_status(
+        status: str, progress: int, error: str | None = None, stage: str | None = None
+    ) -> None:
         job.status = status
         job.progress = progress
         if stage is not None:
@@ -110,72 +114,117 @@ def build_collision(
         job.stage = "LOADING"
         session.flush()
 
-        # Output path under storage: collision/{scene_id}/collision.glb
-        rel_out = f"collision/{sid}/collision.glb"
-        out_path = storage._path(rel_out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
+        # Output dir under storage: collision/{scene_id}/
+        rel_dir = f"collision/{sid}"
+        out_dir = storage._path(rel_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Run builder
-        if mode == "OUTDOOR":
-            from workers.collision.outdoor import build_outdoor_collision
-
-            job.stage = "BUILDING"
-            session.flush()
-            result = build_outdoor_collision(sog_path, out_path)
-        elif mode == "INDOOR":
-            from workers.collision.indoor import build_indoor_collision
-
-            job.stage = "BUILDING"
-            session.flush()
-            # camera/depth paths are best-effort; the indoor builder handles None
-            result = build_indoor_collision(
-                sog_path,
-                out_path,
-                camera_json=None,
-                depth_dir=None,
-            )
-        else:
-            raise ValueError(f"未知碰撞模式: {mode}")
-
-        # Persist asset row
-        data = out_path.read_bytes()
-        sha = storage.sha256(rel_out)
-
-        existing_asset = (
-            session.query(Asset)
-            .filter(Asset.scene_id == sid, Asset.kind == AssetKind.COLLISION_GLB.value)
-            .first()
+        # ── Run the official generator (SSV-07) ──────────────────────────────
+        # splat-transform produces BOTH official collision formats:
+        #   collision.voxel.json + .voxel.bin  (VoxelCollision, preferred)
+        #   collision.glb                      (MeshCollision, fallback)
+        # INDOOR / OUTDOOR stays a *generation policy* (voxel flood fill), never
+        # a viewer runtime mode.
+        job.stage = "BUILDING"
+        session.flush()
+        from workers.collision.splat import (
+            SplatCollisionError,
+            build_collision_artifacts,
         )
-        if existing_asset is not None:
-            existing_asset.byte_size = len(data)
-            existing_asset.sha256 = sha
-            existing_asset.storage_key = rel_out
-            existing_asset.mime_type = "model/gltf-binary"
-            asset = existing_asset
-        else:
-            asset = Asset(
+
+        result = build_collision_artifacts(sog_path, out_dir, mode=mode)
+
+        if not result.ok:
+            raise SplatCollisionError(
+                "碰撞构建未产出任何可用工件: "
+                + ("; ".join(result.warnings) or "未知原因")
+            )
+
+        # ── Persist asset rows ───────────────────────────────────────────────
+        def _upsert_collision_asset(kind: str, rel_key: str, mime: str, meta: dict) -> Asset:
+            existing = (
+                session.query(Asset)
+                .filter(Asset.scene_id == sid, Asset.kind == kind)
+                .first()
+            )
+            size = storage._path(rel_key).stat().st_size
+            sha = storage.sha256(rel_key)
+            if existing is not None:
+                existing.storage_key = rel_key
+                existing.mime_type = mime
+                existing.byte_size = size
+                existing.sha256 = sha
+                existing.metadata_ = meta
+                return existing
+            row = Asset(
                 scene_id=sid,
                 version_id=None,
-                kind=AssetKind.COLLISION_GLB.value,
-                storage_key=rel_out,
-                mime_type="model/gltf-binary",
-                byte_size=len(data),
+                kind=kind,
+                storage_key=rel_key,
+                mime_type=mime,
+                byte_size=size,
                 sha256=sha,
-                metadata_={"mode": mode, "build": result},
+                metadata_=meta,
             )
-            session.add(asset)
-        session.flush()
+            session.add(row)
+            return row
 
-        collision.asset_id = asset.id
+        preferred_asset: Asset | None = None
+
+        # 1) voxel pair (native official format) — preferred.
+        if result.voxel_json is not None and result.voxel_bin is not None:
+            rel_json = f"{rel_dir}/{result.voxel_json.name}"
+            rel_bin = f"{rel_dir}/{result.voxel_bin.name}"
+            voxel_asset = _upsert_collision_asset(
+                AssetKind.COLLISION_VOXEL.value,
+                rel_json,
+                "application/json",
+                {
+                    # The official viewer derives the binary url by replacing
+                    # '.voxel.json' with '.voxel.bin' on the served json url,
+                    # so the pair must be served from the same directory.
+                    "binStorageKey": rel_bin,
+                    "mode": mode,
+                    "build": result.to_params(),
+                },
+            )
+            session.flush()
+            preferred_asset = voxel_asset
+
+        # 2) collision mesh GLB (fallback) — produced whenever available.
+        if result.collision_glb is not None:
+            glb_asset = _upsert_collision_asset(
+                AssetKind.COLLISION_GLB.value,
+                f"{rel_dir}/{result.collision_glb.name}",
+                "model/gltf-binary",
+                {"mode": mode, "build": result.to_params()},
+            )
+            session.flush()
+            if preferred_asset is None:
+                preferred_asset = glb_asset
+
+        if preferred_asset is None:  # pragma: no cover - guarded by result.ok
+            raise SplatCollisionError("碰撞构建未产出可用资产")
+
+        collision.asset_id = preferred_asset.id
         collision.job_id = uuid.UUID(job_id)
-        collision.build_params = result
+        collision.build_params = result.to_params()
         mark_status("SUCCEEDED", 100)
 
         session.commit()
-        logger.info("Collision build SUCCEEDED for scene %s (%s)", scene_id, mode)
-        return {"ok": True, "mode": mode, "asset_id": str(asset.id), **result}
+        logger.info(
+            "Collision build SUCCEEDED for scene %s (%s) format=%s",
+            scene_id, mode, preferred_asset.kind,
+        )
+        return {
+            "ok": True,
+            "mode": mode,
+            "asset_id": str(preferred_asset.id),
+            "format": preferred_asset.kind,
+            **result.to_params(),
+        }
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         session.rollback()
         logger.exception("Collision build FAILED for scene %s", scene_id)
         mark_status("FAILED", job.progress if job.progress else 0, error=str(exc))

@@ -705,6 +705,30 @@ a {
 }
 
 /* ------------------------------------------------------------------ *
+ * Scene Scale Warning（SSV-07 §四 —— 1 unit = 1m 尺度校准告警）
+ * ------------------------------------------------------------------ */
+.gs-viewer__scale-warning {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(180, 83, 9, 0.92);
+  color: #fff7ed;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.gs-viewer__scale-warning-detail {
+  margin-left: 6px;
+  opacity: 0.85;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ *
  * Annotation Media Overlay（SSV-06 §五）
  * ------------------------------------------------------------------ */
 .gs-annotation-media-overlay {
