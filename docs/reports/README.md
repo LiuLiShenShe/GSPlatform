@@ -19,3 +19,14 @@ PHASE_09_REPORT.md
 
 只有必做 Checklist 全部真实通过时才能填写 `PASS`。失败填写 `FAIL`；受外部环境阻断且无法完成验证时填写 `BLOCKED`。两种情况都不能解锁下一阶段。
 
+## SSV Migration Reports
+
+SuperSplat Viewer 迁移（SSV-00 ～ SSV-10，见 `docs/SSV_MIGRATION_PLAN.md`）每阶段报告：
+
+```text
+SSV_00_REPORT.md
+SSV_01_REPORT.md
+...
+SSV_10_REPORT.md
+```
+
