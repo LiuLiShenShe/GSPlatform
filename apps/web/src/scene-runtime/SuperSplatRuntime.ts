@@ -17,6 +17,9 @@ import {
   type ViewerState,
   type XrMode,
 } from '@playcanvas/supersplat-viewer/viewer';
+// 官方 viewer 样式（.sse-viewer 根容器 100%×100%、canvas 绝对定位填充）。
+// 不导入则官方根容器无尺寸，画布停留在默认 300×150，场景只在左上角一小块显示。
+import '@playcanvas/supersplat-viewer/viewer.css';
 import { SuperSplatRuntimeError } from './runtimeErrors';
 
 /** 运行模式：决定 Renderer Policy。 */

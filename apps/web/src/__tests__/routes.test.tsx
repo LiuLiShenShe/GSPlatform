@@ -42,12 +42,12 @@ describe('五个核心路由与 404 页面', () => {
     expect(screen.getByLabelText('作品标题')).toBeInTheDocument();
   });
 
-  it('/scene/:sceneId 使用全屏 Viewer 挂载区且无平台侧边栏', async () => {
+  it('/scene/:sceneId 使用官方 SuperSplat 挂载区且无平台侧边栏', async () => {
     renderApp({ route: '/scene/shanghai-lujiazui' });
     expect(screen.queryByTestId('platform-sider')).not.toBeInTheDocument();
-    expect(await screen.findByTestId('viewer-mount')).toBeInTheDocument();
-    // Phase 02：真实 Viewer 挂载区（iframe 由 ViewerAdapter 注入）
-    expect(screen.getByTestId('viewer-canvas-host').querySelector('iframe')).toBeInTheDocument();
+    // SSV-03：默认官方 runtime（无 iframe）
+    expect(await screen.findByTestId('ov-mount')).toBeInTheDocument();
+    expect(screen.getByTestId('ov-canvas-host').querySelector('iframe')).not.toBeInTheDocument();
   });
 
   it('/health-ui 保留 Phase 00 健康页面', async () => {

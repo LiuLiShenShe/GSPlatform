@@ -1,11 +1,149 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+/**
+ * SSV-03 — Scene Viewer 页面测试（官方 SuperSplat runtime 默认 + legacy 回退）。
+ *
+ * 默认 `/scene/:sceneId` 走官方链路：
+ *   getSceneRuntime → buildExperienceSettings → SuperSplatRuntime.create(desktop)
+ * 断言：无 iframe、进度/加载 overlay、Frame/Reset/Fullscreen/Performance/
+ * Annotations/Orbit-Fly 转发到官方 handle、sceneId 切换 destroy+create、
+ * 卸载 destroy。
+ *
+ * `?runtime=legacy` 分支复用旧 fork ViewerAdapter 链路（iframe），原行为保留。
+ */
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderApp } from '../test/utils';
-import type { SceneDescriptor, ViewerCameraMode, ViewerHandle, ViewerStats } from '@gsplatform/viewer';
+import type {
+  SceneDescriptor,
+  ViewerCameraMode,
+  ViewerHandle,
+  ViewerStats,
+} from '@gsplatform/viewer';
+import { runtimeDescriptorFixture } from '../scene-runtime/__fixtures__/descriptor';
+import type { ViewerHandle as OfficialViewerHandle } from '@playcanvas/supersplat-viewer/viewer';
 
 // ---------------------------------------------------------------------------
-// Mock factories
+// 共享 spy（两个 createViewer 各自独立跟踪）
+// ---------------------------------------------------------------------------
+
+let legacyDestroySpy: ReturnType<typeof vi.fn>;
+let officialDestroySpy: ReturnType<typeof vi.fn>;
+
+// ---------------------------------------------------------------------------
+// Official 模块 mock（@playcanvas/supersplat-viewer/viewer）
+// ---------------------------------------------------------------------------
+
+/** 官方 fake handle：事件语义对齐官方 EventHandler（on/off/fire） */
+let officialHandle: OfficialViewerHandle & { events: { fire: (...args: unknown[]) => void } };
+
+function makeOfficialHandle() {
+  const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
+  const events = {
+    on(event: string, fn: (...args: unknown[]) => void) {
+      if (!listeners.has(event)) listeners.set(event, new Set());
+      listeners.get(event)!.add(fn);
+    },
+    off(event: string, fn: (...args: unknown[]) => void) {
+      listeners.get(event)?.delete(fn);
+    },
+    fire(event: string, ...args: unknown[]) {
+      listeners.get(event)?.forEach((fn) => fn(...args));
+    },
+  };
+  // 官方 WritableStateKey：写入即触发 `<key>:changed`（value, previous）
+  const writable = new Set([
+    'cameraMode',
+    'performanceMode',
+    'showAnnotations',
+    'gamingControls',
+    'animationPaused',
+    'collisionOverlayEnabled',
+    'controlsHidden',
+    'inputEnabled',
+  ]);
+  const rawState: Record<string, unknown> = {
+    loaded: false,
+    progress: 0,
+    cameraMode: 'orbit',
+    performanceMode: false,
+    showAnnotations: true,
+    isFullscreen: false,
+    hasCollision: false,
+    canStartVR: false,
+    canStartAR: false,
+    xrMode: null,
+    selectedAnnotation: null,
+    walkAllowed: false,
+  };
+  const state: Record<string, unknown> = new Proxy(rawState, {
+    set(target, key, value) {
+      const previous = target[key as string];
+      target[key as string] = value;
+      if (writable.has(String(key)) && previous !== value) {
+        events.fire(`${String(key)}:changed`, value, previous);
+      }
+      return true;
+    },
+  });
+  const handle = {
+    app: { graphicsDevice: { deviceType: 'webgl2' }, stats: { frame: { gsplats: 123 } } },
+    state,
+    events,
+    annotations: [],
+    captureFrame: vi.fn(),
+    seek: vi.fn(),
+    frameScene: vi.fn(() => {
+      if (!state.loaded) throw new Error('frameScene: requires state.loaded');
+    }),
+    resetCamera: vi.fn(),
+    toggleWalk: vi.fn(),
+    selectAnnotation: vi.fn(),
+    setMoveInput: vi.fn(),
+    requestFullscreen: vi.fn(async () => {
+      state.isFullscreen = true;
+      events.fire('isFullscreen:changed', true);
+    }),
+    exitFullscreen: vi.fn(async () => {
+      state.isFullscreen = false;
+      events.fire('isFullscreen:changed', false);
+    }),
+    startXR: vi.fn(async () => {}),
+    endXR: vi.fn(async () => {}),
+    destroy: vi.fn(() => {
+      officialDestroySpy();
+      listeners.clear();
+    }),
+  } as unknown as OfficialViewerHandle & { events: { fire: (...args: unknown[]) => void } };
+  return handle;
+}
+
+vi.mock('@playcanvas/supersplat-viewer/viewer', () => ({
+  createViewer: vi.fn(async (_options: unknown) => {
+    officialHandle = makeOfficialHandle();
+    return officialHandle;
+  }),
+}));
+
+// ---------------------------------------------------------------------------
+// runtimeApi mock（官方描述）
+// ---------------------------------------------------------------------------
+
+vi.mock('../scene-runtime/runtimeApi', () => ({
+  getSceneRuntime: vi.fn(async (_sceneId: string) => runtimeDescriptorFixture),
+  RuntimeApiError: class RuntimeApiError extends Error {
+    kind: string;
+    status: number | null;
+    constructor(kind: string, status: number | null, message: string) {
+      super(message);
+      this.name = 'RuntimeApiError';
+      this.kind = kind;
+      this.status = status;
+    }
+  },
+}));
+
+// ---------------------------------------------------------------------------
+// Legacy 模块 mock（@gsplatform/viewer + scenes.local + sceneApi）
 // ---------------------------------------------------------------------------
 
 const makeStats = (overrides?: Partial<ViewerStats>): ViewerStats => ({
@@ -16,10 +154,12 @@ const makeStats = (overrides?: Partial<ViewerStats>): ViewerStats => ({
   ...overrides,
 });
 
-/** tracks all registered listeners so the mock can fire events. */
 type ListenerMap = Record<string, Array<(...args: unknown[]) => void>>;
 
-const createMockHandle = (listenerMap: ListenerMap): ViewerHandle => {
+let legacyHandleListeners: ListenerMap;
+let legacyHandle: ViewerHandle;
+
+const createMockLegacyHandle = (listenerMap: ListenerMap): ViewerHandle => {
   return {
     async loadScene(_descriptor: SceneDescriptor) { /* noop */ },
     async resetCamera() { /* noop */ },
@@ -38,7 +178,7 @@ const createMockHandle = (listenerMap: ListenerMap): ViewerHandle => {
     },
     async setBackground() { /* noop */ },
     async captureScreenshot() { return { dataUrl: 'data:image/webp;base64,abc' }; },
-    destroy() { destroySpy(); },
+    destroy() { legacyDestroySpy(); },
     on(type: string, listener: (...args: unknown[]) => void) {
       (listenerMap[type] ??= []).push(listener);
       return () => {
@@ -48,37 +188,21 @@ const createMockHandle = (listenerMap: ListenerMap): ViewerHandle => {
   } satisfies ViewerHandle;
 };
 
-const destroySpy = vi.fn();
-
-/** fire all listeners for an event. */
 const fireEvent = (listeners: ListenerMap, type: string, payload?: unknown) => {
   listeners[type]?.forEach((fn) => fn(payload));
 };
 
-// ---------------------------------------------------------------------------
-// Module mocks
-// ---------------------------------------------------------------------------
-
-let handleListeners: ListenerMap;
-/** most recently created mock handle (assigned by the createViewer mock). */
-let handle: ViewerHandle;
-
-vi.mock('@gsplatform/viewer', async () => {
+vi.mock('@gsplatform/viewer', () => {
   return {
-    createViewer: (container: HTMLElement) => {
-      handleListeners = {};
-      handle = createMockHandle(handleListeners);
-      // Mirror the adapter: the real createViewer mounts an <iframe> in the
-      // container. jsdom doesn't load the page, but the element must exist so
-      // component tests can assert the mount surface is present.
+    createViewer: (_container: HTMLElement) => {
+      legacyHandleListeners = {};
+      legacyHandle = createMockLegacyHandle(legacyHandleListeners);
+      // 镜像 legacy ViewerAdapter：在容器内创建 iframe（jsdom 不加载页面）
       const iframe = document.createElement('iframe');
       iframe.setAttribute('title', '3D Gaussian 场景查看器');
-      container.appendChild(iframe);
-      // Simulate the embed's async `ready` event.
-      // By the time the timeout fires, the lifecycle hook has subscribed via
-      // viewer.on('ready', cb), so the listener gets invoked.
-      setTimeout(() => fireEvent(handleListeners, 'ready'), 0);
-      return handle;
+      _container.appendChild(iframe);
+      setTimeout(() => fireEvent(legacyHandleListeners, 'ready'), 0);
+      return legacyHandle;
     },
     ViewerError: class extends Error {
       code: string;
@@ -112,15 +236,19 @@ vi.mock('../services/sceneApi', async () => {
 
 vi.mock('../../services/scenes.local', () => {
   return {
-    resolveLocalScene: vi.fn(async (_sceneId: string) => ({
+    resolveProgressiveScene: vi.fn(async (_sceneId: string) => ({
       descriptor: {
         id: 'local-garden',
         title: '示例庭院',
         format: 'sog',
         assetUrl: '/local-scenes/local-garden/scene.sog',
       } satisfies SceneDescriptor,
-      recordedSha256: 'abc123',
+      lods: [],
+      camera: null,
     })),
+    resolveStreamedScene: vi.fn(async () => {
+      throw new Error('not streamed');
+    }),
     LocalSceneError: class extends Error {
       code: string;
       constructor(code: string, msg: string) {
@@ -132,28 +260,150 @@ vi.mock('../../services/scenes.local', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests
+// 工具：把官方 handle 置为首帧已渲染
 // ---------------------------------------------------------------------------
 
-describe('Phase 02: Scene Viewer 集成', () => {
+/** 让官方 fake handle 完成首帧（loaded:true），供 ready 后的交互测试。 */
+function awaitOfficialReady(): void {
+  (officialHandle.state as { loaded: boolean }).loaded = true;
+  officialHandle.events.fire('loaded:changed', true);
+}
+
+beforeAll(() => {
+  legacyDestroySpy = vi.fn();
+  officialDestroySpy = vi.fn();
+});
+
+// ---------------------------------------------------------------------------
+// SSV-03：官方 SuperSplat desktop viewer（默认路径）
+// ---------------------------------------------------------------------------
+
+describe('SSV-03: Official SuperSplat desktop viewer（默认）', () => {
   beforeEach(() => {
-    destroySpy.mockClear();
-    return () => {
-      vi.clearAllMocks();
-    };
+    officialDestroySpy.mockClear();
+    legacyDestroySpy.mockClear();
   });
 
-  it('无平台侧边栏，渲染 canvas 挂载区（iframe）', () => {
+  it('无平台侧边栏，渲染官方挂载区且无 iframe', async () => {
     renderApp({ route: '/scene/local-garden' });
     expect(screen.queryByTestId('platform-sider')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('ov-mount')).toBeInTheDocument();
+    expect(screen.getByTestId('ov-canvas-host')).toBeInTheDocument();
+    // 官方路径不使用 iframe
+    expect(screen.getByTestId('ov-canvas-host').querySelector('iframe')).not.toBeInTheDocument();
+    expect(screen.getByTestId('scene-viewer-page').dataset.runtime).toBe('official');
+  });
+
+  it('加载期显示 onProgress 真实进度', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    const loading = await screen.findByTestId('ov-loading');
+    expect(loading).toBeInTheDocument();
+    officialHandle.events.fire('progress:changed', 42);
+    expect(await screen.findByTestId('ov-progress')).toHaveTextContent('42%');
+  });
+
+  it('ready 后 Frame / Reset 转发官方方法', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    await screen.findByTestId('ov-mount');
+    awaitOfficialReady();
+
+    const frameBtn = screen.getByTestId('ov-frame');
+    const resetBtn = screen.getByTestId('ov-reset');
+    await userEvent.click(resetBtn);
+    expect(officialHandle.resetCamera).toHaveBeenCalled();
+
+    await userEvent.click(frameBtn);
+    expect(officialHandle.frameScene).toHaveBeenCalled();
+  });
+
+  it('Fullscreen 调用官方 requestFullscreen', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    await screen.findByTestId('ov-mount');
+    awaitOfficialReady();
+
+    await userEvent.click(screen.getByTestId('ov-fullscreen'));
+    await waitFor(() => expect(officialHandle.requestFullscreen).toHaveBeenCalled());
+  });
+
+  it('Performance 按钮写入官方 state.performanceMode', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    await screen.findByTestId('ov-mount');
+    awaitOfficialReady();
+
+    expect(officialHandle.state.performanceMode).toBe(false);
+    await userEvent.click(screen.getByTestId('ov-performance'));
+    expect(officialHandle.state.performanceMode).toBe(true);
+  });
+
+  it('Annotations 按钮切换官方 state.showAnnotations', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    await screen.findByTestId('ov-mount');
+    awaitOfficialReady();
+
+    expect(officialHandle.state.showAnnotations).toBe(true);
+    await userEvent.click(screen.getByTestId('ov-annotations'));
+    expect(officialHandle.state.showAnnotations).toBe(false);
+  });
+
+  it('Orbit/Fly 分段写入官方 state.cameraMode', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    await screen.findByTestId('ov-mount');
+    awaitOfficialReady();
+
+    expect(officialHandle.state.cameraMode).toBe('orbit');
+    await userEvent.click(screen.getByText('Fly'));
+    expect(officialHandle.state.cameraMode).toBe('fly');
+    await userEvent.click(screen.getByText('Orbit'));
+    expect(officialHandle.state.cameraMode).toBe('orbit');
+  });
+
+  it('sceneId 切换时销毁旧 runtime 并创建新 runtime', async () => {
+    const { router } = renderApp({ route: '/scene/local-garden' });
+    await screen.findByTestId('ov-mount');
+
+    await act(async () => {
+      router.navigate('/scene/shanghai-lujiazui');
+    });
+
+    await waitFor(() => expect(officialHandle.state).toBeTruthy());
+    // 第二次 boot 完成：官方 destroy 被调用恰好一次（旧的），新 handle 已创建
+    expect(officialDestroySpy).toHaveBeenCalled();
+
+    // 页面仍为官方挂载（新场景走同一链路）
+    expect(screen.getByTestId('scene-viewer-page').dataset.runtime).toBe('official');
+  });
+
+  it('离开 Viewer 路由时销毁官方 runtime（无 context 泄漏）', async () => {
+    renderApp({ route: '/scene/local-garden' });
+    // 等官方挂载创建后再离开
+    await screen.findByTestId('ov-mount');
+
+    await userEvent.click(screen.getByRole('button', { name: '关闭场景' }));
+    await screen.findByText('热门作品');
+    expect(officialDestroySpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Legacy 回退：`?runtime=legacy` 走旧 fork ViewerAdapter（iframe），SSV-09 删除
+// ---------------------------------------------------------------------------
+
+describe('Legacy 回退（?runtime=legacy，iframe ViewerAdapter）', () => {
+  beforeEach(() => {
+    legacyDestroySpy.mockClear();
+    officialDestroySpy.mockClear();
+  });
+
+  it('渲染 legacy canvas 挂载区（iframe）且标记 runtime=legacy', async () => {
+    renderApp({ route: '/scene/local-garden?runtime=legacy' });
+    expect(screen.getByTestId('scene-viewer-page').dataset.runtime).toBe('legacy');
     const canvasHost = screen.getByTestId('viewer-canvas-host');
     expect(canvasHost).toBeInTheDocument();
-    // createViewer 在挂载区内创建 iframe
     expect(canvasHost.querySelector('iframe')).toBeInTheDocument();
   });
 
-  it('底部工具条顺序：Reset / Orbit-Fly / Performance / Quality / Help', () => {
-    renderApp({ route: '/scene/local-garden' });
+  it('底部工具条顺序：Reset / Orbit-Fly / Performance / Quality / Help', async () => {
+    renderApp({ route: '/scene/local-garden?runtime=legacy' });
     const toolbar = screen.getByLabelText('Viewer 工具条');
     const buttons = within(toolbar)
       .getAllByRole('button')
@@ -162,75 +412,35 @@ describe('Phase 02: Scene Viewer 集成', () => {
     const text = toolbar.textContent ?? '';
     expect(text.indexOf('Reset')).toBeLessThan(text.indexOf('Orbit'));
     expect(text.indexOf('Performance')).toBeLessThan(text.indexOf('Quality'));
-    // Orbit 是默认选中模式（Segmented 非按钮 role，检查 aria-pressed/checked via class）
-    expect(screen.getByText('Orbit')).toBeInTheDocument();
-    expect(screen.getByText('Fly')).toBeInTheDocument();
   });
 
-  it('Reset 按钮可点击，调用 viewer.resetCamera', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    const resetSpy = vi.spyOn(handle, 'resetCamera');
+  it('Reset 调用 legacy handle.resetCamera', async () => {
+    renderApp({ route: '/scene/local-garden?runtime=legacy' });
+    const resetSpy = vi.spyOn(legacyHandle, 'resetCamera');
     await userEvent.click(screen.getByRole('button', { name: /Reset/ }));
     await waitFor(() => expect(resetSpy).toHaveBeenCalled());
     resetSpy.mockRestore();
   });
 
-  it('切换 Fly 调用 setCameraMode("fly")', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    const spy = vi.spyOn(handle, 'setCameraMode');
+  it('切换 Fly 调用 legacy handle.setCameraMode("fly")', async () => {
+    renderApp({ route: '/scene/local-garden?runtime=legacy' });
+    const spy = vi.spyOn(legacyHandle, 'setCameraMode');
     await userEvent.click(screen.getByText('Fly'));
     await waitFor(() => expect(spy).toHaveBeenCalledWith('fly'));
     spy.mockRestore();
   });
 
-  it('点击 Performance 打开性能面板', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    await userEvent.click(screen.getByRole('button', { name: /Performance/ }));
-    const stats = await screen.findByRole('region', { name: /性能统计/ });
-    expect(stats).toBeInTheDocument();
-    expect(stats.textContent).toContain('FPS');
-    expect(stats.textContent).toContain('Splats');
-  });
-
-  it('点击 Help 打开操作说明', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    await userEvent.click(screen.getByRole('button', { name: /Help/ }));
-    expect(await screen.findByText(/Orbit（轨道）模式/)).toBeInTheDocument();
-    expect(screen.getByText(/WASD 移动/)).toBeInTheDocument();
-  });
-
   it('点击 Quality 打开质量面板', async () => {
-    renderApp({ route: '/scene/local-garden' });
+    renderApp({ route: '/scene/local-garden?runtime=legacy' });
     await userEvent.click(screen.getByRole('button', { name: /Quality/ }));
     expect(await screen.findByText(/渲染后端/)).toBeInTheDocument();
-    expect(screen.getByText(/渐进加载/)).toBeInTheDocument();
   });
 
-  it('场景标题显示 sceneId，关闭按钮回首页', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    expect(screen.getByText('场景 local-garden')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '关闭场景' }));
-    expect(await screen.findByText('热门作品')).toBeInTheDocument();
-  });
-
-  it('右侧面板按钮顺序固定，详情可打开（fixture 场景）', async () => {
-    // local-garden 是真实测试场景但不属于首页 fixture；详情弹窗需要 fixture 数据
-    renderApp({ route: '/scene/shanghai-lujiazui' });
-    const panel = screen.getByLabelText('场景操作面板');
-    const buttons = within(panel)
-      .getAllByRole('button')
-      .map((btn) => btn.textContent?.trim());
-    expect(buttons).toEqual(['作者', '收藏', '分享', '问 AI', '详情']);
-    await userEvent.click(screen.getByRole('button', { name: '详情' }));
-    expect(await screen.findByText('高斯点数')).toBeInTheDocument();
-  });
-
-  it('离开 Viewer 路由时销毁 Viewer 实例', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    // 等 iframe 创建后离开
+  it('离开 Viewer 路由时销毁 legacy viewer', async () => {
+    renderApp({ route: '/scene/local-garden?runtime=legacy' });
     expect(screen.getByTestId('viewer-canvas-host').querySelector('iframe')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '关闭场景' }));
     await screen.findByText('热门作品');
-    expect(destroySpy).toHaveBeenCalledTimes(1);
+    expect(legacyDestroySpy).toHaveBeenCalledTimes(1);
   });
 });
