@@ -4,6 +4,14 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 
+class CameraVec3(BaseModel):
+    """3D vector (matches the runtime RuntimeVec3 contract)."""
+
+    x: float
+    y: float
+    z: float
+
+
 class SceneAnnotationOut(BaseModel):
     """Annotation output DTO."""
     id: str
@@ -19,6 +27,10 @@ class SceneAnnotationOut(BaseModel):
     textColor: str = Field(default="#FFFFFF", alias="textColor")
     textSize: int = Field(default=14, alias="textSize")
     fov: float = Field(default=60.0)
+    # Per-annotation camera pose (FIX-02 §12) — null when never authored.
+    cameraPosition: CameraVec3 | None = Field(default=None, alias="cameraPosition")
+    cameraTarget: CameraVec3 | None = Field(default=None, alias="cameraTarget")
+    cameraFov: float | None = Field(default=None, alias="cameraFov")
     orderIndex: int = Field(default=0, alias="orderIndex")
     enabled: bool = Field(default=True)
 
@@ -39,6 +51,9 @@ class SceneAnnotationCreateRequest(BaseModel):
     textColor: str = Field(default="#FFFFFF", alias="textColor")
     textSize: int = Field(default=14, alias="textSize")
     fov: float = Field(default=60.0)
+    cameraPosition: CameraVec3 | None = Field(default=None, alias="cameraPosition")
+    cameraTarget: CameraVec3 | None = Field(default=None, alias="cameraTarget")
+    cameraFov: float | None = Field(default=None, alias="cameraFov")
 
     model_config = {"populate_by_name": True}
 
@@ -57,6 +72,9 @@ class SceneAnnotationUpdateRequest(BaseModel):
     textColor: str | None = Field(default=None, alias="textColor")
     textSize: int | None = Field(default=None, alias="textSize")
     fov: float | None = None
+    cameraPosition: CameraVec3 | None = Field(default=None, alias="cameraPosition")
+    cameraTarget: CameraVec3 | None = Field(default=None, alias="cameraTarget")
+    cameraFov: float | None = Field(default=None, alias="cameraFov")
     orderIndex: int | None = Field(default=None, alias="orderIndex")
     enabled: bool | None = None
 

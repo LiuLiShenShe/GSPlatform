@@ -99,6 +99,22 @@ function defaultOptions(overrides: Partial<SuperSplatRuntimeOptions> = {}) {
   };
 }
 
+/** 注入的 pose 标注结构（相机 pose 断言用）。 */
+interface InjectedPoseAnnotation {
+  position: [number, number, number];
+  title: string;
+  text: string;
+  extras: { gsplatform: Record<string, unknown> };
+  camera: {
+    initial: { position: [number, number, number]; target: [number, number, number]; fov: number };
+  };
+}
+
+/** 读取官方 annotations 数组中第 idx 条（运行时注入的 pose 标注）。 */
+function readInjectedAnnotation(handle: ViewerHandle, idx: number): InjectedPoseAnnotation {
+  return (handle.annotations as unknown as InjectedPoseAnnotation[])[idx];
+}
+
 beforeEach(() => {
   mockedCreateViewer.mockReset();
 });
@@ -288,8 +304,57 @@ describe('Experience Adapter V1', () => {
     expect(first.extras).toEqual({
       gsplatform: { annotationId: 'ann-1', contentType: 'TEXT' },
     });
-    // camera = 场景初始视角构图；fov 用标注自身值（clamp 进官方界）。
-    expect(first.camera.initial.fov).toBe(60);
+    // FIX-02 §14：camera 来自该标注**自己**的相机（cameraPosition/Target/Fov），
+    // 不再是 settings.cameras[0]。
+    expect(first.camera.initial.fov).toBe(45);
+    expect(first.camera.initial.position).toEqual([-3.0, 1.9, 2.0]);
+    expect(first.camera.initial.target).toEqual([-1.2, 0.4, 0.4]);
+  });
+
+  it('3 个标注各自带不同相机 → 3 条官方 annotations 的 camera 互不相同（FIX-02 §15）', () => {
+    const desc: SceneRuntimeDescriptorV1 = {
+      ...emptyRuntimeDescriptorFixture,
+      presentation: {
+        ...emptyRuntimeDescriptorFixture.presentation,
+        // 场景初始相机与任何标注相机都不同。
+        initialCamera: { position: { x: 0, y: 10, z: 30 }, target: { x: 0, y: 0, z: 0 }, fov: 50 },
+      },
+      annotations: [
+        {
+          id: 'ann-a', title: 'A', description: '',
+          anchor: { x: 0, y: 0, z: 0 }, style: 'LEADER_TEXT', contentType: 'TEXT', textContent: '',
+          mediaAssetUrl: null, textColor: '#fff', textSize: 14, fov: 60,
+          cameraPosition: { x: 1, y: 1, z: 1 }, cameraTarget: { x: 0, y: 1, z: 0 }, cameraFov: 40,
+          orderIndex: 0, enabled: true,
+        },
+        {
+          id: 'ann-b', title: 'B', description: '',
+          anchor: { x: 1, y: 0, z: 0 }, style: 'LEADER_TEXT', contentType: 'TEXT', textContent: '',
+          mediaAssetUrl: null, textColor: '#fff', textSize: 14, fov: 60,
+          cameraPosition: { x: 2, y: 2, z: 2 }, cameraTarget: { x: 0, y: 1, z: -1 }, cameraFov: 42,
+          orderIndex: 1, enabled: true,
+        },
+        {
+          id: 'ann-c', title: 'C', description: '',
+          anchor: { x: -1, y: 0, z: 0 }, style: 'LEADER_TEXT', contentType: 'TEXT', textContent: '',
+          mediaAssetUrl: null, textColor: '#fff', textSize: 14, fov: 60,
+          cameraPosition: { x: 3, y: 0, z: 3 }, cameraTarget: { x: 0, y: 1, z: 1 }, cameraFov: 38,
+          orderIndex: 2, enabled: true,
+        },
+      ],
+      backgroundAudio: null,
+    };
+    const settings = buildExperienceSettings(desc);
+    expect(() => validateSettings(settings, { limits: true })).not.toThrow();
+    const cams = settings.annotations.map((a) => a.camera.initial);
+    expect(new Set(cams.map((c) => c.position.join(','))).size).toBe(3);
+    expect(new Set(cams.map((c) => c.target.join(','))).size).toBe(3);
+    expect(new Set(cams.map((c) => c.fov)).size).toBe(3);
+    // 任何一条都不等于场景初始相机（settings.cameras[0]）。
+    const sceneCam = settings.cameras[0].initial;
+    for (const c of cams) {
+      expect(c.position.join(',')).not.toBe(sceneCam.position.join(','));
+    }
   });
 
   it('annotation 文本 HTML 被 sanitize（剥离标签/脚本），title/text 截断进官方 limits', () => {
@@ -309,6 +374,9 @@ describe('Experience Adapter V1', () => {
           textColor: '#fff',
           textSize: 14,
           fov: 999, // 越界 → clamp
+          cameraPosition: null,
+          cameraTarget: null,
+          cameraFov: null,
           orderIndex: 0,
           enabled: true,
         },
@@ -343,6 +411,9 @@ describe('Experience Adapter V1', () => {
           textColor: '#fff',
           textSize: 14,
           fov: 60,
+          cameraPosition: null,
+          cameraTarget: null,
+          cameraFov: null,
           orderIndex: 0,
           enabled: true,
         },
@@ -367,6 +438,9 @@ describe('Experience Adapter V1', () => {
       textColor: '#fff',
       textSize: 14,
       fov: 60,
+      cameraPosition: null,
+      cameraTarget: null,
+      cameraFov: null,
       orderIndex: i,
       enabled: i !== 39, // 最后一个 disabled
     }));
@@ -729,14 +803,19 @@ describe('相机 pose 封装（SSV-05）', () => {
     expect(runtime.getCameraPose()!.fov).toBe(120);
   });
 
-  it('setCameraPose 摆放实体：position + lookAt + fov clamp', async () => {
+  it('setCameraPose 经注入标注 selectAnnotation 导航（官方公开 API 唯一 pose 路径，FIX-02 §10）', async () => {
     const fake = makeCameraHandle();
+    (fake.annotations as unknown as unknown[]).length = 0; // 官方 annotations 数组引用
     mockedCreateViewer.mockResolvedValueOnce(fake as unknown as ViewerHandle);
     const runtime = await SuperSplatRuntime.create(defaultOptions());
     runtime.setCameraPose({ position: [0, 1, 0], target: [0, 1, -5], fov: 200 });
-    expect(fake.cameraEntity.setPosition).toHaveBeenCalledWith(0, 1, 0);
-    expect(fake.cameraEntity.lookAt).toHaveBeenCalledWith(0, 1, -5);
-    expect((fake.cameraEntity.camera as { fov: number }).fov).toBe(120);
+    // 注入一条隐藏标注（extras 无 annotationId → 不被当真实标注）并 select 它。
+    expect(fake.selectAnnotation).toHaveBeenCalledTimes(1);
+    const idx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const injected = readInjectedAnnotation(fake, idx);
+    expect(injected.camera.initial.position).toEqual([0, 1, 0]);
+    expect(injected.camera.initial.target).toEqual([0, 1, -5]);
+    expect(injected.camera.initial.fov).toBe(120); // clamp 进官方界
   });
 
   it('pickWorldPosition(0,0) 中心 = 相机正前方焦点深度点', async () => {
@@ -896,5 +975,166 @@ describe('SSV-07 walk / collision / scale', () => {
     expect(runtime.walkAllowed).toBe(true);
     expect(runtime.hasCollision).toBe(true);
     expect(runtime.cameraMode).toBe('walk');
+  });
+});
+
+// ─── FIX-02 —— 世界变换施加 / 视角导航 / per-annotation camera ──────────────
+describe('FIX-02 world transform', () => {
+  it('恒等世界变换 applyWorldTransform = no-op（实体保持官方初始）', async () => {
+    const setLocalEulerAngles = vi.fn();
+    const setLocalPosition = vi.fn();
+    const setLocalScale = vi.fn();
+    const sync = vi.fn();
+    const root = {
+      findByName: (name: string) =>
+        name === 'gsplat' ? { setLocalEulerAngles, setLocalPosition, setLocalScale, sync } : null,
+    };
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.applyWorldTransform()).toBe(true);
+    expect(setLocalEulerAngles).not.toHaveBeenCalled();
+    expect(setLocalPosition).not.toHaveBeenCalled();
+    expect(setLocalScale).not.toHaveBeenCalled();
+  });
+
+  it('非恒等 W 施加到 gsplat 实体（位置/旋转合成/缩放），幂等', async () => {
+    const setLocalEulerAngles = vi.fn();
+    const setLocalPosition = vi.fn();
+    const setLocalScale = vi.fn();
+    const sync = vi.fn();
+    const root = {
+      findByName: (name: string) =>
+        name === 'gsplat' ? { setLocalEulerAngles, setLocalPosition, setLocalScale, sync } : null,
+    };
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const wt = { position: { x: 2, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 2, y: 2, z: 2 } };
+    const runtime = await SuperSplatRuntime.create(defaultOptions({ worldTransform: wt }));
+    expect(runtime.applyWorldTransform()).toBe(true);
+    expect(setLocalPosition).toHaveBeenCalledWith(2, 0, 0);
+    expect(setLocalScale).toHaveBeenCalledWith(2, 2, 2);
+    // 恒等旋转 + 官方 Rz180 合成 → 仍为 [0,0,180]
+    expect(setLocalEulerAngles).toHaveBeenCalledWith(0, 0, 180);
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it('实体缺失时 applyWorldTransform 返回 false（不抛错）', async () => {
+    const fake = makeFakeHandle();
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      worldTransform: { position: { x: 1, y: 0, z: 0 }, rotation: null, scale: null },
+    }));
+    expect(runtime.applyWorldTransform()).toBe(false);
+  });
+
+  it('worldTransformInfo 报告归一化 position/rotation/scale', async () => {
+    const fake = makeFakeHandle();
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      worldTransform: { position: { x: 1, y: 2, z: 3 }, rotation: null, scale: { x: 2, y: 1, z: 1 } },
+    }));
+    expect(runtime.worldTransformInfo()).toEqual({
+      position: { x: 1, y: 2, z: 3 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 2, y: 1, z: 1 },
+      isIdentity: false,
+    });
+  });
+
+  it('setWorldTransform 更新活动适配器并重新施加到实体（此后换算用新 W）', async () => {
+    const setLocalEulerAngles = vi.fn();
+    const setLocalPosition = vi.fn();
+    const setLocalScale = vi.fn();
+    const sync = vi.fn();
+    const root = {
+      findByName: (name: string) =>
+        name === 'gsplat' ? { setLocalEulerAngles, setLocalPosition, setLocalScale, sync } : null,
+    };
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    // 初始为恒等 W。
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.worldTransform.isIdentity).toBe(true);
+    // 切到非恒等 W：适配器 + 实体同步更新。
+    expect(runtime.setWorldTransform({ position: { x: 3, y: 0, z: 0 }, rotation: null, scale: null })).toBe(true);
+    expect(runtime.worldTransform.isIdentity).toBe(false);
+    expect(runtime.worldTransform.sceneToRuntimePoint({ x: 0, y: 0, z: 0 })).toEqual({ x: 3, y: 0, z: 0 });
+    expect(setLocalPosition).toHaveBeenCalledWith(3, 0, 0);
+    // 传 null → 恢复恒等（实体复位到官方初始，但不再写实体，因为恒等 = no-op）。
+    expect(runtime.setWorldTransform(null)).toBe(true);
+    expect(runtime.worldTransform.isIdentity).toBe(true);
+  });
+
+  it('setWorldTransform 实体未就绪时更新适配器并返回 false（不抛错）', async () => {
+    const fake = makeFakeHandle();
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.setWorldTransform({ position: { x: 0, y: 5, z: 0 }, rotation: null, scale: null })).toBe(false);
+    // 适配器已更新 → 下次 applyWorldTransform 会用新 W。
+    expect(runtime.worldTransform.sceneToRuntimePoint({ x: 0, y: 0, z: 0 })).toEqual({ x: 0, y: 5, z: 0 });
+  });
+});
+
+describe('FIX-02 viewpoints', () => {
+  it('selectViewpoint 把视角 pose 经世界变换换算后注入标注并 select', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      worldTransform: { position: { x: 10, y: 0, z: 0 }, rotation: null, scale: null },
+      viewpoints: [
+        { id: 'vp-a', name: 'A', position: { x: 0, y: 1.6, z: 0 }, target: { x: 0, y: 1, z: -2 }, fov: 55, orderIndex: 0, enabled: true },
+      ],
+    }));
+    expect(runtime.getViewpoints()).toHaveLength(1);
+    expect(runtime.selectViewpoint('vp-a')).toBe(true);
+    expect(fake.selectAnnotation).toHaveBeenCalledTimes(1);
+    const idx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const injected = readInjectedAnnotation(fake, idx);
+    // position (0,1.6,0) → +10 → (10,1.6,0)
+    expect(injected.camera.initial.position).toEqual([10, 1.6, 0]);
+    expect(injected.camera.initial.target).toEqual([10, 1, -2]);
+    expect(injected.camera.initial.fov).toBe(55);
+    // extras 无 annotationId → 不会被当真实标注
+    expect(injected.extras).toEqual({ gsplatform: {} });
+  });
+
+  it('selectViewpoint 找不到 / disabled 视角返回 false', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      viewpoints: [{ id: 'vp-off', name: '关', position: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 1 }, fov: 60, orderIndex: 0, enabled: false }],
+    }));
+    expect(runtime.selectViewpoint('vp-off')).toBe(false);
+    expect(runtime.selectViewpoint('no-such')).toBe(false);
+    expect(fake.selectAnnotation).not.toHaveBeenCalled();
+  });
+
+  it('重复 select 同一视角复用同一条注入标注（index 稳定，不重复追加）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      viewpoints: [{ id: 'vp-1', name: 'A', position: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 1 }, fov: 60, orderIndex: 0, enabled: true }],
+    }));
+    runtime.selectViewpoint('vp-1');
+    runtime.selectViewpoint('vp-1');
+    expect(fake.selectAnnotation).toHaveBeenCalledTimes(2);
+    const i0 = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const i1 = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[1][0];
+    expect(i0).toBe(i1);
+    expect((fake.annotations as unknown as unknown[]).length).toBe(1);
+  });
+
+  it('未加载时 selectViewpoint 静默跳过（不抛错）', async () => {
+    const fake = makeFakeHandle(); // loaded=false
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      viewpoints: [{ id: 'vp-1', name: 'A', position: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 1 }, fov: 60, orderIndex: 0, enabled: true }],
+    }));
+    expect(runtime.selectViewpoint('vp-1')).toBe(true);
+    expect(fake.selectAnnotation).not.toHaveBeenCalled();
   });
 });

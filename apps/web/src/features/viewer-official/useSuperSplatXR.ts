@@ -24,6 +24,8 @@ import {
   type GsplatformAnnotationRef,
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
+import { shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
+import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
 export type OfficialXRStatus =
@@ -67,6 +69,12 @@ export interface OfficialXRViewerState {
   /** 重新走完整 boot（销毁重建）。 */
   retry: () => void;
   frameScene: () => void;
+  /**
+   * 当前相机 pose（FIX-02 §16 —— 进入 VR 前的初始构图可读，与 Desktop
+   * `ov-diagnostics.camera` 同源，用于核对 XR 与 Desktop 使用同一 authored
+   * Initial Camera / 世界变换）。经 SuperSplatRuntime 封装读取（页面不碰 app）。
+   */
+  getCameraPose: () => CameraPose | null;
   /** 用户手势内调用：官方 startXR('vr')。 */
   startVR: () => Promise<void>;
   /** 结束当前 XR 会话。 */
@@ -199,6 +207,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
             : undefined,
           mode: 'xr',
           ui: true,
+          // FIX-02 §5/§16：世界变换与已保存视角在 Desktop/XR 走同一 runtime 逻辑。
+          worldTransform: desc.presentation.worldTransform,
+          viewpoints: desc.viewpoints,
         });
         if (cancelled) {
           runtime.destroy();
@@ -224,10 +235,16 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
             if (cancelled) return;
             setLoaded(v);
             if (v) {
-              try {
-                runtime.frameScene(); // 场景加载完成自动取景整个场景
-              } catch (frameErr) {
-                console.error('[xr] frameScene failed', frameErr);
+              // FIX-02 §16：XR 与 Desktop 同一套规则 —— 世界变换先执行；
+              // authored Initial Camera 存在 → 不自动 frameScene；
+              // 否则 frameScene()（进入 XR 前的桌面构图 = authored 初始相机）。
+              runtime.applyWorldTransform();
+              if (shouldFrameSceneOnLoad(desc)) {
+                try {
+                  runtime.frameScene();
+                } catch (frameErr) {
+                  console.error('[xr] frameScene failed', frameErr);
+                }
               }
             }
             refresh();
@@ -300,6 +317,17 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     }
   }, []);
 
+  // FIX-02 §16：进入 VR 前的初始构图可读（与 Desktop ov-diagnostics.camera 同源）。
+  const getCameraPose = useCallback((): CameraPose | null => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return null;
+    try {
+      return runtime.getCameraPose();
+    } catch {
+      return null;
+    }
+  }, []);
+
   const startVR = useCallback(async () => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -349,6 +377,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     containerRef,
     retry,
     frameScene,
+    getCameraPose,
     startVR,
     endXR,
     selectedGsplatformAnnotation,

@@ -382,26 +382,53 @@ class SceneRuntimeService:
 
     def _build_annotations(self, scene: Scene) -> list[RuntimeAnnotation]:
         base = PRESENTATION_SERVE_BASE.format(slug=scene.slug)
-        return [
-            RuntimeAnnotation(
-                id=str(ann.id),
-                title=ann.title,
-                description=ann.description,
-                anchor=RuntimeVec3(x=ann.anchor_x, y=ann.anchor_y, z=ann.anchor_z),
-                style=ann.style,
-                contentType=ann.content_type,
-                textContent=ann.text_content,
-                mediaAssetUrl=(
-                    f"{base}/annotations/{ann.id}/media" if ann.media_asset_id else None
-                ),
-                textColor=ann.text_color,
-                textSize=ann.text_size,
-                fov=ann.fov,
-                orderIndex=ann.order_index,
-                enabled=ann.enabled,
+        result: list[RuntimeAnnotation] = []
+        for ann in self._annotations.list_by_scene(scene.id):
+            camera_position = None
+            camera_target = None
+            if (
+                ann.camera_position_x is not None
+                and ann.camera_position_y is not None
+                and ann.camera_position_z is not None
+            ):
+                camera_position = RuntimeVec3(
+                    x=ann.camera_position_x,
+                    y=ann.camera_position_y,
+                    z=ann.camera_position_z,
+                )
+            if (
+                ann.camera_target_x is not None
+                and ann.camera_target_y is not None
+                and ann.camera_target_z is not None
+            ):
+                camera_target = RuntimeVec3(
+                    x=ann.camera_target_x,
+                    y=ann.camera_target_y,
+                    z=ann.camera_target_z,
+                )
+            result.append(
+                RuntimeAnnotation(
+                    id=str(ann.id),
+                    title=ann.title,
+                    description=ann.description,
+                    anchor=RuntimeVec3(x=ann.anchor_x, y=ann.anchor_y, z=ann.anchor_z),
+                    style=ann.style,
+                    contentType=ann.content_type,
+                    textContent=ann.text_content,
+                    mediaAssetUrl=(
+                        f"{base}/annotations/{ann.id}/media" if ann.media_asset_id else None
+                    ),
+                    textColor=ann.text_color,
+                    textSize=ann.text_size,
+                    fov=ann.fov,
+                    cameraPosition=camera_position,
+                    cameraTarget=camera_target,
+                    cameraFov=ann.camera_fov,
+                    orderIndex=ann.order_index,
+                    enabled=ann.enabled,
+                )
             )
-            for ann in self._annotations.list_by_scene(scene.id)
-        ]
+        return result
 
     def _build_background_audio(self, scene: Scene) -> RuntimeBackgroundAudio | None:
         pres = self._presentations.get_by_scene(scene.id)

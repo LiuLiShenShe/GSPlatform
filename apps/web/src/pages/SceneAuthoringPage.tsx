@@ -29,6 +29,8 @@ import { ViewpointPanel } from '../features/authoring/ViewpointPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
 import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 import { resolveSceneRuntimeDescriptor } from '../scene-runtime/descriptorResolver';
+import { shouldFrameSceneOnLoad } from '../scene-runtime/initialCameraPolicy';
+import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneViewpoint } from '../services/presentationApi';
 import type { SceneAnnotation } from '../services/annotationApi';
 import {
@@ -92,6 +94,9 @@ export default function SceneAuthoringPage() {
           // SSV-06：官方 annotation hotspots/tooltip 层（多余 chrome 由 wrapper
           // scoped CSS 隐藏），预览必须使用官方 hotspot。
           ui: true,
+          // FIX-02 §5：作者预览与 /scene 施加**同一**世界变换（W），所见即所得。
+          worldTransform: descriptor.presentation.worldTransform,
+          viewpoints: descriptor.viewpoints,
         });
         if (cancelled) {
           runtime.destroy();
@@ -103,12 +108,17 @@ export default function SceneAuthoringPage() {
         active.onLoaded((loaded) => {
           if (!cancelled) {
             setViewerReady(loaded);
-            // 与 /scene 页一致：loaded 后 frameScene，保证预览区可见场景。
             if (loaded) {
-              try {
-                active.frameScene();
-              } catch (frameErr) {
-                console.error('[authoring] frameScene failed', frameErr);
+              // FIX-02 §5：世界变换真正执行（施加到 gsplat 实体；恒等 → no-op）。
+              active.applyWorldTransform();
+              // FIX-02 §2/§16：与 /scene 同一规则 —— authored Initial Camera 存在
+              // → 不自动 frameScene（保持作者已保存的初始构图）；否则取景整个场景。
+              if (shouldFrameSceneOnLoad(descriptor)) {
+                try {
+                  active.frameScene();
+                } catch (frameErr) {
+                  console.error('[authoring] frameScene failed', frameErr);
+                }
               }
             }
           }
@@ -163,8 +173,31 @@ export default function SceneAuthoringPage() {
       message.error('拾取位置失败，请确保场景已加载');
       return;
     }
-    const [anchorX, anchorY, anchorZ] = hit.position;
-    const ann = await apiCreateAnnotation(effectiveSceneId, { anchorX, anchorY, anchorZ });
+    // FIX-02 §5/§13：拾取点是引擎（RUNTIME）空间 —— 存回 SCENE 空间。
+    const sceneAnchor = runtime.worldTransform.runtimeToScenePoint({
+      x: hit.position[0],
+      y: hit.position[1],
+      z: hit.position[2],
+    });
+    // §13：同时保存作者当前 Viewer 相机（标注自己的相机 pose，SCENE 空间）。
+    const enginePose = runtime.getCameraPose();
+    let camera: { position: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; fov: number } | null = null;
+    if (enginePose) {
+      const sceneCam = runtime.worldTransform.runtimeToSceneCamera({
+        position: { x: enginePose.position[0], y: enginePose.position[1], z: enginePose.position[2] },
+        target: { x: enginePose.target[0], y: enginePose.target[1], z: enginePose.target[2] },
+        fov: enginePose.fov,
+      });
+      camera = sceneCam;
+    }
+    const ann = await apiCreateAnnotation(effectiveSceneId, {
+      anchorX: sceneAnchor.x,
+      anchorY: sceneAnchor.y,
+      anchorZ: sceneAnchor.z,
+      ...(camera
+        ? { cameraPosition: camera.position, cameraTarget: camera.target, cameraFov: camera.fov }
+        : {}),
+    });
     setAnnotations((prev) => [...prev, ann]);
     setAnnotationRevision((n) => n + 1);
     setPickingAnnotation(false);
@@ -184,10 +217,23 @@ export default function SceneAuthoringPage() {
   }, [effectiveSceneId]);
 
   // 当前相机 pose —— 经 SuperSplatRuntime 封装读取（页面不触碰 app）。
-  const getCurrentPose = useCallback(async () => {
+  // FIX-02 §5：引擎返回 RUNTIME 空间（世界变换已施加）—— 存回 SCENE 空间，
+  // 使初始视角/视角点在世界变换变化后仍钉在同一内容上。
+  const getCurrentPose = useCallback(async (): Promise<CameraPose | null> => {
     const runtime = runtimeRef.current;
     if (!runtime || !viewerReady) return null;
-    return runtime.getCameraPose();
+    const pose = runtime.getCameraPose();
+    if (!pose) return null;
+    const scene = runtime.worldTransform.runtimeToSceneCamera({
+      position: { x: pose.position[0], y: pose.position[1], z: pose.position[2] },
+      target: { x: pose.target[0], y: pose.target[1], z: pose.target[2] },
+      fov: pose.fov,
+    });
+    return {
+      position: [scene.position.x, scene.position.y, scene.position.z],
+      target: [scene.target.x, scene.target.y, scene.target.z],
+      fov: scene.fov,
+    };
   }, [viewerReady]);
 
   const handleSaveAll = useCallback(async () => {
@@ -226,10 +272,16 @@ export default function SceneAuthoringPage() {
     (vp: SceneViewpoint) => {
       const runtime = runtimeRef.current;
       if (!runtime) return;
-      runtime.setCameraPose({
-        position: [vp.position.x, vp.position.y, vp.position.z],
-        target: [vp.target.x, vp.target.y, vp.target.z],
+      // FIX-02 §5/§11：视角点存 SCENE 空间 —— 定位时经 adapter 换算到 RUNTIME。
+      const rt = runtime.worldTransform.sceneToRuntimeCamera({
+        position: vp.position,
+        target: vp.target,
         fov: vp.fov,
+      });
+      runtime.setCameraPose({
+        position: [rt.position.x, rt.position.y, rt.position.z],
+        target: [rt.target.x, rt.target.y, rt.target.z],
+        fov: rt.fov,
       });
     },
     [],

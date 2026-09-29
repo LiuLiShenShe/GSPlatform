@@ -35,6 +35,7 @@ import {
 } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from './types';
 import { resolveRuntimeAssetUrl } from './assetUrl';
+import { SceneTransformAdapter } from './SceneTransformAdapter';
 
 const TONEMAPPING_VALUES = [
   'none',
@@ -133,6 +134,9 @@ export function buildExperienceSettings(
 ): ExperienceSettings {
   const settings = defaultSettings(fit);
   const pres = descriptor.presentation;
+  // FIX-02 §5-§9：世界变换 W 统一施加到 gsplat 实体；初始相机 / 标注 / 视角点
+  // 全部经 adapter 从 SCENE 空间换算到 RUNTIME 空间，与移动后的场景保持一致。
+  const adapter = SceneTransformAdapter.fromWorldTransform(pres.worldTransform);
 
   // 1) background color —— 存在时覆盖官方默认。
   const bgColor = toRgbTuple(pres.background.color);
@@ -156,18 +160,24 @@ export function buildExperienceSettings(
   // 5) post effects —— 单一结构化 JSONB → 官方 postEffectSettings（clamp 界内）。
   settings.postEffectSettings = buildPostEffectSettings(pres.postEffects);
 
-  // 6) initial camera —— 描述里同时有 position + target 才映射；
-  //    fov 存在则 clamp 进官方 authoring 界（limits: true 校验要求）。
+  // 6) initial camera —— 描述里同时有 position + target 才映射（显式 null 语义，
+  //    FIX-02 §3：绝不用 position != [0,0,0] 猜测）；fov 存在则 clamp 进官方
+  //    authoring 界（limits: true 校验要求）。经世界变换换算到 RUNTIME 空间。
   const cam = pres.initialCamera;
   if (cam.position && cam.target) {
     const fov =
       typeof cam.fov === 'number' && Number.isFinite(cam.fov) ? cam.fov : DEFAULT_CAMERA_FOV;
+    const runtimeCam = adapter.sceneToRuntimeCamera({
+      position: cam.position,
+      target: cam.target,
+      fov,
+    });
     settings.cameras = [
       {
         initial: {
-          position: [cam.position.x, cam.position.y, cam.position.z],
-          target: [cam.target.x, cam.target.y, cam.target.z],
-          fov: clamp(fov, CAMERA_FOV_RANGE.min, CAMERA_FOV_RANGE.max),
+          position: [runtimeCam.position.x, runtimeCam.position.y, runtimeCam.position.z],
+          target: [runtimeCam.target.x, runtimeCam.target.y, runtimeCam.target.z],
+          fov: clamp(runtimeCam.fov, CAMERA_FOV_RANGE.min, CAMERA_FOV_RANGE.max),
         },
       },
     ];
@@ -185,7 +195,9 @@ export function buildExperienceSettings(
   // 8) annotations —— SSV-06：官方 annotations[]（position/title/text/camera/extras）。
   //    每个 annotation 都带 extras 固定协议 { gsplatform: { annotationId, contentType } }，
   //    页面依据 annotationId 解析（禁止用数组 index 当数据库 ID）。
-  settings.annotations = buildAnnotations(descriptor, settings);
+  //    FIX-02 §14：每个 official annotation 的 camera.initial 来自该标注**自己**的
+  //    camera（经世界变换换算），不再是 settings.cameras[0]。
+  settings.annotations = buildAnnotations(descriptor, settings, adapter);
 
   // 官方校验：作者侧限值全开，任何字段越界立即抛错。
   validateSettings(settings, { limits: true });
@@ -193,20 +205,24 @@ export function buildExperienceSettings(
 }
 
 /**
- * 把 descriptor.annotations 映射为官方 settings.annotations（SSV-06）。
+ * 把 descriptor.annotations 映射为官方 settings.annotations（SSV-06 + FIX-02 §14）。
  *
  * - 仅保留 enabled 标注，数量 cap 进官方 ANNOTATION_LIMITS.maxCount。
  * - title / text 做 HTML sanitize（剥标签成纯文本）后截断进官方
- *   ANNOTATION_LIMITS.titleMax / textMax —— 满足“TEXT 直接由官方 panel 显示，
- *   HTML 必须 sanitize”。
+ *   ANNOTATION_LIMITS.titleMax / textMax。
  * - extras 为固定协议 { gsplatform: { annotationId, contentType } }。
- * - camera 复用 settings.cameras[0].initial（初始视角构图），fov 用标注自身的
- *   fov（若合法则覆盖，clamp 进官方界）——官方 hotspot 点击后 camera navigation
- *   仍由官方执行（fly 到该 camera）。
+ * - camera.initial **来自该标注自己的 camera**（cameraPosition/cameraTarget/cameraFov，
+ *   拾取时保存的 Viewer pose），经世界变换换算到 RUNTIME 空间；官方 hotspot 点击后
+ *   camera navigation 由官方执行（fly 到该 camera）。当标注未作者化相机时逐条回落到
+ *   场景初始相机（换算后），而不是把 settings.cameras[0] 无条件共享给所有标注。
+ * - 标注锚点 anchor 同样经世界变换换算到 RUNTIME 空间（与移动后的高斯对齐）。
  */
 export function buildAnnotations(
   descriptor: SceneRuntimeDescriptorV1,
   settings: Pick<ExperienceSettings, 'cameras'>,
+  adapter: SceneTransformAdapter = SceneTransformAdapter.fromWorldTransform(
+    descriptor.presentation.worldTransform,
+  ),
 ): {
   position: [number, number, number];
   title: string;
@@ -214,14 +230,15 @@ export function buildAnnotations(
   extras: { gsplatform: { annotationId: string; contentType: string } };
   camera: { initial: { position: [number, number, number]; target: [number, number, number]; fov: number } };
 }[] {
+  // 场景初始相机（换算到 RUNTIME 空间）—— 未作者化相机标注的回落值。
   const base = settings.cameras[0]?.initial;
-  const basePosition: [number, number, number] = base
+  const fallbackPos: [number, number, number] = base
     ? [base.position[0], base.position[1], base.position[2]]
     : [0, 2, 0];
-  const baseTarget: [number, number, number] = base
+  const fallbackTarget: [number, number, number] = base
     ? [base.target[0], base.target[1], base.target[2]]
     : [2, 2, 0];
-  const baseFov = base ? base.fov : DEFAULT_CAMERA_FOV;
+  const fallbackFov = base ? base.fov : DEFAULT_CAMERA_FOV;
 
   return descriptor.annotations
     .filter((a) => a.enabled !== false)
@@ -229,16 +246,38 @@ export function buildAnnotations(
     .map((a) => {
       const title = sanitizeAnnotationText(a.title).slice(0, ANNOTATION_LIMITS.titleMax);
       const text = sanitizeAnnotationText(a.textContent).slice(0, ANNOTATION_LIMITS.textMax);
-      const fov =
-        typeof a.fov === 'number' && Number.isFinite(a.fov)
-          ? clamp(a.fov, CAMERA_FOV_RANGE.min, CAMERA_FOV_RANGE.max)
-          : baseFov;
+
+      // 锚点 → RUNTIME 空间（与被世界变换移动后的高斯表面一致）。
+      const anchor = adapter.sceneToRuntimePoint(a.anchor);
+
+      // camera：优先该标注自己的相机（position+target 都存在时），经世界变换换算；
+      // 否则逐条回落场景初始相机。
+      let camPos: [number, number, number] = fallbackPos;
+      let camTarget: [number, number, number] = fallbackTarget;
+      let fov = fallbackFov;
+      if (a.cameraPosition && a.cameraTarget) {
+        const rt = adapter.sceneToRuntimeCamera({
+          position: a.cameraPosition,
+          target: a.cameraTarget,
+          fov:
+            typeof a.cameraFov === 'number' && Number.isFinite(a.cameraFov)
+              ? a.cameraFov
+              : fallbackFov,
+        });
+        camPos = [rt.position.x, rt.position.y, rt.position.z];
+        camTarget = [rt.target.x, rt.target.y, rt.target.z];
+        fov = rt.fov;
+      } else if (typeof a.fov === 'number' && Number.isFinite(a.fov)) {
+        fov = a.fov;
+      }
+      fov = clamp(fov, CAMERA_FOV_RANGE.min, CAMERA_FOV_RANGE.max);
+
       return {
-        position: [a.anchor.x, a.anchor.y, a.anchor.z],
+        position: [anchor.x, anchor.y, anchor.z],
         title: title || '标注',
         text,
         extras: { gsplatform: { annotationId: a.id, contentType: a.contentType } },
-        camera: { initial: { position: basePosition, target: baseTarget, fov } },
+        camera: { initial: { position: camPos, target: camTarget, fov } },
       };
     });
 }

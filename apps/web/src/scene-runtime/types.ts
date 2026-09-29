@@ -127,6 +127,14 @@ export interface RuntimeAnnotation {
   textColor: string;
   textSize: number;
   fov: number;
+  /**
+   * 标注自身相机（FIX-02 §12）—— 作者在拾取锚点时同时保存的 Viewer 相机。
+   * 为 null/缺失 = 未作者化；前端 adapter 回落到场景初始相机（逐条判定，
+   * 绝不共用 settings.cameras[0] 作为所有标注的相机）。
+   */
+  cameraPosition?: RuntimeVec3 | null;
+  cameraTarget?: RuntimeVec3 | null;
+  cameraFov?: number | null;
   orderIndex: number;
   enabled: boolean;
 }

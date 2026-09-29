@@ -27,6 +27,11 @@ import {
 } from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from './runtimeErrors';
 import type { SceneBounds } from './sceneScale';
+import {
+  SceneTransformAdapter,
+  composeEntityEulerDeg,
+} from './SceneTransformAdapter';
+import type { RuntimeViewpoint, RuntimeWorldTransform } from './types';
 
 /**
  * 相机封装（SSV-05 §5）目标距离策略。
@@ -84,6 +89,18 @@ export interface SuperSplatRuntimeOptions {
    * （.sse-sceneLayer）—— 官方控件不重复渲染。
    */
   ui?: boolean;
+  /**
+   * 世界变换（FIX-02 §5-§9，方案A）。与描述符 presentation.worldTransform
+   * 一致；scene↔runtime 换算与 gsplat 实体施加统一经 SceneTransformAdapter。
+   * null/恒等 → 实体保持官方初始（存量场景零改动）。
+   */
+  worldTransform?: RuntimeWorldTransform | null;
+  /**
+   * 已保存视角（FIX-02 §10）。enabled 视角经 selectViewpoint(id) 导航到其相机；
+   * 数据仅供视角导航，绝不注入官方 settings.annotations（官方 v2 无 viewpoints
+   * 字段，注入会生成多余 hotspot）。
+   */
+  viewpoints?: RuntimeViewpoint[];
 }
 
 /** 选中官方 annotation 中带 GSPlatform extras 协议的引用（SSV-06 §二）。 */
@@ -120,9 +137,32 @@ export class SuperSplatRuntime {
   /** 当前运行模式（renderer 策略）。 */
   readonly mode: RuntimeMode;
 
+  /**
+   * 当前生效的世界变换适配器（FIX-02）。场景→runtime 换算（settings 构建/
+   * selectViewpoint）与 runtime→scene 反向换算（作者捕获）共用；作者侧世界变换
+   * 滑块变化经 {@link setWorldTransform} 更新 —— 捕获/导航始终用**当前** W，
+   * 不会在滑块拖动后继续用过期 W。恒等时全部透传。
+   */
+  get worldTransform(): SceneTransformAdapter {
+    return this.activeTransform;
+  }
+
+  private activeTransform: SceneTransformAdapter;
+
   private readonly handle: ViewerHandle;
   private readonly unsubscribers: Set<() => void> = new Set();
   private destroyed = false;
+
+  /** 已保存视角（仅导航数据；不注入官方 annotations）。 */
+  private readonly viewpoints: RuntimeViewpoint[];
+
+  /**
+   * 运行时注入的 pose 导航标注（FIX-02 §10/A6 调查结论：官方公开 API 无任意
+   * pose setter；唯一受支持路径 = selectAnnotation → annotation.camera.initial）。
+   * 注入发生在导航时刻（官方 UI 热点已在 createViewer 时构建完毕），因此不会
+   * 生成多余 hotspot。key = 视角 id 或 `pose:<随机>`。
+   */
+  private readonly injectedPoseAnnotations: { key: string; index: number }[] = [];
 
   private constructor(handle: ViewerHandle, viewerOptions: CreateViewerOptions) {
     this.handle = handle;
@@ -130,6 +170,12 @@ export class SuperSplatRuntime {
     this.app = handle.app;
     this.state = handle.state;
     this.annotations = handle.annotations;
+    const options = viewerOptions as CreateViewerOptions & {
+      worldTransform?: RuntimeWorldTransform | null;
+      viewpoints?: RuntimeViewpoint[];
+    };
+    this.activeTransform = SceneTransformAdapter.fromWorldTransform(options.worldTransform);
+    this.viewpoints = options.viewpoints ?? [];
   }
 
   // ------------------------------------------------------------------ #
@@ -350,17 +396,157 @@ export class SuperSplatRuntime {
   }
 
   /**
-   * 直接把相机摆到给定 pose（position + lookAt target + fov）。
+   * 把相机过渡到给定 pose（position + lookAt target + fov）。
    *
-   * 用于编辑页视角导航 / 恢复已保存视角。注意：官方 OrbitController 在下一次
-   * 输入时会重新接管相机；本方法只负责一次性摆放，不承诺接管控制器。
+   * FIX-02 §10 调查结论：官方 1.35.0 **没有**公开的 setCameraPose —— 直接写引擎
+   * 相机实体（findByName('camera').setPosition）会被官方 CameraManager 每帧
+   * `applyCamera` 覆盖（viewer.ts update → applyCamera），一次都留不住。唯一受支持
+   * 的任意 pose 路径 = `selectAnnotation(i)` → `annotation.camera.initial`
+   * （camera-manager.selectAnnotation 切 orbit + goto 该 pose，官方过渡动画）。
+   * 因此本方法把 pose 包成一个**运行时注入的隐藏标注**（extras 不含 annotationId
+   * → 不会被解析为真实标注 / 不触发媒体 Overlay），再 select 它的 index。
+   *
+   * 用于 /scene 视角导航、已保存视角、?spawn= 测试定位、authoring 定位。
    */
   setCameraPose(pose: CameraPose): void {
-    const camera = this.cameraEntity();
-    if (!camera?.camera) return;
-    camera.setPosition(pose.position[0], pose.position[1], pose.position[2]);
-    camera.lookAt(pose.target[0], pose.target[1], pose.target[2]);
-    camera.camera.fov = clampFov(pose.fov);
+    const key = `pose:${this.injectedPoseAnnotations.length}:${Math.random()}`;
+    this.navigateToPose(pose, key);
+  }
+
+  /**
+   * 导航到已保存视角的相机（FIX-02 §10）。经 SceneTransformAdapter 换算到
+   * RUNTIME 空间后（视角数据与 gsplat/标注/初始相机共用同一世界变换），复用同一
+   * 注入标注再 select → 官方过渡到该相机。返回是否成功找到并导航。
+   */
+  selectViewpoint(viewpointId: string): boolean {
+    const vp = this.viewpoints.find((v) => v.id === viewpointId && v.enabled !== false);
+    if (!vp) return false;
+    const rt = this.worldTransform.sceneToRuntimeCamera({
+      position: vp.position,
+      target: vp.target,
+      fov: vp.fov,
+    });
+    // adapter 返回 {x,y,z} 结构 → 官方 CameraPose 用数组元组。
+    this.navigateToPose(
+      {
+        position: [rt.position.x, rt.position.y, rt.position.z],
+        target: [rt.target.x, rt.target.y, rt.target.z],
+        fov: rt.fov,
+      },
+      `viewpoint:${vp.id}`,
+    );
+    return true;
+  }
+
+  /** 已保存视角列表（只读副本语义）。 */
+  getViewpoints(): readonly RuntimeViewpoint[] {
+    return this.viewpoints;
+  }
+
+  /**
+   * 施加世界变换到官方 gsplat 实体（方案A runtime Scene Root Transform，
+   * FIX-02 §5-§9）。恒等时 no-op（实体保持官方 setLocalEulerAngles(0,0,180)）。
+   *
+   * 与官方烘焙的 180°Z 旋转合成（composeEntityEulerDeg → W.rot ∘ Rz180），
+   * 使 W 作用在默认世界空间。诊断：施加前后 getSceneBounds()（读实体世界变换）
+   * 反映包围盒变化。
+   *
+   * 幂等：重复调用安全。实体尚未出现（加载中）时返回 false 不抛错。
+   */
+  applyWorldTransform(): boolean {
+    if (this.worldTransform.isIdentity) return true; // 恒等：实体保持官方初始
+    const gsplat = this.gsplatEntity();
+    if (!gsplat) return false; // 加载中/实体未就绪
+    const { position, rotation, scale } = this.worldTransform;
+    const euler = composeEntityEulerDeg({
+      position: { ...position },
+      rotation: { ...rotation },
+      scale: { ...scale },
+    });
+    gsplat.setLocalPosition(position.x, position.y, position.z);
+    gsplat.setLocalEulerAngles(euler[0], euler[1], euler[2]);
+    gsplat.setLocalScale(scale.x, scale.y, scale.z);
+    gsplat.sync?.();
+    return true;
+  }
+
+  /** 世界变换诊断：原始 position/rotation/scale + 施加后的场景包围盒。 */
+  worldTransformInfo(): {
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    scale: { x: number; y: number; z: number };
+    isIdentity: boolean;
+  } {
+    return {
+      position: { ...this.worldTransform.position },
+      rotation: { ...this.worldTransform.rotation },
+      scale: { ...this.worldTransform.scale },
+      isIdentity: this.worldTransform.isIdentity,
+    };
+  }
+
+  /**
+   * 更新 **当前生效** 的世界变换（FIX-02 §9 作者侧实时预览）。
+   *
+   * 覆盖调度器：更新内部适配器（此后所有 scene→runtime / runtime→scene 换算、
+   * selectViewpoint / 捕获反向换算都走**新** W —— 滑块拖动后不再用过期 W），
+   * 并把实体（若已出现）就地重新施加。可传 null → 恢复恒等。
+   *
+   * 返回 false 表示实体尚未出现（加载中），适配器仍已更新 —— 下一次
+   * {@link applyWorldTransform}（onLoaded / 重建时）会读到新 W。
+   */
+  setWorldTransform(wt: RuntimeWorldTransform | null): boolean {
+    this.activeTransform = SceneTransformAdapter.fromWorldTransform(wt);
+    return this.applyWorldTransform();
+  }
+
+  /**
+   * 把一个 RUNTIME 空间 pose 导航到位（官方 selectAnnotation 过渡）。
+   * 内部：把 pose 包成注入标注 → selectAnnotation(index)。不等待动画。
+   */
+  private navigateToPose(pose: CameraPose, key: string): void {
+    if (!this.requiredState().loaded) return; // 未加载时官方抛错，静默跳过
+    const index = this.ensurePoseAnnotation(pose, key);
+    this.handle.selectAnnotation(index);
+  }
+
+  /** 在官方 annotations 数组尾部注入（或复用）一个隐藏 pose 标注，返回其 index。 */
+  private ensurePoseAnnotation(pose: CameraPose, key: string): number {
+    // handle.annotations 与官方 settings.annotations 同一数组引用（官方
+    // viewer.selectAnnotation 按 index 读该数组），导航时追加的条目在官方 UI
+    // 热点构建完成后注入 → 不会生成多余 hotspot。
+    const arr = this.handle.annotations as unknown as Array<{
+      position: [number, number, number];
+      title: string;
+      text: string;
+      extras: { gsplatform: { viewpointId?: string } };
+      camera: { initial: { position: [number, number, number]; target: [number, number, number]; fov: number } };
+    }>;
+    const existing = this.injectedPoseAnnotations.find((e) => e.key === key);
+    const entry = {
+      position: [pose.position[0], pose.position[1], pose.position[2]] as [number, number, number],
+      title: '',
+      text: '',
+      // extras 不含 annotationId → selectedGsplatformAnnotation 解析为 null
+      // （不会被当成真实标注 / 不触发媒体 Overlay）。
+      extras: { gsplatform: {} },
+      camera: {
+        initial: {
+          position: [pose.position[0], pose.position[1], pose.position[2]] as [number, number, number],
+          target: [pose.target[0], pose.target[1], pose.target[2]] as [number, number, number],
+          fov: clampFov(pose.fov),
+        },
+      },
+    };
+    if (existing) {
+      // 复用同一条（更新 pose），保持 index 稳定。
+      (arr as Array<unknown>)[existing.index] = entry;
+      return existing.index;
+    }
+    arr.push(entry);
+    const index = arr.length - 1;
+    this.injectedPoseAnnotations.push({ key, index });
+    return index;
   }
 
   /**
@@ -527,6 +713,32 @@ export class SuperSplatRuntime {
     }
   }
 
+  /** 官方 gsplat 实体访问器（FIX-02 §5：世界变换施加目标）。缺失返回 null。 */
+  private gsplatEntity(): {
+    setLocalPosition(x: number, y: number, z: number): void;
+    setLocalEulerAngles(x: number, y: number, z: number): void;
+    setLocalScale(x: number, y: number, z: number): void;
+    sync?(): void;
+  } | null {
+    try {
+      const root = this.requireLive().app?.root as
+        | { findByName(name: string): unknown | null }
+        | undefined;
+      const entity = root?.findByName('gsplat') as
+        | {
+            setLocalPosition(x: number, y: number, z: number): void;
+            setLocalEulerAngles(x: number, y: number, z: number): void;
+            setLocalScale(x: number, y: number, z: number): void;
+            sync?(): void;
+          }
+        | null
+        | undefined;
+      return entity ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   /** 相机到场景 gsplat 包围盒中心的距离（焦点深度）；缺失时回退固定距离。 */
   private cameraFocusDistance(from: { x: number; y: number; z: number }): number {
     const aabb = this.gsplatAabb();
@@ -654,6 +866,9 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
     //   desktop → undefined（官方默认 webgpu，引擎自动 fallback WebGL，即“auto”）
     //   xr      → 'webgl'（禁止 XR 默认走 WebGPU）
     renderer: rendererForMode(options.mode),
+    // FIX-02 §5-§9 / §10：透传给运行时构造（scene↔runtime 换算 + 视角导航）。
+    worldTransform: options.worldTransform ?? null,
+    viewpoints: options.viewpoints ?? [],
   } as CreateViewerOptions;
 }
 

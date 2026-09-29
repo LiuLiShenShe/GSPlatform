@@ -5,7 +5,8 @@
  *   voxel gridBounds（collision.voxel.json）：
  *     x ∈ [-4.6, 3.6]  y ∈ [-1.4, 2.6]  z ∈ [7.2, 14.6]
  * 实例：walkAllowed/hasCollision/collisionFormat 来自 ov-diagnostics；
- * cameraPosition 也是 ov-diagnostics 暴露的官方 camera pose。
+ * camera.position 是 ov-diagnostics 暴露的官方 camera pose（FIX-02 起为
+ * camera: {position, target, fov}）。
  */
 import { expect, test } from './fresh-browser';
 
@@ -27,7 +28,8 @@ async function readDiag(page: import('@playwright/test').Page): Promise<Record<s
 }
 
 function cameraPosition(diag: Record<string, unknown>): [number, number, number] | null {
-  const p = diag.cameraPosition as number[] | null | undefined;
+  // FIX-02：diagnostics 相机字段改为 camera: {position, target, fov}。
+  const p = (diag.camera as { position?: number[] } | null | undefined)?.position;
   return p && p.length === 3 ? [p[0], p[1], p[2]] : null;
 }
 

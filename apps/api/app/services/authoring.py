@@ -28,6 +28,7 @@ from app.repositories.authoring import (
     SceneViewpointRepository,
 )
 from app.schemas.scene_annotation import (
+    CameraVec3,
     SceneAnnotationCreateRequest,
     SceneAnnotationOut,
     SceneAnnotationReorderRequest,
@@ -129,6 +130,46 @@ def _presentation_out(
         collisionStepOffset=pres.collision_step_offset,
         collisionPlayerHeight=pres.collision_player_height,
         collisionEnabled=pres.collision_enabled,
+    )
+
+
+def _annotation_out(a: SceneAnnotation) -> SceneAnnotationOut:
+    """Assemble the annotation DTO (FIX-02 §12: per-annotation camera pose)."""
+    camera_position = None
+    camera_target = None
+    if (
+        a.camera_position_x is not None
+        and a.camera_position_y is not None
+        and a.camera_position_z is not None
+    ):
+        camera_position = CameraVec3(
+            x=a.camera_position_x, y=a.camera_position_y, z=a.camera_position_z
+        )
+    if (
+        a.camera_target_x is not None
+        and a.camera_target_y is not None
+        and a.camera_target_z is not None
+    ):
+        camera_target = CameraVec3(x=a.camera_target_x, y=a.camera_target_y, z=a.camera_target_z)
+    return SceneAnnotationOut(
+        id=str(a.id),
+        title=a.title,
+        description=a.description,
+        anchorX=a.anchor_x,
+        anchorY=a.anchor_y,
+        anchorZ=a.anchor_z,
+        style=a.style,
+        contentType=a.content_type,
+        textContent=a.text_content,
+        mediaAssetId=str(a.media_asset_id) if a.media_asset_id else None,
+        textColor=a.text_color,
+        textSize=a.text_size,
+        fov=a.fov,
+        cameraPosition=camera_position,
+        cameraTarget=camera_target,
+        cameraFov=a.camera_fov,
+        orderIndex=a.order_index,
+        enabled=a.enabled,
     )
 
 
@@ -586,26 +627,7 @@ class AuthoringService:
         self, slug_or_id: str, identity_user_id: uuid.UUID | None
     ) -> list[SceneAnnotationOut]:
         scene = self._get_owned_scene_for_read(slug_or_id, identity_user_id)
-        return [
-            SceneAnnotationOut(
-                id=str(a.id),
-                title=a.title,
-                description=a.description,
-                anchorX=a.anchor_x,
-                anchorY=a.anchor_y,
-                anchorZ=a.anchor_z,
-                style=a.style,
-                contentType=a.content_type,
-                textContent=a.text_content,
-                mediaAssetId=str(a.media_asset_id) if a.media_asset_id else None,
-                textColor=a.text_color,
-                textSize=a.text_size,
-                fov=a.fov,
-                orderIndex=a.order_index,
-                enabled=a.enabled,
-            )
-            for a in self._annotations.list_by_scene(scene.id)
-        ]
+        return [_annotation_out(a) for a in self._annotations.list_by_scene(scene.id)]
 
     def create_annotation(
         self, slug_or_id: str, owner_id: uuid.UUID, body: SceneAnnotationCreateRequest
@@ -647,28 +669,19 @@ class AuthoringService:
             text_color=body.textColor,
             text_size=body.textSize,
             fov=body.fov,
+            camera_position_x=body.cameraPosition.x if body.cameraPosition else None,
+            camera_position_y=body.cameraPosition.y if body.cameraPosition else None,
+            camera_position_z=body.cameraPosition.z if body.cameraPosition else None,
+            camera_target_x=body.cameraTarget.x if body.cameraTarget else None,
+            camera_target_y=body.cameraTarget.y if body.cameraTarget else None,
+            camera_target_z=body.cameraTarget.z if body.cameraTarget else None,
+            camera_fov=body.cameraFov,
             order_index=self._annotations.next_order_index(scene.id),
             enabled=True,
         )
         self._annotations.add(annotation)
 
-        return SceneAnnotationOut(
-            id=str(annotation.id),
-            title=annotation.title,
-            description=annotation.description,
-            anchorX=annotation.anchor_x,
-            anchorY=annotation.anchor_y,
-            anchorZ=annotation.anchor_z,
-            style=annotation.style,
-            contentType=annotation.content_type,
-            textContent=annotation.text_content,
-            mediaAssetId=str(annotation.media_asset_id) if annotation.media_asset_id else None,
-            textColor=annotation.text_color,
-            textSize=annotation.text_size,
-            fov=annotation.fov,
-            orderIndex=annotation.order_index,
-            enabled=annotation.enabled,
-        )
+        return _annotation_out(annotation)
 
     def update_annotation(
         self,
@@ -726,6 +739,16 @@ class AuthoringService:
             ann.text_size = body.textSize
         if body.fov is not None:
             ann.fov = body.fov
+        if body.cameraPosition is not None:
+            ann.camera_position_x = body.cameraPosition.x
+            ann.camera_position_y = body.cameraPosition.y
+            ann.camera_position_z = body.cameraPosition.z
+        if body.cameraTarget is not None:
+            ann.camera_target_x = body.cameraTarget.x
+            ann.camera_target_y = body.cameraTarget.y
+            ann.camera_target_z = body.cameraTarget.z
+        if body.cameraFov is not None:
+            ann.camera_fov = body.cameraFov
         if body.orderIndex is not None:
             ann.order_index = body.orderIndex
         if body.enabled is not None:
@@ -733,23 +756,7 @@ class AuthoringService:
 
         self._session.flush()
 
-        return SceneAnnotationOut(
-            id=str(ann.id),
-            title=ann.title,
-            description=ann.description,
-            anchorX=ann.anchor_x,
-            anchorY=ann.anchor_y,
-            anchorZ=ann.anchor_z,
-            style=ann.style,
-            contentType=ann.content_type,
-            textContent=ann.text_content,
-            mediaAssetId=str(ann.media_asset_id) if ann.media_asset_id else None,
-            textColor=ann.text_color,
-            textSize=ann.text_size,
-            fov=ann.fov,
-            orderIndex=ann.order_index,
-            enabled=ann.enabled,
-        )
+        return _annotation_out(ann)
 
     def delete_annotation(self, slug_or_id: str, owner_id: uuid.UUID, annotation_id: str) -> None:
         scene = self._get_owned_scene(slug_or_id, owner_id)
@@ -827,23 +834,7 @@ class AuthoringService:
         ann.media_asset_id = asset.id
         self._session.flush()
 
-        return SceneAnnotationOut(
-            id=str(ann.id),
-            title=ann.title,
-            description=ann.description,
-            anchorX=ann.anchor_x,
-            anchorY=ann.anchor_y,
-            anchorZ=ann.anchor_z,
-            style=ann.style,
-            contentType=ann.content_type,
-            textContent=ann.text_content,
-            mediaAssetId=str(ann.media_asset_id),
-            textColor=ann.text_color,
-            textSize=ann.text_size,
-            fov=ann.fov,
-            orderIndex=ann.order_index,
-            enabled=ann.enabled,
-        )
+        return _annotation_out(ann)
 
     def serve_annotation_media(self, slug_or_id: str, annotation_id: str) -> tuple[bytes, str]:
         """Return annotation media bytes + mime (or raise NotFound)."""

@@ -25,11 +25,12 @@ import {
 } from '../../scene-runtime/SuperSplatRuntime';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
+import { shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
 import {
   assessSceneScale,
   type SceneScaleAssessment,
 } from '../../scene-runtime/sceneScale';
-import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
+import type { RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
 export type OfficialViewerStatus = 'loading' | 'ready' | 'error';
 
@@ -73,8 +74,15 @@ export interface OfficialDesktopViewerState {
   retry: () => void;
   frameScene: () => void;
   resetCamera: () => void;
-  /** 直接把相机摆到给定 pose（官方一次性摆放，用于测试/导航定位）。 */
+  /** 直接把相机摆到给定 pose（官方 selectAnnotation 过渡；用于测试/定位）。 */
   setCameraPose: (pose: CameraPose) => void;
+  /**
+   * 导航到已保存视角（FIX-02 §10）。id = descriptor.viewpoints[].id（数据库 ID）。
+   * 相机经 SceneTransformAdapter 换算到 runtime 空间，由官方过渡。找不到返回 false。
+   */
+  selectViewpoint: (viewpointId: string) => boolean;
+  /** 场景已保存视角（enabled 优先、orderIndex 排序）—— 供 Saved Views 列表渲染。 */
+  viewpoints: RuntimeViewpoint[];
   requestFullscreen: () => void;
   /** 退出本 viewer 的全屏。 */
   exitFullscreen: () => void;
@@ -184,6 +192,9 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
             : undefined,
           mode: 'desktop',
           ui: true,
+          // FIX-02 §5/§10：世界变换 + 已保存视角（runtime 侧统一换算/导航）。
+          worldTransform: desc.presentation.worldTransform,
+          viewpoints: desc.viewpoints,
         });
         if (cancelled) {
           runtime.destroy();
@@ -220,10 +231,17 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
             if (cancelled) return;
             setLoaded(v);
             if (v) {
-              try {
-                runtime.frameScene(); // 保证场景可见（官方需要 loaded）
-              } catch (frameErr) {
-                console.error('[viewer] frameScene failed', frameErr);
+              // FIX-02 §5：世界变换真正执行（施加到 gsplat 实体；恒等 → no-op）。
+              runtime.applyWorldTransform();
+              // FIX-02 §2：authored Initial Camera 存在 → 不自动 frameScene，
+              // 直接用 authored 相机（官方 load 已 copy cameras[0].initial）；
+              // 没有 authored 相机 → frameScene() 取景。
+              if (shouldFrameSceneOnLoad(desc)) {
+                try {
+                  runtime.frameScene();
+                } catch (frameErr) {
+                  console.error('[viewer] frameScene failed', frameErr);
+                }
               }
             }
             refresh();
@@ -308,6 +326,17 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     }
   }, []);
 
+  const selectViewpoint = useCallback((viewpointId: string): boolean => {
+    const runtime = runtimeRef.current;
+    if (!runtime || !runtime.loaded) return false;
+    try {
+      return runtime.selectViewpoint(viewpointId);
+    } catch (err) {
+      console.error('[viewer] selectViewpoint failed', err);
+      return false;
+    }
+  }, []);
+
   const requestFullscreen = useCallback(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -372,6 +401,10 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     frameScene,
     resetCamera,
     setCameraPose,
+    selectViewpoint,
+    viewpoints: (descriptor?.viewpoints ?? [])
+      .slice()
+      .sort((a, b) => a.orderIndex - b.orderIndex),
     requestFullscreen,
     exitFullscreen,
     setCameraMode,

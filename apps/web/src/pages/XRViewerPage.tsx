@@ -122,6 +122,22 @@ export default function XRViewerPage() {
             <td>frame.gsplats</td>
             <td data-testid="diag-gsplats">{state.gsplats}</td>
           </tr>
+          <tr>
+            {/* FIX-02 §16：进入 VR 前的相机 pose（position/target/fov，Desktop
+                同源读数）—— e2e 核对 XR 与 Desktop 使用同一 authored Initial
+                Camera / 世界变换。 */}
+            <td>Camera (pre-XR)</td>
+            <td data-testid="diag-camera">
+              {(() => {
+                const pose = state.getCameraPose();
+                return pose
+                  ? `${pose.position
+                      .map((v) => Number(v.toFixed(3)))
+                      .join(', ')} / ${pose.target.map((v) => Number(v.toFixed(3))).join(', ')} / ${Number(pose.fov.toFixed(2))}`
+                  : '—';
+              })()}
+            </td>
+          </tr>
         </tbody>
       </table>
 

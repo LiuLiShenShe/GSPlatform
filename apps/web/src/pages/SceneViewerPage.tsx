@@ -116,14 +116,49 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
               horizontalExtent: Number(state.sceneScale.horizontalExtent.toFixed(3)),
               verticalExtent: Number(state.sceneScale.verticalExtent.toFixed(3)),
             },
-            cameraPosition: (() => {
-              // 渲染期引擎读（e2e 取证）。相机实体尚未就绪时 getCameraPose
-              // 可能抛错（faoiled 之前 —— 作者页在 loaded 后才读），这里防御。
+            // FIX-02 §4/§9：完整相机 pose（position/target/fov）+ 世界变换诊断。
+            // e2e 刷新 /scene/:sceneId 后与数据库相机比较；worldTransform 报告
+            // 归一化 W，sceneBounds 反映施加后的包围盒（entity 世界变换读取）。
+            camera: (() => {
               try {
                 const runtime = state.runtimeRef.current;
                 if (!runtime) return null;
                 const pose = runtime.getCameraPose();
-                return pose ? pose.position : null;
+                return pose
+                  ? {
+                      position: pose.position.map((v) => Number(v.toFixed(4))),
+                      target: pose.target.map((v) => Number(v.toFixed(4))),
+                      fov: Number(pose.fov.toFixed(2)),
+                    }
+                  : null;
+              } catch {
+                return null;
+              }
+            })(),
+            worldTransform: (() => {
+              try {
+                const runtime = state.runtimeRef.current;
+                if (!runtime) return null;
+                const info = runtime.worldTransformInfo();
+                const bounds = runtime.getSceneBounds();
+                return {
+                  position: Object.fromEntries(
+                    Object.entries(info.position).map(([k, v]) => [k, Number(v.toFixed(4))]),
+                  ),
+                  rotation: Object.fromEntries(
+                    Object.entries(info.rotation).map(([k, v]) => [k, Number(v.toFixed(4))]),
+                  ),
+                  scale: Object.fromEntries(
+                    Object.entries(info.scale).map(([k, v]) => [k, Number(v.toFixed(4))]),
+                  ),
+                  isIdentity: info.isIdentity,
+                  boundsAfter: bounds
+                    ? {
+                        min: bounds.min.map((v) => Number(v.toFixed(3))),
+                        max: bounds.max.map((v) => Number(v.toFixed(3))),
+                      }
+                    : null,
+                };
               } catch {
                 return null;
               }

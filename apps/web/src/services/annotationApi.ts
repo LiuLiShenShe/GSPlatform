@@ -13,6 +13,12 @@ import { httpClient } from './http';
 export type AnnotationStyle = 'LEADER_TEXT' | 'NUMBER_POPUP' | 'HIDDEN';
 export type AnnotationContentType = 'TEXT' | 'IMAGE' | 'VIDEO' | 'AUDIO' | 'PANORAMA';
 
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
 export interface SceneAnnotation {
   id: string;
   title: string;
@@ -27,6 +33,10 @@ export interface SceneAnnotation {
   textColor: string;
   textSize: number;
   fov: number;
+  /** 标注自身相机（FIX-02 §12）—— 拾取锚点时保存的 Viewer pose；null = 未保存。 */
+  cameraPosition?: Vec3 | null;
+  cameraTarget?: Vec3 | null;
+  cameraFov?: number | null;
   orderIndex: number;
   enabled: boolean;
 }
@@ -85,6 +95,10 @@ export async function createAnnotation(
     textColor?: string;
     textSize?: number;
     fov?: number;
+    /** 标注自己的相机（§13：拾取时捕获的当前 Viewer pose）。 */
+    cameraPosition?: Vec3;
+    cameraTarget?: Vec3;
+    cameraFov?: number;
   },
   signal?: AbortSignal,
 ): Promise<SceneAnnotation> {
@@ -113,6 +127,9 @@ export async function updateAnnotation(
     | 'textColor'
     | 'textSize'
     | 'fov'
+    | 'cameraPosition'
+    | 'cameraTarget'
+    | 'cameraFov'
     | 'orderIndex'
     | 'enabled'
   >>,

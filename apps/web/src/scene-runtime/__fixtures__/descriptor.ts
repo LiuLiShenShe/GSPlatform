@@ -69,6 +69,10 @@ export const runtimeDescriptorFixture: SceneRuntimeDescriptorV1 = {
       textColor: '#FFFFFF',
       textSize: 14,
       fov: 60,
+      // FIX-02 §12：标注自身相机（拾取时保存的 Viewer pose）—— 与场景初始相机不同。
+      cameraPosition: { x: -3.0, y: 1.9, z: 2.0 },
+      cameraTarget: { x: -1.2, y: 0.4, z: 0.4 },
+      cameraFov: 45,
       orderIndex: 0,
       enabled: true,
     },

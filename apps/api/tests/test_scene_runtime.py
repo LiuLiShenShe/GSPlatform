@@ -369,6 +369,93 @@ class TestAnnotations:
         assert _get(public_scene.slug).json()["annotations"] == []
 
 
+# ─── FIX-02. per-annotation camera（作者拾取时保存的相机 pose）────────────
+class TestAnnotationCamera:
+    """FIX-02 §12-§15 — 每条标注有自己的相机；runtime 描述符逐条透出。"""
+
+    @staticmethod
+    def _create(slug: str, **camera) -> dict:
+        payload = {"title": "标注", "anchorX": 1.0, "anchorY": 2.0, "anchorZ": 3.0}
+        if "cameraPosition" in camera:
+            payload["cameraPosition"] = camera["cameraPosition"]
+        if "cameraTarget" in camera:
+            payload["cameraTarget"] = camera["cameraTarget"]
+        if "cameraFov" in camera:
+            payload["cameraFov"] = camera["cameraFov"]
+        resp = client.post(f"/api/v1/scenes/{slug}/annotations", json=payload)
+        assert resp.status_code == 201, resp.text
+        return resp.json()
+
+    def test_create_persists_camera_pose(self, public_scene):
+        ann = self._create(
+            public_scene.slug,
+            cameraPosition={"x": 1.5, "y": 2.5, "z": 3.5},
+            cameraTarget={"x": 0.0, "y": 0.5, "z": -1.0},
+            cameraFov=42.0,
+        )
+        assert ann["cameraPosition"] == {"x": 1.5, "y": 2.5, "z": 3.5}
+        assert ann["cameraTarget"] == {"x": 0.0, "y": 0.5, "z": -1.0}
+        assert ann["cameraFov"] == 42.0
+        # list 端点同样回显（作者面板二次读取不失真）。
+        listed = client.get(f"/api/v1/scenes/{public_scene.slug}/annotations").json()
+        found = next(a for a in listed if a["id"] == ann["id"])
+        assert found["cameraPosition"] == {"x": 1.5, "y": 2.5, "z": 3.5}
+        assert found["cameraFov"] == 42.0
+
+    def test_create_without_camera_emits_null(self, public_scene):
+        ann = self._create(public_scene.slug)
+        assert ann["cameraPosition"] is None
+        assert ann["cameraTarget"] is None
+        assert ann["cameraFov"] is None
+
+    def test_update_camera_pose(self, public_scene):
+        ann = self._create(public_scene.slug)
+        resp = client.patch(
+            f"/api/v1/scenes/{public_scene.slug}/annotations/{ann['id']}",
+            json={
+                "cameraPosition": {"x": -2.0, "y": 1.0, "z": 0.5},
+                "cameraTarget": {"x": 0.0, "y": 0.0, "z": 0.0},
+                "cameraFov": 38.0,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["cameraPosition"] == {"x": -2.0, "y": 1.0, "z": 0.5}
+        assert body["cameraFov"] == 38.0
+
+    def test_runtime_descriptor_emits_three_distinct_cameras(self, public_scene):
+        """§15 —— 3 条标注位于不同位置、相机明显不同 → runtime 逐条透出。"""
+        poses = [
+            ({"x": 1.0, "y": 1.0, "z": 1.0}, {"x": 0.0, "y": 1.0, "z": 0.0}, 40.0),
+            ({"x": 2.0, "y": 2.0, "z": 2.0}, {"x": 0.0, "y": 1.0, "z": -1.0}, 50.0),
+            ({"x": 3.0, "y": 0.0, "z": 3.0}, {"x": 0.0, "y": 1.0, "z": 1.0}, 60.0),
+        ]
+        for i, (pos, target, fov) in enumerate(poses):
+            self._create(
+                public_scene.slug,
+                cameraPosition=pos,
+                cameraTarget=target,
+                cameraFov=fov,
+            )
+            assert i < 3  # 三条全部创建
+        annotations = _get(public_scene.slug).json()["annotations"]
+        assert len(annotations) == 3
+        # 逐条 camera 独立：3 组互不相同（无共享 settings.cameras[0] 的情况）。
+        positions = {tuple(a["cameraPosition"].values()) for a in annotations}
+        targets = {tuple(a["cameraTarget"].values()) for a in annotations}
+        fovs = {a["cameraFov"] for a in annotations}
+        assert len(positions) == 3
+        assert len(targets) == 3
+        assert len(fovs) == 3
+
+    def test_runtime_descriptor_marks_unauthored_camera_null(self, public_scene):
+        self._create(public_scene.slug)
+        ann = _get(public_scene.slug).json()["annotations"][0]
+        assert ann["cameraPosition"] is None
+        assert ann["cameraTarget"] is None
+        assert ann["cameraFov"] is None
+
+
 # ─── SSV-06. annotation media upload / serve ────────────────────────────────
 class TestAnnotationMedia:
     """SSV-06 — per-annotation media upload, replace, MIME gate, serve."""

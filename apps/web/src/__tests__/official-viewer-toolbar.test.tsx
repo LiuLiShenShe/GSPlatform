@@ -35,6 +35,8 @@ function fakeState(overrides: Partial<OfficialDesktopViewerState> = {}): Officia
     frameScene: vi.fn(),
     resetCamera: vi.fn(),
     setCameraPose: vi.fn(),
+    selectViewpoint: vi.fn(),
+    viewpoints: [],
     requestFullscreen: vi.fn(),
     exitFullscreen: vi.fn(),
     setCameraMode: vi.fn(),

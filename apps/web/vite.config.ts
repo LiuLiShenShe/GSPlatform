@@ -269,6 +269,18 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false,
+    // DEVELOP ONLY —— 把 `/api/*` 代理到本地 FastAPI (:8001)，与生产（Nginx
+    // 同源 /api）路由一致。FIX-01 把场景资产迁到授权的
+    // `/api/v1/scenes/<slug>/assets/...` 之后，官方 viewer 按相对 URL 请求它们；
+    // 没有该代理时 Vite 的 SPA fallback 会对每个 /api 路径回 200 HTML，DB 场景
+    // 在 dev 浏览器里永远加载不出来（e2e §19 依赖此代理）。
+    // 应用自身走 http.ts 的绝对 :8001 + CORS，不经此代理，互不影响。
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:8001',
+        changeOrigin: false,
+      },
+    },
     // DEV ONLY tunnel gate (see comment above).
     allowedHosts: devTunnelEnabled ? ['.trycloudflare.com'] : undefined,
   },

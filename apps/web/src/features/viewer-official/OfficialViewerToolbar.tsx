@@ -7,12 +7,15 @@
  *   Annotations 可见性       → 写入官方 state.showAnnotations
  *   Frame Scene              → runtime.frameScene()
  *   Fullscreen               → runtime.requestFullscreen()
+ *   Saved Views（FIX-02 §10）→ 列出已保存视角；点击 → state.selectViewpoint(id)
+ *                              （官方 selectAnnotation 过渡，不经 app 实体树）
  *
  * 用 antd 与 legacy ViewerToolbar 保持视觉一致。data-testid 供 smoke 断言。
  */
-import { Button, Segmented, Space, Tooltip } from 'antd';
+import { Button, Dropdown, Segmented, Space, Tooltip } from 'antd';
 import {
   AimOutlined,
+  CameraOutlined,
   CompressOutlined,
   EyeOutlined,
   FullscreenOutlined,
@@ -38,6 +41,16 @@ export function OfficialViewerToolbar({ state }: OfficialViewerToolbarProps) {
   const walkEnabled =
     loaded && state.walkAllowed && !state.sceneScale.needsCalibration;
   const walking = cameraMode === 'walk';
+
+  // FIX-02 §10：Saved Views —— enabled 视角（按 orderIndex 排序）可点击导航。
+  const savedViews = state.viewpoints.filter((vp) => vp.enabled !== false);
+  const savedViewsItems = savedViews.map((vp) => ({
+    key: vp.id,
+    label: vp.name || '未命名视角',
+    onClick: () => {
+      state.selectViewpoint(vp.id);
+    },
+  }));
 
   return (
     <footer className="gs-viewer__bottom-toolbar" aria-label="Official Viewer 工具条">
@@ -84,6 +97,21 @@ export function OfficialViewerToolbar({ state }: OfficialViewerToolbarProps) {
             Reset
           </Button>
         </Tooltip>
+
+        {/* FIX-02 §10：Saved Views（视角真正被消费 —— 经 wrapper selectViewpoint） */}
+        <Dropdown
+          menu={{ items: savedViewsItems }}
+          disabled={!loaded || savedViews.length === 0}
+          trigger={['click']}
+        >
+          <Button
+            icon={<CameraOutlined aria-hidden />}
+            disabled={!loaded || savedViews.length === 0}
+            data-testid="ov-saved-views"
+          >
+            视角 ({savedViews.length})
+          </Button>
+        </Dropdown>
 
         <span data-testid="ov-camera-mode">
           <Segmented

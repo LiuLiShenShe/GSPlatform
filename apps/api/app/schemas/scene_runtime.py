@@ -123,6 +123,12 @@ class RuntimeAnnotation(BaseModel):
     textColor: str = Field(default="#FFFFFF", alias="textColor")
     textSize: int = Field(default=14, alias="textSize")
     fov: float = Field(default=60.0)
+    # Per-annotation camera pose (FIX-02 §12-§14).  Null = no authored camera;
+    # the front-end adapter falls back to the scene initial camera.  Never a
+    # shared default guess.
+    cameraPosition: RuntimeVec3 | None = Field(default=None, alias="cameraPosition")
+    cameraTarget: RuntimeVec3 | None = Field(default=None, alias="cameraTarget")
+    cameraFov: float | None = Field(default=None, alias="cameraFov")
     orderIndex: int = Field(default=0, alias="orderIndex")
     enabled: bool = Field(default=True)
 

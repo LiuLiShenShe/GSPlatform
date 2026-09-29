@@ -59,6 +59,17 @@ class SceneAnnotation(Base):
     text_size: Mapped[int] = mapped_column(Integer, nullable=False, default=14)
     fov: Mapped[float] = mapped_column(Float, nullable=False, default=60.0)
 
+    # Per-annotation camera pose (FIX-02 §12).  Captured from the viewer at
+    # authoring time; NULL means "no authored camera" and the runtime falls
+    # back to the scene initial camera.  Never a shared default guess.
+    camera_position_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    camera_position_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    camera_position_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    camera_target_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    camera_target_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    camera_target_z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    camera_fov: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Ordering & visibility
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
