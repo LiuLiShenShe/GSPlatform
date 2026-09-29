@@ -1,8 +1,21 @@
 /**
- * CollisionPanel — collision asset management and physics settings (Phase 12).
+ * CollisionPanel — collision asset management and real runtime capabilities (Phase 12 / FIX-03 §9/§10).
+ *
+ * FIX-03 §9/§10：官方 SuperSplat Walk 使用**固定物理参数**（gravity 9.8 m/s²、
+ * capsuleHeight 1.5m、eyeHeight 1.3m、moveGroundSpeed 7m/s），官方 public API
+ * 无 gravity/slopeLimitDegrees/stepOffset/playerHeight 可调接口 —— 这些参数在当前
+ * runtime **不生效**。因此本面板只保留真实能力：
+ *
+ *   - Collision 启用开关（collisionEnabled → descriptor.collision.enabled →
+ *     runtime 加载碰撞网格，真实生效）
+ *   - INDOOR / OUTDOOR 构建策略（Select）
+ *   - 构建碰撞 / 重建碰撞（异步任务）
+ *
+ * 重力/坡度限制/台阶高度/玩家高度 **不再以可调控件出现**（避免"看起来能配、
+ * 实际无效"的虚假能力）；DB 字段保留向后兼容但构建请求不再携带（后端忽略）。
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Select, InputNumber, Switch, Alert, Space, Typography, Spin } from 'antd';
+import { Card, Button, Select, Switch, Alert, Space, Typography, Spin } from 'antd';
 import { ReloadOutlined, BuildOutlined } from '@ant-design/icons';
 import {
   getCollision,
@@ -10,7 +23,6 @@ import {
   updateCollision,
   rebuildCollision,
   type CollisionAsset,
-  type CollisionBuildRequest,
 } from '../../services/collisionApi';
 
 const { Text } = Typography;
@@ -20,16 +32,26 @@ interface CollisionPanelProps {
   isOwner: boolean;
 }
 
+/** FIX-03 §8/§9：官方 Walk 固定物理参数（只读展示，非可调能力）。 */
+const FIXED_PHYSICS_NOTICE =
+  '当前 runtime（@playcanvas/supersplat-viewer Walk）使用固定物理参数：重力 9.8 m/s²、' +
+  '角色胶囊高 1.5 m、眼高 1.3 m、步行速度 7 m/s。重力/坡度限制/台阶高度/玩家高度' +
+  '在官方 public API 中不可配置，以下参数对运行态无效：已停用（仅保留数据库兼容字段）';
+
+const UNSUPPORTED_PARAMS = [
+  { key: 'gravity', label: '重力 (m/s²)' },
+  { key: 'slopeLimitDegrees', label: '坡度限制 (度)' },
+  { key: 'stepOffset', label: '台阶高度 (米)' },
+  { key: 'playerHeight', label: '玩家高度 (米)' },
+] as const;
+
 export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner }) => {
   const [collision, setCollision] = useState<CollisionAsset | null>(null);
   const [loading, setLoading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [mode, setMode] = useState<'INDOOR' | 'OUTDOOR'>('OUTDOOR');
-  const [gravity, setGravity] = useState(9.81);
-  const [slopeLimit, setSlopeLimit] = useState(45);
-  const [stepOffset, setStepOffset] = useState(0.3);
-  const [playerHeight, setPlayerHeight] = useState(1.8);
   const [collisionEnabled, setCollisionEnabled] = useState(false);
+  const [savingEnabled, setSavingEnabled] = useState(false);
 
   const fetchCollision = useCallback(async () => {
     try {
@@ -37,12 +59,8 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
       const data = await getCollision(sceneId);
       setCollision(data);
       setMode(data.mode);
-      setGravity(data.gravity);
-      setSlopeLimit(data.slopeLimitDegrees);
-      setStepOffset(data.stepOffset);
-      setPlayerHeight(data.playerHeight);
       setCollisionEnabled(data.collisionEnabled);
-    } catch (error) {
+    } catch {
       // 404 means no collision asset yet
       setCollision(null);
     } finally {
@@ -57,13 +75,8 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
   const handleBuild = async () => {
     try {
       setBuilding(true);
-      const request: CollisionBuildRequest = {
-        mode,
-        gravity,
-        slopeLimitDegrees: slopeLimit,
-        stepOffset,
-        playerHeight,
-      };
+      // FIX-03 §9：构建请求只带 mode（物理参数对官方 runtime 无效，不再发送）。
+      const request = { mode };
       await buildCollision(sceneId, request);
       // Poll for status
       setTimeout(fetchCollision, 2000);
@@ -86,18 +99,19 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
     }
   };
 
-  const handleUpdateParams = async () => {
+  // FIX-03 §10：启用开关是真实能力（collisionEnabled → runtime 加载碰撞网格），
+  // 切换即保存 —— 不再有"保存参数"按钮（物理参数不可调）。
+  const handleToggleEnabled = async (checked: boolean) => {
+    setCollisionEnabled(checked);
     try {
-      await updateCollision(sceneId, {
-        gravity,
-        slopeLimitDegrees: slopeLimit,
-        stepOffset,
-        playerHeight,
-        collisionEnabled,
-      });
+      setSavingEnabled(true);
+      await updateCollision(sceneId, { collisionEnabled: checked });
       fetchCollision();
     } catch (error) {
-      console.error('Update failed:', error);
+      console.error('Update collision enabled failed:', error);
+      fetchCollision();
+    } finally {
+      setSavingEnabled(false);
     }
   };
 
@@ -108,6 +122,27 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
   return (
     <Card title="碰撞设置" size="small">
       <Space direction="vertical" style={{ width: '100%' }}>
+        {/* FIX-03 §9：注明官方 Walk 固定物理，以下参数不可配置 —— 不再显示可调控件 */}
+        <Alert
+          type="info"
+          showIcon
+          message="物理参数由官方 runtime 固定"
+          description={
+            <div>
+              {FIXED_PHYSICS_NOTICE}
+              <ul style={{ margin: '4px 0 0 18px', paddingLeft: 0 }}>
+                {UNSUPPORTED_PARAMS.map((p) => (
+                  <li key={p.key}>
+                    <Text type="secondary" delete>{p.label}</Text>
+                    <Text type="secondary"> （不支持）</Text>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          }
+          data-testid="collision-unsupported-notice"
+        />
+
         {!collision ? (
           <>
             <Text type="secondary">尚未创建碰撞资产</Text>
@@ -149,69 +184,17 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
               </Space>
 
               <Space>
-                <Text>重力 (m/s²):</Text>
-                <InputNumber
-                  value={gravity}
-                  onChange={(v) => setGravity(v ?? 9.81)}
-                  min={0}
-                  max={20}
-                  step={0.1}
-                  disabled={building}
-                />
-              </Space>
-
-              <Space>
-                <Text>坡度限制 (度):</Text>
-                <InputNumber
-                  value={slopeLimit}
-                  onChange={(v) => setSlopeLimit(v ?? 45)}
-                  min={0}
-                  max={90}
-                  step={5}
-                  disabled={building}
-                />
-              </Space>
-
-              <Space>
-                <Text>台阶高度 (米):</Text>
-                <InputNumber
-                  value={stepOffset}
-                  onChange={(v) => setStepOffset(v ?? 0.3)}
-                  min={0}
-                  max={2}
-                  step={0.1}
-                  disabled={building}
-                />
-              </Space>
-
-              <Space>
-                <Text>玩家高度 (米):</Text>
-                <InputNumber
-                  value={playerHeight}
-                  onChange={(v) => setPlayerHeight(v ?? 1.8)}
-                  min={0.5}
-                  max={3}
-                  step={0.1}
-                  disabled={building}
-                />
-              </Space>
-
-              <Space>
                 <Text>启用碰撞:</Text>
                 <Switch
                   checked={collisionEnabled}
-                  onChange={setCollisionEnabled}
-                  disabled={building}
+                  onChange={handleToggleEnabled}
+                  loading={savingEnabled}
+                  disabled={building || !isOwner}
+                  data-testid="collision-enabled-switch"
                 />
               </Space>
 
               <Space>
-                <Button
-                  onClick={handleUpdateParams}
-                  disabled={building || !isOwner}
-                >
-                  保存参数
-                </Button>
                 <Button
                   icon={<ReloadOutlined />}
                   onClick={handleRebuild}

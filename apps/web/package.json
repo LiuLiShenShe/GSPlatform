@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.3.4",
+    "@photo-sphere-viewer/core": "5.15.1",
     "@playcanvas/supersplat-viewer": "1.35.0",
     "antd": "^6.6.3",
     "axios": "^1.20.0",
@@ -20,6 +21,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.3",
+    "three": "0.185.1",
     "zustand": "^5.0.15"
   },
   "devDependencies": {

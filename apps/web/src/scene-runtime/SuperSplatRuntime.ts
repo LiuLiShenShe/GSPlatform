@@ -31,6 +31,7 @@ import {
   SceneTransformAdapter,
   composeEntityEulerDeg,
 } from './SceneTransformAdapter';
+import { applyUiScopeStyles } from './superSplatUiCompatibility';
 import type { RuntimeViewpoint, RuntimeWorldTransform } from './types';
 
 /**
@@ -872,29 +873,13 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
   } as CreateViewerOptions;
 }
 
-/**
- * 官方 UI 作用域（SSV-06）：
- *
- * 官方 annotation hotspots / tooltip（Annotations 类）只在官方 UI 层
- * （initUI）内构建，因此开启 ui:true；同时给容器打上作用域 class 并注入一次性
- * CSS，隐藏官方冗余 chrome（.sse-ui：控件栏 / 海报 / 加载条 / annotation 导航 /
- * 设置面板 / 帮助），只保留 .sse-sceneLayer（标注热点 + tooltip）与 canvas。
- * 这样宿主自绘控件，而官方标注层独立工作，且不 fork viewer。
- */
-const UI_SCOPE_CLASS = 'gs-supersplat-host';
-let uiScopeStyle: HTMLStyleElement | null = null;
-
-function applyUiScopeStyles(container: HTMLElement): void {
-  container.classList.add(UI_SCOPE_CLASS);
-  if (uiScopeStyle) return;
-  uiScopeStyle = document.createElement('style');
-  uiScopeStyle.id = 'gs-supersplat-ui-scope';
-  uiScopeStyle.textContent = [
-    `.${UI_SCOPE_CLASS} .sse-ui { display: none !important; }`,
-    `.${UI_SCOPE_CLASS} .sse-sceneLayer { display: block !important; }`,
-  ].join('\n');
-  document.head.appendChild(uiScopeStyle);
-}
+// ------------------------------------------------------------------ #
+// 官方 UI 内部 class 兼容（FIX-03 §11/§12）—— 全部集中在
+// scene-runtime/superSplatUiCompatibility.ts（禁止散落）：
+//   Pinned to @playcanvas/supersplat-viewer@1.35.0（内部 CSS 依赖）
+// 只保留官方 annotations 层（.sse-sceneLayer），隐藏官方冗余 chrome（.sse-ui）
+// —— 宿主自绘控件，不重复渲染，且不 fork viewer。
+// ------------------------------------------------------------------ #
 
 // ------------------------------------------------------------------ #
 // 诊断辅助（供 runtime 页面读取真实引擎状态）

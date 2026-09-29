@@ -1,15 +1,30 @@
 /**
- * SSV-06 — AnnotationMediaOverlay 组件测试。
+ * SSV-06 + FIX-03 — AnnotationMediaOverlay 组件测试。
  *
  * 覆盖：IMAGE/VIDEO/AUDIO/PANORAMA 渲染、TEXT 不渲染、关闭回调、
- * 缺失媒体提示、切换标注自动更新（key 重挂）。
+ * 缺失媒体提示、切换标注自动更新（key 重挂）、
+ * FIX-03 §4/§7：PANORAMA 走真实 PanoramaViewer、AUDIO/VIDEO 播放态 → onPlaybackChange。
  */
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
 import type { GsplatformAnnotationRef } from '../scene-runtime/SuperSplatRuntime';
 import type { SceneRuntimeDescriptorV1 } from '../scene-runtime/types';
+
+// FIX-03 §4：PANORAMA 分支挂载真实 PanoramaViewer —— mock PSV Viewer 避免 jsdom
+// 下真实 WebGL 初始化（该 mock 同时被 panorama-viewer.test.tsx 复用语义）。
+vi.mock('@photo-sphere-viewer/core', () => ({
+  Viewer: class {
+    listeners: Record<string, Array<(e?: unknown) => void>> = {};
+    addEventListener(type: string, cb: (e?: unknown) => void) {
+      (this.listeners[type] ??= []).push(cb);
+    }
+    destroy() {
+      this.listeners = {};
+    }
+  },
+}));
 
 function makeDescriptor(annotations: SceneRuntimeDescriptorV1['annotations']): SceneRuntimeDescriptorV1 {
   return {
@@ -101,7 +116,7 @@ describe('AnnotationMediaOverlay', () => {
     expect(screen.getByTestId('annotation-media-audio')).not.toBeNull();
   });
 
-  it('PANORAMA 标注 → 走图片渲染（Overlay 展示全景资产）', () => {
+  it('PANORAMA 标注 → 渲染真实 360° PanoramaViewer（FIX-03 §2/§4，非 <img>）', () => {
     render(
       <AnnotationMediaOverlay
         annotation={{ index: 0, annotationId: 'ann-pano', contentType: 'PANORAMA' }}
@@ -109,8 +124,43 @@ describe('AnnotationMediaOverlay', () => {
         onClose={() => undefined}
       />,
     );
-    expect(screen.getByTestId('annotation-media-image')).not.toBeNull();
+    expect(screen.getByTestId('annotation-media-panorama')).not.toBeNull();
+    expect(screen.queryByTestId('annotation-media-image')).toBeNull();
     expect(screen.getByText('360° 全景')).toBeInTheDocument();
+  });
+
+  it('FIX-03 §7：AUDIO 播放 → onPlaybackChange(true)；暂停/结束 → (false)', () => {
+    const onPlaybackChange = vi.fn();
+    const { rerender } = render(
+      <AnnotationMediaOverlay
+        annotation={{ index: 0, annotationId: 'ann-audio', contentType: 'AUDIO' }}
+        descriptor={makeDescriptor([mediaAnnotation('ann-audio', 'AUDIO')])}
+        onClose={() => undefined}
+        onPlaybackChange={onPlaybackChange}
+      />,
+    );
+    const audio = screen.getByTestId('annotation-media-audio') as HTMLAudioElement;
+    fireEvent.play(audio);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(true);
+    fireEvent.pause(audio);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(false);
+    fireEvent.play(audio);
+    fireEvent.ended(audio);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(false);
+
+    rerender(
+      <AnnotationMediaOverlay
+        annotation={{ index: 0, annotationId: 'ann-video', contentType: 'VIDEO' }}
+        descriptor={makeDescriptor([mediaAnnotation('ann-video', 'VIDEO')])}
+        onClose={() => undefined}
+        onPlaybackChange={onPlaybackChange}
+      />,
+    );
+    const video = screen.getByTestId('annotation-media-video') as HTMLVideoElement;
+    fireEvent.play(video);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(true);
+    fireEvent.pause(video);
+    expect(onPlaybackChange).toHaveBeenLastCalledWith(false);
   });
 
   it('TEXT 标注 → 不渲染 Overlay（官方 annotation panel 直接显示）', () => {

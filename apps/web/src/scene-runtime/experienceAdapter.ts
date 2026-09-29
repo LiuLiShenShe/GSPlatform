@@ -34,7 +34,6 @@ import {
   type PostEffectSettings,
 } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from './types';
-import { resolveRuntimeAssetUrl } from './assetUrl';
 import { SceneTransformAdapter } from './SceneTransformAdapter';
 
 const TONEMAPPING_VALUES = [
@@ -183,14 +182,10 @@ export function buildExperienceSettings(
     ];
   }
 
-  // 7) background audio —— 官方 soundUrl 能力（唯一播放来源）；仅 enabled 且有 url 才写。
-  //    解析为绝对 URL（跨源/开发时相对路径会 404）。官方自带 autoplay 解锁策略，
-  //    不绕过浏览器权限。
-  const audio = descriptor.backgroundAudio;
-  const soundUrl = resolveRuntimeAssetUrl(audio?.url);
-  if (audio && audio.enabled && soundUrl) {
-    settings.soundUrl = soundUrl;
-  }
+  // 7) background audio —— 由 GSPlatform 自建 BackgroundAudioController 管理（FIX-03 §5）：
+  //    官方 ExperienceSettings 仅 soundUrl 且无 volume/loop/enabled API，**不再写入**
+  //    settings.soundUrl。页面层从 descriptor.backgroundAudio 配置独立控制器。
+  //    注意：官方 settings.soundUrl 不可用后，ExperienceSettings.soundUrl 保持 undefined。
 
   // 8) annotations —— SSV-06：官方 annotations[]（position/title/text/camera/extras）。
   //    每个 annotation 都带 extras 固定协议 { gsplatform: { annotationId, contentType } }，

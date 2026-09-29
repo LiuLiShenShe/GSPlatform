@@ -8,6 +8,7 @@ import { OfficialViewerCanvas } from '../features/viewer-official/OfficialViewer
 import { OfficialViewerToolbar } from '../features/viewer-official/OfficialViewerToolbar';
 import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
 import { useSuperSplatDesktop } from '../features/viewer-official/useSuperSplatDesktop';
+import { useBackgroundAudio } from '../hooks/useBackgroundAudio';
 import { SCENE_SCALE_WARNING } from '../scene-runtime/sceneScale';
 
 /**
@@ -31,6 +32,10 @@ export default function SceneViewerPage() {
 function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
   const state = useSuperSplatDesktop(sceneId);
   const [searchParams] = useSearchParams();
+
+  // FIX-03 §5/§6/§7：背景音频由 GSPlatform 自建控制器管理（官方 soundUrl 无
+  // volume/loop/enabled API，已停用）。descriptor 就绪后自动配置；场景切换/卸载释放。
+  const backgroundAudio = useBackgroundAudio(state.descriptor?.backgroundAudio ?? null, sceneId);
 
   // 场景信息面板（作者/收藏/分享/问 AI/详情）：与 legacy 一致保留，
   // 走既有 findScene，不属于 runtime 层职责。
@@ -80,7 +85,15 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
         <AnnotationMediaOverlay
           annotation={overlayOpen ? selectedAnnotation : null}
           descriptor={state.descriptor}
-          onClose={() => setOverlayOpen(false)}
+          onClose={() => {
+            // FIX-03 §7：关闭 Overlay 时恢复背景音频（卸载 audio/video 元素不保证
+            // 触发 pause 事件 —— 关闭必须显式 resume）。
+            setOverlayOpen(false);
+            backgroundAudio.resume();
+          }}
+          onPlaybackChange={(isPlaying) =>
+            isPlaying ? backgroundAudio.pause() : backgroundAudio.resume()
+          }
         />
         <ViewerRightPanel scene={scene} />
         {/* 视觉隐藏的真实运行态读数（e2e 取证：renderer / 已渲染 Gaussian 数 / 首帧） */}

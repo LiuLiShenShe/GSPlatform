@@ -15,6 +15,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useSuperSplatXR } from '../features/viewer-official/useSuperSplatXR';
 import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
+import { useBackgroundAudio } from '../hooks/useBackgroundAudio';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 
 export default function XRViewerPage() {
@@ -23,6 +24,9 @@ export default function XRViewerPage() {
   useDocumentTitle(effectiveSceneId ? `XR 场景 ${effectiveSceneId}` : 'XR 场景');
 
   const state = useSuperSplatXR(effectiveSceneId);
+
+  // FIX-03 §5/§6/§7：背景音频（XR 页同样由 GSPlatform 控制器管理，官方 soundUrl 停用）。
+  const backgroundAudio = useBackgroundAudio(state.descriptor?.backgroundAudio ?? null, effectiveSceneId);
 
   // SSV-06：媒体 Overlay（关闭不清除官方 selection；切换标注自动更新）。
   const [overlayOpen, setOverlayOpen] = useState(false);
@@ -145,7 +149,14 @@ export default function XRViewerPage() {
         <AnnotationMediaOverlay
           annotation={overlayOpen ? selectedAnnotation : null}
           descriptor={state.descriptor}
-          onClose={() => setOverlayOpen(false)}
+          onClose={() => {
+            // FIX-03 §7：关闭 Overlay 时恢复背景音频（卸载不保证触发 pause 事件）。
+            setOverlayOpen(false);
+            backgroundAudio.resume();
+          }}
+          onPlaybackChange={(isPlaying) =>
+            isPlaying ? backgroundAudio.pause() : backgroundAudio.resume()
+          }
         />
       </div>
 

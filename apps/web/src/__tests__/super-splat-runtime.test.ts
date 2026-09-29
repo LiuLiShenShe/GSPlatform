@@ -269,16 +269,16 @@ describe('Experience Adapter V1', () => {
     expect(settings.background.skyboxUrl).toBeUndefined();
   });
 
-  // ─── SSV-06 —— annotations / soundUrl 映射 ──────────────────────────────
+  // ─── SSV-06 —— annotations；FIX-03 §5 —— backgroundAudio 不再映射 soundUrl ──
 
-  it('backgroundAudio enabled → 官方 soundUrl（解析为绝对 URL）', () => {
+  it('FIX-03 §5：backgroundAudio 由 GSPlatform 控制器管理 → 一律不写官方 soundUrl', () => {
+    // 官方 ExperienceSettings 仅 soundUrl 且无 volume/loop/enabled API —— 已停用。
+    // 背景音频由页面层 BackgroundAudioController 从 descriptor.backgroundAudio 配置。
     const settings = buildExperienceSettings(runtimeDescriptorFixture);
-    expect(settings.soundUrl).toBe(
-      'http://localhost:8001/api/v1/scenes/r-8c4e2264e86a/presentation/background-audio',
-    );
+    expect(settings.soundUrl).toBeUndefined();
   });
 
-  it('backgroundAudio 未启用/无 url → 不写 soundUrl', () => {
+  it('backgroundAudio 未启用/无 url → 仍不写 soundUrl（任何情况都停用官方字段）', () => {
     const disabled: SceneRuntimeDescriptorV1 = {
       ...runtimeDescriptorFixture,
       backgroundAudio: { url: '/x.mp3', volume: 1, loop: true, enabled: false },
@@ -290,6 +290,12 @@ describe('Experience Adapter V1', () => {
       backgroundAudio: { url: null, volume: 1, loop: true, enabled: true },
     };
     expect(buildExperienceSettings(noUrl).soundUrl).toBeUndefined();
+
+    const enabledWithUrl: SceneRuntimeDescriptorV1 = {
+      ...runtimeDescriptorFixture,
+      backgroundAudio: { url: '/y.mp3', volume: 0.5, loop: true, enabled: true },
+    };
+    expect(buildExperienceSettings(enabledWithUrl).soundUrl).toBeUndefined();
   });
 
   it('annotations → 官方 annotations[]（position/title/text/camera/extras 协议）', () => {

@@ -123,6 +123,18 @@ test.describe('SSV-06 annotation media (real scene r-8c4e2264e86a)', () => {
       );
       console.log(`switch to ${type}: OK`);
     }
+    // FIX-03 §2/§4：最后停在 PANORAMA —— 验证真实 360° 渲染器（three.js canvas）
+    // 已挂载且未进入错误态（不是退化成 <img>）。
+    await page.waitForFunction(
+      () => {
+        const stage = document.querySelector('.gs-panorama__stage');
+        const hasCanvas = stage !== null && stage.querySelector('canvas') !== null;
+        const hasError = document.querySelector('[data-testid="panorama-error"]') !== null;
+        return hasCanvas && !hasError;
+      },
+      { timeout: 30000 },
+    );
+    console.log('PANORAMA real 360° canvas mounted (no error state): OK');
     await page.click('[data-testid="annotation-media-overlay-close"]');
   });
 });

@@ -14,6 +14,7 @@
  */
 import { useEffect, useMemo } from 'react';
 import { resolveRuntimeAssetUrl } from '../../scene-runtime/assetUrl';
+import { PanoramaViewer } from '../media/PanoramaViewer';
 import type { GsplatformAnnotationRef } from '../../scene-runtime/SuperSplatRuntime';
 import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
@@ -33,6 +34,11 @@ export interface AnnotationMediaOverlayProps {
   descriptor: SceneRuntimeDescriptorV1 | null;
   /** 关闭 Overlay。不得在此调 clearAnnotation（关闭不删 selection）。 */
   onClose: () => void;
+  /**
+   * AUDIO / VIDEO 播放态变化回调（FIX-03 §7）—— 父组件据此 duck 背景音频
+   * （本层固定策略：媒体播放时暂停背景，结束/关闭/暂停时恢复）。
+   */
+  onPlaybackChange?: (isPlaying: boolean) => void;
 }
 
 /** 标注的媒体类型标签（UI 展示用）。 */
@@ -47,6 +53,7 @@ export function AnnotationMediaOverlay({
   annotation,
   descriptor,
   onClose,
+  onPlaybackChange,
 }: AnnotationMediaOverlayProps) {
   // 按 extras.gsplatform.annotationId 解析数据（官方 index 只用于事件定位）。
   const gsAnnotation = useMemo(() => {
@@ -112,6 +119,9 @@ export function AnnotationMediaOverlay({
                     muted
                     playsInline
                     data-testid="annotation-media-video"
+                    onPlay={() => onPlaybackChange?.(true)}
+                    onPause={() => onPlaybackChange?.(false)}
+                    onEnded={() => onPlaybackChange?.(false)}
                   />
                 )
                 : <MissingMedia />)
@@ -124,19 +134,31 @@ export function AnnotationMediaOverlay({
                       controls
                       autoPlay
                       data-testid="annotation-media-audio"
+                      onPlay={() => onPlaybackChange?.(true)}
+                      onPause={() => onPlaybackChange?.(false)}
+                      onEnded={() => onPlaybackChange?.(false)}
                     />
                   )
                   : <MissingMedia />)
-              : (mediaUrl
-                  ? (
-                    <img
-                      className="gs-annotation-media-overlay__media"
-                      src={mediaUrl}
-                      alt={gsAnnotation.title}
-                      data-testid="annotation-media-image"
-                    />
-                  )
-                  : <MissingMedia />)}
+              : type === 'PANORAMA'
+                ? (mediaUrl
+                    ? (
+                      <PanoramaViewer
+                        mediaUrl={mediaUrl}
+                        title={gsAnnotation.title}
+                      />
+                    )
+                    : <MissingMedia />)
+                : (mediaUrl
+                    ? (
+                      <img
+                        className="gs-annotation-media-overlay__media"
+                        src={mediaUrl}
+                        alt={gsAnnotation.title}
+                        data-testid="annotation-media-image"
+                      />
+                    )
+                    : <MissingMedia />)}
           {gsAnnotation.description && (
             <p className="gs-annotation-media-overlay__desc">{gsAnnotation.description}</p>
           )}
