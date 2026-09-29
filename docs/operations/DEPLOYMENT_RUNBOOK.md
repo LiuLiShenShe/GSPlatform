@@ -1,6 +1,11 @@
 # GSPlatform Deployment Runbook
 
 > Phase 09 artifact — production deployment of GSPlatform on Ubuntu + Nginx + HTTPS.
+> FIX-01 (2026-09-29): scene bytes are no longer delivered from a public static
+> alias.  The browser fetches `/api/v1/scenes/<slug>/assets/<rel>`; FastAPI
+> authorizes via the unified SceneAccessPolicy and Nginx serves the file from
+> the internal `/_scene-origin/` location (X-Accel-Redirect).  There is no
+> unauthenticated scene path.
 
 ## 1. Topology
 
@@ -8,8 +13,10 @@
 Internet ── 443/80 ──► Nginx (Ubuntu host)
                          ├── /                  → /opt/gsplatform/current/apps/web/dist (SPA)
                          ├── /api/              → FastAPI 127.0.0.1:8001
-                         ├── /health/{live,ready}
-                         └── /local-scenes/     → /srv/gsplatform-data/scene-origin (Streamed SOG, Range)
+                         │       └── /api/v1/scenes/<slug>/assets/<rel>
+                         │            → policy check → X-Accel-Redirect ↓
+                         ├── /_scene-origin/    → /srv/gsplatform-data/scene-origin (internal; Range)
+                         └── /health/{live,ready}
 FastAPI ──► PostgreSQL (127.0.0.1) · Redis (127.0.0.1) · Celery workers (CPU/GPU)
 ```
 
@@ -91,10 +98,14 @@ browser calls are same-origin through Nginx (no CORS traffic in production).
 curl -fsS https://DOMAIN/health/live
 curl -fsS https://DOMAIN/health/ready
 curl -I  https://DOMAIN/
+# FIX-01: authorized asset path (public scene).  `/_scene-origin/...` is
+# internal — a direct curl there must 404.
 curl -i  -H "Range: bytes=0-1023" \
-     https://DOMAIN/local-scenes/<published-slug>/current/lod-meta.json   # expect 206
+     https://DOMAIN/api/v1/scenes/<published-slug>/assets/current/lod-meta.json   # expect 206
 curl -i  -H "Range: bytes=999999999999-" \
-     https://DOMAIN/local-scenes/<published-slug>/current/lod-meta.json   # expect 416
+     https://DOMAIN/api/v1/scenes/<published-slug>/assets/current/lod-meta.json   # expect 416
+curl -o /dev/null -s -w '%{http_code}\n' \
+     https://DOMAIN/_scene-origin/<published-slug>/current/lod-meta.json          # expect 404 (internal)
 ./deploy/scripts/smoke_test.sh --environment production --base-url https://DOMAIN
 ```
 

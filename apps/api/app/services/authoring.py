@@ -184,24 +184,14 @@ class AuthoringService:
     def _get_owned_scene_for_read(
         self, slug_or_id: str, identity_user_id: uuid.UUID | None
     ) -> Scene:
-        from app.repositories.scenes import SceneRepository
+        """Readable by owner (any non-deleted) or public-published, via the
+        unified scene access policy (FIX-01).  Deleted → 404, PUBLIC+READY is
+        NOT readable anonymously — same rule as the runtime descriptor."""
+        from app.services.scene_access import SceneAccessPolicy
 
-        repo = SceneRepository(self._session)
-        scene = repo.get_by_slug(slug_or_id)
-        if scene is None:
-            try:
-                scene_uuid = uuid.UUID(slug_or_id)
-                scene = repo.get_by_id(scene_uuid)
-            except ValueError:
-                scene = None
-        if scene is None:
-            raise NotFoundError(f"场景 {slug_or_id} 不存在")
-        if identity_user_id is not None and scene.owner_id == identity_user_id:
-            return scene
-        # published + public scenes are readable by anyone
-        if scene.status in {"PUBLISHED", "READY"} and scene.visibility == "PUBLIC":
-            return scene
-        raise ForbiddenError("该场景不可见或未发布")
+        return SceneAccessPolicy(self._session).resolve_readable_for_user(
+            slug_or_id, identity_user_id
+        )
 
     def update_presentation(
         self,

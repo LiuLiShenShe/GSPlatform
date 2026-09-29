@@ -24,30 +24,64 @@ const MIME_TYPES: Record<string, string> = {
   '.spz': 'application/octet-stream',
 }
 
-/**
- * Serves streamed-SOG scene assets (`/local-scenes/*`) straight from the
- * git-ignored `scenes/` tree on disk, with REAL HTTP Range semantics.
- *
- * Why not rely on Vite's static `public/` serving?
- *   1. The scene's `current` symlink points into a versioned subdirectory;
- *      `cpSync` copies it as an absolute link that escapes Vite's public
- *      root, so the SPA fallback answers `200 text/html` instead of the file.
- *   2. Phase 04 requires the origin to truthfully support Range: 206 with
- *      correct Content-Range, 416 for invalid ranges, HEAD with length, and
- *      byte streams that never return the whole file for a partial request.
- *
- * This middleware answers `/local-scenes/<sceneId>/<rel>` directly from
- * `scenes/<sceneId>/<rel>`, following the `current` symlink, and implements
- * single-range requests (the only form splat-transform's UrlReadFileSystem
- * issues). Multi-range is answered with 416 (unsupported) rather than a
- * silently-wrong body — the upstream client never sends it.
- */
+// DEV ONLY — the scene asset root for local development.
+//
+// This middleware answers `/local-scenes/<sceneId>/<rel>` straight from the
+// git-ignored `scenes/` tree.  It is a *development* convenience: production
+// serves scene bytes through the API's authorized `/api/v1/scenes/.../assets`
+// endpoint (FastAPI policy + Nginx X-Accel-Redirect); Nginx has NO public
+// `/local-scenes/` alias.  The repo-level dev scenes that have no DB row
+// (local-garden / ssv08-*) keep working here, and this middleware is hardened
+// exactly like the API path so a dev server can never serve files it should
+// not (FIX-01 P0-2).
+//
+// Security model (FIX-01 §8-§10):
+//   1. The sceneId must match the same slug grammar the API accepts —
+//      `^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`.  Anything else → 403.
+//   2. URL-encoded components are decoded exactly once; a value that still
+//      contains `%` after that (double-encoding) or any `%`/`\`/NUL is
+//      rejected with 400 — no second decode is ever performed.
+//   3. Path containment is verified with `fs.realpathSync` on the final
+//      target against the real scene root (and the real published-storage
+//      root, because `versions/<ver>` legitimately symlinks into it), using a
+//      component-aware check — never a bare `startsWith`.
+//   4. Range semantics: 206 + Content-Range, 416 for invalid ranges, HEAD
+//      with length, and byte streams that never return the whole file for a
+//      partial request.
 const serveStreamedScenes = (): Plugin => {
   const scenesRoot = path.resolve(import.meta.dirname, '../../scenes')
+  // Mirrors the API's settings.storage_root / GS_STORAGE_ROOT (dev default),
+  // where published versions live; `scenes/<slug>/versions/<ver>` symlinks
+  // point there.  Only `<storage>/published` is trusted.
+  const publishedRoot = path.resolve(
+    process.env.GS_STORAGE_ROOT ?? '/home/test/gsplatform-data',
+    'published',
+  )
 
+  const SCENE_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
+  /** Decode a percent-encoded component exactly once; null on any error. */
+  const decodeOnce = (raw: string): string | null => {
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      return null
+    }
+  }
+
+  /** Component-aware containment: *child* inside *parent* (or equal). */
+  const isWithin = (child: string, parent: string): boolean => {
+    const rel = path.relative(parent, child)
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))
+  }
+
+  const reject = (res: ServerResponse, code: number) => {
+    res.statusCode = code
+    res.end('forbidden')
+  }
+
+  // Accepted range → { start, end }, null → 416 (invalid / multi-range).
   const parseRange = (header: string, size: number) => {
-    // Only a single `bytes=start-end` / `bytes=start-` / `bytes=-suffix`
-    // range is supported. Anything else returns null (→ 416).
     const m = /^bytes=(\d*)-(\d*)$/.exec(header)
     if (!m) return null
     const [, startStr, endStr] = m
@@ -55,7 +89,6 @@ const serveStreamedScenes = (): Plugin => {
     let start: number
     let end: number
     if (startStr === '') {
-      // suffix range: last N bytes
       const suffix = Number(endStr)
       if (!Number.isFinite(suffix) || suffix <= 0) return null
       start = Math.max(0, size - suffix)
@@ -78,10 +111,7 @@ const serveStreamedScenes = (): Plugin => {
     res.setHeader('Accept-Ranges', 'bytes')
     res.setHeader('Content-Type', mime)
 
-    // CORS (checklist F4): dev-only, restricted to local frontend origins.
-    // Same-origin page loads need no CORS at all; cross-origin fetches from
-    // any non-localhost origin get no ACAO header and are refused by the
-    // browser. This mirrors the prod nginx `scenes-streaming.conf` allowlist.
+    // CORS (dev-only): restricted to local frontend origins; mirrors prod nginx.
     const origin = req.headers.origin as string | undefined
     if (origin && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin)
@@ -90,10 +120,6 @@ const serveStreamedScenes = (): Plugin => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Range, Accept, Origin, Content-Type')
 
-    // Cache policy (checklist F3): the business manifest lives at a stable
-    // path (`current/manifest.json`) so it gets a short cache; everything
-    // under a content-hashed `versions/<sha>/` dir is immutable by
-    // construction (a new build lands in a new dir, `current` is repointed).
     const isManifest = path.basename(rel) === 'manifest.json'
     res.setHeader(
       'Cache-Control',
@@ -106,7 +132,6 @@ const serveStreamedScenes = (): Plugin => {
       return
     }
 
-    // Without a Range header: full 200 (still Accept-Ranges advertised).
     if (!rangeHeader) {
       res.statusCode = 200
       res.setHeader('Content-Length', stat.size)
@@ -120,7 +145,6 @@ const serveStreamedScenes = (): Plugin => {
 
     const range = parseRange(rangeHeader, stat.size)
     if (!range) {
-      // 416: Range Not Satisfiable, with the actual file size.
       res.statusCode = 416
       res.setHeader('Content-Range', `bytes */${stat.size}`)
       res.end()
@@ -141,43 +165,99 @@ const serveStreamedScenes = (): Plugin => {
     name: 'gs-serve-streamed-scenes',
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
-        // Mount at root and manually match /local-scenes prefix to avoid
-        // potential issues with Connect path-prefix matching in Vite 8.
-        const rawUrl = (req.url ?? '')
+        const rawUrl = req.url ?? ''
         if (!rawUrl.startsWith('/local-scenes/')) { next(); return }
-        // Strip the /local-scenes prefix; Connect does NOT strip for root mounts.
         const url = rawUrl.replace(/^\/local-scenes/, '').split('?')[0]
-        // Resolve sceneId + rel, refusing any path escaping the scenes root.
         const segments = url.split('/').filter(Boolean)
-        if (segments.length === 0) {
-          next()
+        if (segments.length === 0) { next(); return }
+
+        // 1) sceneId: slug grammar + single decode.  Anything else is a
+        //    traversal/encoding attack → 403 (mirrors the API policy).
+        const sceneId = decodeOnce(segments[0])
+        if (sceneId === null || !SCENE_SLUG_RE.test(sceneId)) {
+          reject(res, 403)
           return
         }
-        const sceneId = decodeURIComponent(segments[0])
-        const rel = segments.slice(1).map(decodeURIComponent).join('/')
-        const resolved = path.resolve(scenesRoot, sceneId, rel)
-        const safe = resolved.startsWith(path.resolve(scenesRoot, sceneId) + path.sep)
-        if (!safe) {
-          res.statusCode = 403
-          res.end('forbidden')
+
+        // 2) rel segments: single decode; reject remaining `%` (double
+        //    encoding), separators, `.`/`..`, decoded slashes and NUL → 400.
+        const relSegments: string[] = []
+        for (const seg of segments.slice(1)) {
+          const decoded = decodeOnce(seg)
+          if (
+            decoded === null ||
+            decoded === '' ||
+            decoded === '.' ||
+            decoded === '..' ||
+            decoded.includes('%') ||
+            decoded.includes('/') ||
+            decoded.includes('\\') ||
+            decoded.includes('\u0000')
+          ) {
+            reject(res, 400)
+            return
+          }
+          relSegments.push(decoded)
+        }
+        const rel = relSegments.join('/')
+
+        // 3) realpath containment (FIX-01 §9).  The scene dir and the target
+        //    are both fully resolved first, then the final real path is
+        //    verified against the trusted roots component-wise.  Failures
+        //    are REJECTED (never the SPA fallback): a traversal attempt or a
+        //    missing asset under /local-scenes must not answer 200.
+        let realSceneRoot: string
+        try {
+          realSceneRoot = fs.realpathSync(path.join(scenesRoot, sceneId))
+        } catch {
+          reject(res, 404)
           return
         }
+        const resolved = path.resolve(realSceneRoot, rel)
+        let realResolved: string
+        try {
+          realResolved = fs.realpathSync(resolved)
+        } catch {
+          reject(res, 404)
+          return
+        }
+
+        const trusted: string[] = [realSceneRoot]
+        try {
+          const realPublished = fs.realpathSync(publishedRoot)
+          if (!trusted.includes(realPublished)) trusted.push(realPublished)
+        } catch {
+          /* storage root missing in dev — scene root is the only trust anchor */
+        }
+        if (!trusted.some((root) => isWithin(realResolved, root))) {
+          // Symlink escape: /etc, a sibling scene, anywhere else.
+          reject(res, 403)
+          return
+        }
+
         let stat: fs.Stats
         try {
-          stat = fs.statSync(resolved) // follows the `current` symlink
+          stat = fs.statSync(realResolved) // no further symlink to follow
         } catch {
-          next() // let Vite's SPA fallback / 404 handle it
+          reject(res, 404)
           return
         }
         if (!stat.isFile()) {
-          next()
+          reject(res, 404)
           return
         }
-        send(req, res, resolved, stat, rel)
+        send(req, res, realResolved, stat, rel)
       })
     },
   }
 }
+
+// The Cloudflare quick tunnel (Quest/PICO WebXR real-device debugging) must be
+// OPT-IN: it makes the dev origin reachable from the public internet, so it is
+// gated behind GS_ENABLE_DEV_TUNNEL=1.  Never default it on, never use
+// `allowedHosts: true` (FIX-01 P0-2).  Production is Nginx + a real domain —
+// untouched by this flag.
+const devTunnelEnabled = process.env.GS_ENABLE_DEV_TUNNEL === '1'
 
 export default defineConfig({
   plugins: [react(), serveStreamedScenes()],
@@ -189,10 +269,8 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: false,
-    // Quest/PICO WebXR 真机测试入口：允许 Cloudflare quick tunnel
-    // （*.trycloudflare.com，每次启动子域名随机）穿过 Vite 的 DNS 重绑保护
-    // 到达 dev server。仅 dev 环境；生产由 nginx 转发，不受影响。
-    allowedHosts: ['.trycloudflare.com'],
+    // DEV ONLY tunnel gate (see comment above).
+    allowedHosts: devTunnelEnabled ? ['.trycloudflare.com'] : undefined,
   },
   build: {
     outDir: 'dist',

@@ -10,8 +10,9 @@ Routes:
 from __future__ import annotations
 
 import uuid
+from typing import Literal, cast
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session as DBSession
 
 from app.core.config import get_settings
@@ -33,6 +34,13 @@ router = APIRouter()
 
 def _service(db: DBSession) -> ShareService:
     return ShareService(db)
+
+
+def _same_site(value: str) -> Literal["lax", "strict", "none"]:
+    """Narrow the configured SameSite policy for Starlette's Literal type."""
+    if value not in ("lax", "strict", "none"):
+        return "lax"
+    return cast(Literal["lax", "strict", "none"], value)
 
 
 @router.post("/scenes/{scene_slug}", response_model=CreateShareOut)
@@ -88,9 +96,25 @@ def revoke_share(
 @router.get("/resolve/{token}", response_model=ShareResolutionOut)
 def resolve_share(
     token: str,
+    response: Response,
     db: DBSession = Depends(get_db_session),
 ) -> ShareResolutionOut:
     scene, link = _service(db).resolve_share(token)
+    # FIX-01: the visitor's browser must keep the grant for the runtime
+    # descriptor and every asset/chunk request that follows (the official
+    # viewer fetches LOD chunks with its own URL loader, so the token cannot
+    # be threaded through them by hand). HttpOnly + Lax so the raw token
+    # stays out of JS and out of cross-site requests; revoking the link
+    # revokes the grant immediately, because every read re-validates it.
+    settings = get_settings()
+    response.set_cookie(
+        key=settings.share_cookie_name,
+        value=token,
+        httponly=True,
+        samesite=_same_site(settings.session_same_site),
+        secure=settings.session_secure_cookie,
+        path="/",
+    )
     return ShareResolutionOut(
         scene=scene,
         shareId=str(link.id),

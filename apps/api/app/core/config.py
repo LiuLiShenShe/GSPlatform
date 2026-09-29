@@ -50,6 +50,10 @@ class Settings(BaseSettings):
 
     # --- Sessions (Phase 08) ---
     session_cookie_name: str = "gs_session"
+    # Share-grant cookie (FIX-01): set when a visitor resolves a share token,
+    # so the viewer's descriptor + asset fetches carry the grant. HttpOnly,
+    # SameSite=Lax — a per-domain, revocable, expiring capability.
+    share_cookie_name: str = "gs_share"
     session_ttl_hours: int = 7 * 24        # 7 days
     session_secure_cookie: bool = False     # production injects GS_SESSION_SECURE_COOKIE=true
     session_same_site: str = "lax"          # strict | lax | none
@@ -75,8 +79,11 @@ class Settings(BaseSettings):
     # Logical names; deployment overrides via GS_STORAGE_ROOT env var.
     storage_root: str = "/home/test/gsplatform-data"
 
-    # Scene asset origin tree (Phase 09).
-    # Production Nginx serves `/local-scenes/<slug>/...` from this tree.
+    # Scene asset origin tree (Phase 09; FIX-01).
+    # Production Nginx maps the INTERNAL location `/_scene-origin/<slug>/...`
+    # onto this tree; FastAPI authorizes every scene-asset request and hands
+    # the file to Nginx via X-Accel-Redirect.  There is no public alias to the
+    # tree — a scene's gaussian bytes are never reachable unauthenticated.
     # Empty string = no production origin tree (dev uses repo `scenes/` instead).
     scene_origin_root: str = ""
 

@@ -1,27 +1,33 @@
-"""Scene runtime descriptor assembly (SSV-01).
+"""Scene runtime descriptor assembly (SSV-01) — FIX-01 hardened.
 
 Builds :class:`SceneRuntimeDescriptorV1` from the existing DB models
 (Scene, SceneVersion, ScenePresentation, SceneViewpoint, SceneAnnotation,
 CollisionAsset). All values are read-only projections; no new DB fields are
 introduced. Content URLs are always viewer-accessible same-origin URLs
-(``/local-scenes/...`` or ``/api/...``) — never server-local filesystem paths.
+(``/api/...``) — never server-local filesystem paths.
 
-Access control mirrors the scene read rules:
-  - owner → allowed;
-  - ``PUBLIC`` + (``PUBLISHED``/``READY``) → allowed for anyone;
+Access control is the single unified policy
+:class:`~app.services.scene_access.SceneAccessPolicy` (FIX-01):
+  - owner (any non-deleted own scene) → allowed;
+  - ``PUBLIC + PUBLISHED`` + not deleted → allowed for anyone
+    (``PUBLIC + READY`` is NOT anonymously readable — the works-hall rule);
+  - a live share token → allowed (``?share=`` query or ``gs_share`` cookie);
+  - deleted scene → 404 for everyone;
   - exists but not accessible + anonymous → 401 (login required);
   - exists but not accessible + other user → 403;
   - missing → 404.
+
+Content URLs go through the authorized asset endpoint
+(``/api/v1/scenes/{slug}/assets/...``) so private gaussian bytes are never
+reachable via a public static path (FIX-01 P0-1).
 """
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.core.errors import ForbiddenError, NotFoundError, UnauthorizedError
 from app.core.identity import RequestIdentity
 from app.db.models.asset import Asset
 from app.db.models.enums import AssetKind
@@ -32,7 +38,6 @@ from app.repositories.authoring import (
     SceneViewpointRepository,
 )
 from app.repositories.collision import CollisionAssetRepository
-from app.repositories.scenes import SceneRepository
 from app.schemas.scene_runtime import (
     RuntimeAnnotation,
     RuntimeBackground,
@@ -47,9 +52,10 @@ from app.schemas.scene_runtime import (
     RuntimeWorldTransform,
     SceneRuntimeDescriptorV1,
 )
+from app.services.scene_access import SceneAccessPolicy
 
 # Business URL prefixes produced by the serving layer. Never filesystem paths.
-SCENE_ASSET_BASE = "/local-scenes/{slug}"
+SCENE_ASSET_BASE = "/api/v1/scenes/{slug}/assets"
 PRESENTATION_SERVE_BASE = "/api/v1/scenes/{slug}"
 COLLISION_SERVE_BASE = "/api/v1/scenes/{slug}/collision"
 
@@ -177,45 +183,50 @@ class SceneRuntimeService:
 
     def __init__(self, session: Session) -> None:
         self._session = session
-        self._scenes = SceneRepository(session)
         self._presentations = ScenePresentationRepository(session)
         self._viewpoints = SceneViewpointRepository(session)
         self._annotations = SceneAnnotationRepository(session)
         self._collisions = CollisionAssetRepository(session)
 
     # ------------------------------------------------------------------ #
-    # access control
+    # access control (single unified policy, FIX-01)
     # ------------------------------------------------------------------ #
     def _resolve_readable_scene(
-        self, slug_or_id: str, identity: RequestIdentity | None
+        self,
+        slug_or_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None = None,
     ) -> Scene:
-        scene = self._scenes.get_by_slug(slug_or_id)
-        if scene is None:
-            try:
-                scene = self._scenes.get_by_id(uuid.UUID(slug_or_id))
-            except ValueError:
-                scene = None
-        if scene is None:
-            raise NotFoundError(f"场景 {slug_or_id} 不存在")
-
-        user_id = identity.user_id if identity is not None else None
-        if user_id is not None and scene.owner_id == user_id:
-            return scene
-        if scene.status in {"PUBLISHED", "READY"} and scene.visibility == "PUBLIC":
-            return scene
-
-        # The scene exists but is not readable by this caller.
-        if identity is None:
-            raise UnauthorizedError("该场景需要登录后访问")
-        raise ForbiddenError("该场景不可见或未发布")
+        return SceneAccessPolicy(self._session).resolve_readable_scene(
+            slug_or_id, identity, share_token=share_token
+        )
 
     # ------------------------------------------------------------------ #
     # content
     # ------------------------------------------------------------------ #
     def _content_url(self, scene: Scene, url: str) -> str:
-        """Normalise a relative asset reference to a same-origin URL."""
-        if url.startswith(("http://", "https://", "/")):
+        """Normalise a stored asset reference to an authorized same-origin URL.
+
+        http(s) URLs pass through unchanged (external resources).  Every path
+        reference is re-homed under THIS scene's authorized ``/assets``
+        endpoint.  A legacy absolute ``/local-scenes/<slug>/...`` reference is
+        stripped of the public-tree prefix and re-served through the
+        authorized endpoint — the descriptor must never emit an
+        unauthenticated gaussian URL (FIX-01 P0-1), even for manifests
+        written before the change.
+        """
+        if url.startswith(("http://", "https://")):
             return url
+        # A legacy public-tree reference is re-homed under the authorized
+        # endpoint, dropping the public prefix and this scene's slug segment.
+        for legacy_prefix in (
+            f"/local-scenes/{scene.slug}/",
+            "/local-scenes/",
+        ):
+            if url.startswith(legacy_prefix):
+                url = url[len(legacy_prefix) :]
+                break
         relative = url.lstrip("/")
         while relative.startswith("./"):
             relative = relative[2:]
@@ -280,9 +291,15 @@ class SceneRuntimeService:
     # descriptor
     # ------------------------------------------------------------------ #
     def get_descriptor(
-        self, slug_or_id: str, identity: RequestIdentity | None
+        self,
+        slug_or_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None = None,
     ) -> SceneRuntimeDescriptorV1:
-        scene = self._resolve_readable_scene(slug_or_id, identity)
+        scene = self._resolve_readable_scene(
+            slug_or_id, identity, share_token=share_token
+        )
         version = scene.current_version
 
         scene_block = RuntimeSceneOut(

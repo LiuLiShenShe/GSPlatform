@@ -15,7 +15,7 @@
 
 | Component | Baseline | Growth trigger | Lever |
 |---|---|---|---|
-| Nginx | 4 worker procs | > 5k req/min | scale out/up; CDN for /local-scenes |
+| Nginx | 4 worker procs | > 5k req/min | scale out/up; cache CDN in front of the authorized asset API |
 | FastAPI (uvicorn) | 4 workers on 2–4 vCPU | CPU > 70% sustained | +workers / separate host |
 | PostgreSQL | 2 vCPU, 4 GB, max_connections=100 | pool > 80% | vacuum tuning, read replica, connection pooler |
 | Redis | 1 GB maxmemory, noeviction | mem > 80% | increase maxmemory / cluster |
@@ -42,7 +42,7 @@
 
 ## 4. Growth levers (ordered by cost/benefit)
 
-1. **CDN in front of `/local-scenes/`** — Range-compatible CDNs (Cloudflare,
+1. **CDN in front of the authorized asset API (`/api/v1/scenes/{slug}/assets`)** — Range-compatible CDNs (Cloudflare,
    Fastly) offload the bulk of viewer traffic; keep `Cache-Control: immutable`
    for versioned chunks.
 2. **Object storage for published assets** — move published versions to S3/OSS;
@@ -67,7 +67,7 @@
 | Redis memory | < 70% | 70–80% | > 80% |
 | Queue depth (CPU/GPU) | < 5 | 5–20 | > 50 |
 | Task failure rate | 0 | < 2% | > 3% |
-| View 4xx/5xx on /local-scenes | < 1% | 1–3% | > 5% |
+| View 4xx/5xx on authorized asset API (`/api/v1/scenes/{slug}/assets`) | < 1% | 1–3% | > 5% |
 
 ## 6. Rollover budget (Phase 09 G)
 

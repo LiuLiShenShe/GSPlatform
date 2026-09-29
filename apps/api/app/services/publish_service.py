@@ -13,11 +13,13 @@ a fully-verified version directory. The contract:
 The scene row itself is created at upload-complete time (DRAFT→PROCESSING) so
 the scene id exists before the worker runs.
 
-Dev-mode symlink bridge (Phase 07):
+Dev-mode symlink bridge (Phase 07; FIX-01):
 After a successful publish the service creates a ``current`` symlink in the
 repo-level ``scenes/<slug>/`` tree that points into the published version dir.
-This allows the Vite dev-server middleware (``/local-scenes/<slug>/<rel>``) to
-serve assets without duplicating files on disk.
+The Vite dev-server middleware (``/local-scenes/<slug>/<rel>``) and the
+authorized API asset endpoint (``/api/v1/scenes/<slug>/assets/<rel>``) both
+serve from that tree; production creates the same shape under
+``settings.scene_origin_root`` for Nginx's internal origin.
 """
 
 from __future__ import annotations
@@ -181,14 +183,17 @@ class PublishService:
         Dev (development/test): the web dev server's ``gs-serve-streamed-scenes``
         middleware answers ``/local-scenes/<slug>/<rel>`` from
         ``<repo>/scenes/<slug>/<rel>``, following a ``current`` symlink exactly
-        like ``build_streamed_sog.sh``:
+        like ``build_streamed_sog.sh``; the API asset endpoint serves the same
+        tree under ``/api/v1/scenes/<slug>/assets/<rel>`` (FIX-01):
 
         ``scenes/<slug>/current       -> versions/<ver>``   (relative)
         ``scenes/<slug>/versions/<ver> -> <storage>/published/<uuid>/versions/<ver>``
 
         Production (Phase 09): same tree shape is created under
-        ``settings.scene_origin_root`` so Nginx can serve `/local-scenes/...`
-        as a static origin. Skipped entirely when env is production and
+        ``settings.scene_origin_root`` so Nginx's INTERNAL ``/_scene-origin/``
+        location can serve it — reachable only via the API's X-Accel-Redirect
+        after authorization, never as a public alias. Skipped entirely when
+        env is production and
         ``scene_origin_root`` is empty (no publicly served origin).
 
         This method creates that tree so a published scene is immediately

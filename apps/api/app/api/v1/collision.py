@@ -14,11 +14,15 @@ Routes:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.core.identity import RequestIdentity, require_csrf
+from app.core.identity import (
+    RequestIdentity,
+    get_optional_current_user,
+    require_csrf,
+)
 from app.db.session import get_db_session
 from app.schemas.collision import (
     CollisionAssetCreateRequest,
@@ -28,6 +32,7 @@ from app.schemas.collision import (
 )
 from app.services.celery_client import send_task
 from app.services.collision import CollisionService
+from app.services.scene_access import SceneAccessPolicy
 from app.storage import LocalDiskStorage
 
 router = APIRouter()
@@ -44,6 +49,25 @@ def _service(
     return CollisionService(db, _storage(settings), send_task=send_task)
 
 
+def _readable_slug(
+    db: Session,
+    slug: str,
+    request: Request,
+    identity: RequestIdentity | None,
+    share: str | None,
+) -> str:
+    """Authorize a collision READ (FIX-01 §3 — collision is a read surface).
+
+    The unified policy decides: owner / PUBLIC+PUBLISHED / live share token →
+    allowed; deleted or missing → 404; private for anonymous → 401; private
+    for other user → 403.  Before FIX-01 these routes served bytes for any
+    non-deleted slug with no identity at all.
+    """
+    token = share or request.cookies.get(get_settings().share_cookie_name) or None
+    SceneAccessPolicy(db).resolve_readable_scene(slug, identity, share_token=token)
+    return slug
+
+
 # ------------------------------------------------------------------ #
 # Get collision status
 # ------------------------------------------------------------------ #
@@ -51,24 +75,33 @@ def _service(
 @router.get("/{slug}/collision", response_model=CollisionAssetOut)
 def get_collision(
     slug: str,
-    identity: RequestIdentity | None = None,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
     svc: CollisionService = Depends(_service),
 ) -> CollisionAssetOut:
-    """Get collision asset status for a scene."""
+    """Get collision asset status for a readable scene."""
+    _readable_slug(db, slug, request, identity, share)
     return svc.get_collision(slug, identity.user_id if identity else None)
 
 
 @router.get("/{slug}/collision/mesh")
 def serve_collision_mesh(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
     svc: CollisionService = Depends(_service),
 ) -> Response:
-    """Serve the built collision GLB. Public (viewer fetches it directly).
+    """Serve the built collision GLB to a readable scene.
 
     Kept for the SSV-01 runtime contract. The runtime descriptor now emits the
     ``.glb``-suffixed url (``/collision/collision.glb``) because the official
     viewer selects mesh-vs-voxel by the url extension.
     """
+    _readable_slug(db, slug, request, identity, share)
     data, mime = svc.serve_collision_mesh(slug)
     return Response(
         content=data,
@@ -80,9 +113,14 @@ def serve_collision_mesh(
 @router.get("/{slug}/collision/collision.glb")
 def serve_collision_glb_url(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
     svc: CollisionService = Depends(_service),
 ) -> Response:
     """Serve the collision GLB under a ``.glb`` url (official mesh loader)."""
+    _readable_slug(db, slug, request, identity, share)
     data, mime = svc.serve_collision_mesh(slug)
     return Response(
         content=data,
@@ -94,6 +132,10 @@ def serve_collision_glb_url(
 @router.get("/{slug}/collision/collision.voxel.json")
 def serve_collision_voxel_json(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
     svc: CollisionService = Depends(_service),
 ) -> Response:
     """Serve the voxel octree metadata (official ``VoxelCollision`` loader).
@@ -101,6 +143,7 @@ def serve_collision_voxel_json(
     The official viewer derives the binary url by replacing ``.voxel.json``
     with ``.voxel.bin``, taking it to ``/collision/collision.voxel.bin``.
     """
+    _readable_slug(db, slug, request, identity, share)
     data, mime = svc.serve_collision_voxel(slug, binary=False)
     return Response(
         content=data,
@@ -112,9 +155,14 @@ def serve_collision_voxel_json(
 @router.get("/{slug}/collision/collision.voxel.bin")
 def serve_collision_voxel_bin(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
+    db: Session = Depends(get_db_session),
     svc: CollisionService = Depends(_service),
 ) -> Response:
     """Serve the voxel leaf octree binary."""
+    _readable_slug(db, slug, request, identity, share)
     data, mime = svc.serve_collision_voxel(slug, binary=True)
     return Response(
         content=data,

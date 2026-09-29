@@ -20,9 +20,11 @@ from app.repositories.scenes import SceneRepository
 from app.schemas.common import PageMeta
 from app.schemas.scene import SceneAuthor, SceneDetailOut, SceneListPage, SceneSummaryOut
 
-# Business URL prefix for scene assets, produced by the serving layer (Vite dev
-# middleware or Nginx scenes-streaming.conf). Never a server filesystem path.
-SCENE_ASSET_BASE = "/local-scenes/{slug}"
+# Business URL prefix for scene assets. FIX-01: private assets are NO LONGER a
+# public static path (/local-scenes was an unauthenticated Nginx alias). All
+# scene bytes go through the authorized API endpoint, which in production
+# hands the file to Nginx via X-Accel-Redirect. Never a server filesystem path.
+SCENE_ASSET_BASE = "/api/v1/scenes/{slug}/assets"
 
 
 def _scene_asset_url(slug: str, rel: str) -> str:
@@ -91,6 +93,10 @@ class SceneService:
     """Scene catalogue use cases."""
 
     def __init__(self, session: Session) -> None:
+        # Kept for the unified access policy (FIX-01); the repository is the
+        # only query surface, but the policy needs the session for share-token
+        # validation.
+        self._session = session
         self._repo = SceneRepository(session)
 
     def list_public(
@@ -127,36 +133,33 @@ class SceneService:
     def resolve_detail(
         self, slug: str, identity: RequestIdentity | None
     ) -> SceneDetailOut:
-        """Resolve scene detail with correct 404-vs-403 semantics.
+        """Resolve scene detail through the unified access policy (FIX-01).
 
-        - Scene exists and is public+published → return detail.
-        - Scene exists but is not public/published → 403 (exists, not visible).
-        - Scene does not exist at all → 404.
+        - PUBLIC + PUBLISHED + not deleted → detail for everyone.
+        - Otherwise the single policy decides: owner (any non-deleted own
+          scene) → detail; a live share token → detail; exists but private →
+          401 (anonymous) / 403 (other user); deleted or missing → 404.
+
+        A deleted scene is invisible to its owner too — before FIX-01 the bare
+        ``get_by_slug`` fallback still returned detail for a soft-deleted
+        scene to whoever owned it (P1-2).
         """
-        scene = self._repo.get_public_by_slug(slug)
-        if scene is not None:
-            fav = False
-            if identity is not None:
-                fav = self._repo.is_favorited(identity.user_id, scene.id)
-            return _detail_from_scene(scene, is_favorited=fav)
+        from app.services.scene_access import SceneAccessPolicy
 
-        # Does the scene exist at all (any status/visibility)?
-        internal = self._repo.get_by_slug(slug)
-        if internal is None:
-            # Maybe slug is actually the internal UUID.
-            try:
-                scene_uuid = uuid.UUID(slug)
-                internal = self._repo.get_by_id(scene_uuid)
-            except ValueError:
-                internal = None
+        public = self._repo.get_public_by_slug(slug)
+        if public is not None:
+            fav = (
+                identity is not None
+                and self._repo.is_favorited(identity.user_id, public.id)
+            )
+            return _detail_from_scene(public, is_favorited=fav)
 
-        if internal is not None:
-            if identity is not None and identity.user_id == internal.owner_id:
-                fav = self._repo.is_favorited(identity.user_id, internal.id)
-                return _detail_from_scene(internal, is_favorited=fav)
-            raise ForbiddenError("该场景不可见或未发布")
-
-        raise NotFoundError(f"场景 {slug} 不存在")
+        user_id = identity.user_id if identity is not None else None
+        scene = SceneAccessPolicy(self._session).resolve_readable_for_user(
+            slug, user_id
+        )
+        fav = identity is not None and self._repo.is_favorited(identity.user_id, scene.id)
+        return _detail_from_scene(scene, is_favorited=fav)
 
     def increment_views(self, slug: str) -> None:
         """Increment view counter (best-effort, not called for owners)."""

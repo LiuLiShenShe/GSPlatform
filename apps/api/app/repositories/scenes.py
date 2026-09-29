@@ -119,12 +119,16 @@ class SceneRepository:
         next_cursor = None
         if has_more and items:
             last = items[-1]
-            val = (
-                last.views
-                if sort == "popular"
-                else (last.published_at or datetime.min.replace(tzinfo=None))
-            )
-            next_cursor = _encode_cursor({"v": val, "id": str(last.id)})
+            if sort == "popular":
+                sort_key: Any = last.views
+            else:
+                # Cursor must be a JSON-serializable string; the decode side
+                # uses datetime.fromisoformat. (FIX-01: raw datetime objects
+                # are not JSON serializable → 500 once a page fills up.)
+                sort_key = (
+                    last.published_at or datetime.min.replace(tzinfo=None)
+                ).isoformat()
+            next_cursor = _encode_cursor({"v": sort_key, "id": str(last.id)})
 
         return items, next_cursor
 

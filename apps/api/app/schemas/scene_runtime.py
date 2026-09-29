@@ -34,8 +34,11 @@ class RuntimeSceneOut(BaseModel):
 class RuntimeContentOut(BaseModel):
     """Loadable content for the Viewer.
 
-    ``url`` is a viewer-accessible same-origin asset URL (``/api/...`` or
-    ``/local-scenes/...``), never a server-local filesystem path.
+    ``url`` is a viewer-accessible same-origin asset URL.  FIX-01: the
+    descriptor always emits the authorized endpoint
+    (``/api/v1/scenes/<slug>/assets/...``) so private gaussian bytes are never
+    reachable through a public static path; the legacy ``/local-scenes/...``
+    prefix is re-homed by the service.  Never a server-local filesystem path.
     ``format`` is derived from the actual asset filename / metadata:
     ``sog`` | ``ply`` | ``compressed-ply`` | ``meta`` | ``lod-meta``.
     Both are ``None`` when the scene has no published version yet.

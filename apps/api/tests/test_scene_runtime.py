@@ -73,9 +73,15 @@ class TestBasic:
         assert body["schemaVersion"] == 1
         assert body["scene"]["id"] == public_scene.slug
         assert body["scene"]["name"] == "测试场景"
-        assert body["scene"]["posterUrl"] == f"/local-scenes/{public_scene.slug}/poster.webp"
+        assert (
+            body["scene"]["posterUrl"]
+            == f"/api/v1/scenes/{public_scene.slug}/assets/poster.webp"
+        )
         # default fixture version is streamed-sog without entryUrl → lod-meta fallback
-        assert body["content"]["url"] == f"/local-scenes/{public_scene.slug}/current/lod-meta.json"
+        assert (
+            body["content"]["url"]
+            == f"/api/v1/scenes/{public_scene.slug}/assets/current/lod-meta.json"
+        )
         assert body["content"]["format"] == "lod-meta"
 
     def test_not_found_returns_404(self):
@@ -103,7 +109,10 @@ class TestContentFormats:
             manifest={"format": "sog", "assetUrl": f"/local-scenes/{scene.slug}/scene.sog"},
         )
         body = _get(scene.slug).json()
-        assert body["content"]["url"] == f"/local-scenes/{scene.slug}/scene.sog"
+        # FIX-01: a legacy absolute /local-scenes/ reference must NOT survive —
+        # it is re-homed through the authorized /assets endpoint so the
+        # descriptor never emits an unauthenticated gaussian URL.
+        assert body["content"]["url"] == f"/api/v1/scenes/{scene.slug}/assets/scene.sog"
         assert body["content"]["format"] == "sog"
 
     def test_ply_format_relative_asset_url(self, db):
@@ -117,7 +126,7 @@ class TestContentFormats:
             manifest={"format": "ply", "assetUrl": "./model.ply"},
         )
         body = _get(scene.slug).json()
-        assert body["content"]["url"] == f"/local-scenes/{scene.slug}/model.ply"
+        assert body["content"]["url"] == f"/api/v1/scenes/{scene.slug}/assets/model.ply"
         assert body["content"]["format"] == "ply"
 
     def test_lod_meta_format_streamed_entry(self, db):
@@ -140,7 +149,7 @@ class TestContentFormats:
         body = _get(scene.slug).json()
         assert body["content"]["format"] == "lod-meta"
         assert body["content"]["url"].endswith("/lod-meta.json")
-        assert body["content"]["url"].startswith(f"/local-scenes/{scene.slug}/versions/")
+        assert body["content"]["url"].startswith(f"/api/v1/scenes/{scene.slug}/assets/versions/")
 
     def test_compressed_ply_extension_recognised(self):
         from app.services.scene_runtime import content_format_from_filename

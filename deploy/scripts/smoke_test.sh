@@ -83,9 +83,12 @@ for route in "/" "/works" "/upload"; do
 done
 
 # ── 4. Public scene manifest (short cache) ─────────────────────────────────
+# FIX-01: scene bytes are NO LONGER served from a public /local-scenes/ alias.
+# The smoke test now goes through the authorized API asset endpoint exactly
+# like the viewer does (FastAPI policy + Nginx X-Accel internal redirect).
 echo ""
 if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
-    MANIFEST="$BASE_URL/local-scenes/$PUBLIC_SCENE_SLUG/current/manifest.json"
+    MANIFEST="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/current/manifest.json"
     echo "[4] Public scene manifest ($PUBLIC_SCENE_SLUG)"
     CODE=$(C -o /tmp/gsplatform-manifest.json -w '%{http_code}' --max-time 15 "$MANIFEST" 2>/dev/null || echo 000)
     if [[ "$CODE" == "200" ]]; then
@@ -104,7 +107,7 @@ fi
 echo ""
 if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
     echo "[5] Range 206 / 416"
-    ASSET="$BASE_URL/local-scenes/$PUBLIC_SCENE_SLUG/current/lod-meta.json"
+    ASSET="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/current/lod-meta.json"
     R206=$(C -o /tmp/gsplatform-range.json -w '%{http_code}' -H 'Range: bytes=0-1023' --max-time 15 "$ASSET" 2>/dev/null || echo 000)
     if [[ "$R206" == "206" ]]; then
         pass "Range bytes=0-1023 → 206"
