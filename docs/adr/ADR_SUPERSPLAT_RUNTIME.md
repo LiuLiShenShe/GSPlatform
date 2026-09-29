@@ -1,10 +1,10 @@
 # ADR_SUPERSPLAT_RUNTIME：GSPlatform 生产 Scene Runtime 冻结为官方 SuperSplat Viewer
 
-- 状态：ACCEPTED（FROZEN — 不接受重新讨论）
+- 状态：ACCEPTED（FROZEN — 不接受重新讨论）　**SSV-10 已闭环（2026-09-29）**
 - 日期：2026-09-28
-- 阶段：SSV-00（SuperSplat Viewer 迁移 · 架构冻结与基线审计）
+- 阶段：SSV-00（SuperSplat Viewer 迁移 · 架构冻结与基线审计）→ SSV-10（Production Acceptance）
 - 决策人：项目负责人
-- 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4`（SSV-00～SSV-10 完成前禁止升级）
+- 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4`（SSV-00～SSV-10 期间禁止升级；迁移完成后如需升级走新 ADR）
 
 ---
 

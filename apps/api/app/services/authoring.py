@@ -115,7 +115,7 @@ def _presentation_out(
         backgroundAudioVolume=pres.background_audio_volume,
         backgroundAudioLoop=pres.background_audio_loop,
         backgroundAudioEnabled=pres.background_audio_enabled,
-        tonemapping=pres.tonemapping,  # type: ignore[arg-type]
+        tonemapping=pres.tonemapping,
         highPrecisionRendering=pres.high_precision_rendering,
         postEffects=(
             PostEffects.model_validate(pres.post_effects)

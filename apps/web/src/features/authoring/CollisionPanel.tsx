@@ -13,7 +13,7 @@ import {
   type CollisionBuildRequest,
 } from '../../services/collisionApi';
 
-const { Text, Link } = Typography;
+const { Text } = Typography;
 
 interface CollisionPanelProps {
   sceneId: string;

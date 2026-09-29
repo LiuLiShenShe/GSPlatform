@@ -29,6 +29,21 @@ GSPlatform 是一个面向 3D Gaussian Splatting 场景的 Web 平台。用户�
 
 ## 2. 固定技术架构
 
+**最终 Scene Runtime 架构（SSV-00 ～ SSV-10 迁移完成，SSV-10 验收）：**
+
+```text
+GSPlatform
+  → SceneRuntimeDescriptor          (apps/web/src/scene-runtime：DB runtime contract / manifest 回退)
+  → ExperienceSettings v2           (descriptor.presentation + annotations/collision 适配)
+  → @playcanvas/supersplat-viewer   (官方 runtime，锁定 1.35.0 + playcanvas 2.22.4)
+  → Desktop (WebGPU，官方自动回退 WebGL) / XR (强制 WebGL)
+```
+
+生产 Web **不引用** `apps/viewer`（legacy fork，SSV-09 起 LEGACY / DEPRECATED、不参与
+dev/build/deploy；`apps/xr-viewer` 已删除）。护栏测试
+`apps/web/src/__tests__/no-legacy-viewer-references.test.ts` 强制零引用。决策见
+`docs/adr/ADR_SUPERSPLAT_RUNTIME.md`，验收见 `docs/reports/SSV_FINAL_ACCEPTANCE.md`。
+
 ```text
 +------------------------------ Browser -------------------------------+
 | React + TypeScript + Vite                                             |
@@ -36,20 +51,21 @@ GSPlatform 是一个面向 3D Gaussian Splatting 场景的 Web 平台。用户�
 |                                                                         |
 | /                 首页                   /works      我的作品           |
 | /compute          免费计算               /upload     上传作品           |
-| /scene/:sceneId   全屏 Scene Viewer                                 |
+| /scene/:sceneId   全屏 Scene Viewer   /xr/:sceneId  沉浸式 XR 页面     |
 +----------------------+--------------------------+----------------------+
                        | REST / SSE               | Viewer integration
                        v                          v
 +-----------------------------+      +-------------------------------+
-| FastAPI /api/v1             |      | SuperSplat Viewer fork        |
-| Pydantic v2                 |      | PlayCanvas Engine             |
-| SQLAlchemy 2.x + Alembic    |      | SOG / Streamed SOG            |
+| FastAPI /api/v1             |      | SceneRuntimeDescriptor        |
+| Pydantic v2                 |      |  → ExperienceSettings v2      |
+| SQLAlchemy 2.x + Alembic    |      |  → @playcanvas/supersplat-    |
+|                             |      |    viewer（官方 runtime）      |
 +--------------+--------------+      +---------------+---------------+
                |                                     |
                v                                     v
 +-----------------------------+      +-------------------------------+
-| PostgreSQL                  |      | Scene asset storage           |
-| users/scenes/assets/jobs    |      | poster/manifest/lod/chunks    |
+| PostgreSQL                  |      | Scene asset origin            |
+| users/scenes/assets/jobs    |      | poster/manifest/lod-meta/chunks (Range) |
 +-----------------------------+      +-------------------------------+
                ^                                     ^
                |                                     |
@@ -60,7 +76,8 @@ GSPlatform 是一个面向 3D Gaussian Splatting 场景的 Web 平台。用户�
                               |
                               v
 +----------------------------------------------------------------------+
-| Ubuntu + Nginx + HTTPS                                               |
+| Ubuntu + Nginx + HTTPS（Range / Cache-Control / CORS / Permissions-   |
+| Policy xr-spatial-tracking，供 Quest / PICO WebXR）                    |
 +----------------------------------------------------------------------+
 ```
 

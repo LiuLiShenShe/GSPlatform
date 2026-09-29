@@ -116,7 +116,7 @@ async def upload_cover(
     identity: RequestIdentity = Depends(require_csrf),
     svc: AuthoringService = Depends(_service),
     file: UploadFile = File(...),
-) -> ScenePresentationOut:
+) -> ScenePresentationOut | Response:
     """Upload JPG/PNG/WebP cover image."""
     if file.content_type not in _COVER_MIME:
         msg = _VALIDATION_ERR % "仅支持 JPG/PNG/WebP 封面"
@@ -166,7 +166,7 @@ async def upload_background(
         default=None,
         description="Optional longitude for panorama metadata",
     ),
-) -> ScenePresentationOut:
+) -> ScenePresentationOut | Response:
     """Upload equirectangular panorama background image."""
     if file.content_type not in _COVER_MIME:
         msg = _VALIDATION_ERR % "仅支持 JPG/PNG/WebP 全景背景"
@@ -388,7 +388,7 @@ async def upload_annotation_media(
     identity: RequestIdentity = Depends(require_csrf),
     svc: AuthoringService = Depends(_service),
     file: UploadFile = File(...),
-) -> SceneAnnotationOut:
+) -> SceneAnnotationOut | Response:
     """Upload media for an IMAGE/VIDEO/AUDIO/PANORAMA annotation (multipart)."""
     data = await file.read()
     if len(data) > _ANNOTATION_MEDIA_MAX_BYTES:

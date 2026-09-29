@@ -160,4 +160,4 @@ class UploadRepository:
         )
         result = self._session.execute(stmt)
         self._session.flush()
-        return result.rowcount
+        return int(result.rowcount)  # type: ignore[attr-defined]

@@ -106,7 +106,7 @@ def _post_effects_json(raw: Any) -> dict[str, Any] | None:
         for key, default in defaults.items():
             num = value.get(key, default)
             try:
-                out[key] = type(default)(num)  # type: ignore[call-overload]
+                out[key] = type(default)(num)
             except (TypeError, ValueError):
                 out[key] = default
         return out

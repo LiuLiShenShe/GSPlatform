@@ -36,6 +36,13 @@ GSPlatform/
 GSPlatform 不再存在任何生产 legacy viewer 引用（SSV-09 已清理，见
 `docs/SSV_09_REPORT.md` 与 `docs/adr/ADR_SUPERSPLAT_RUNTIME.md`）。
 
+最终运行时链路（SSV-10 验收）：
+
+```text
+GSPlatform → SceneRuntimeDescriptor → ExperienceSettings v2
+           → @playcanvas/supersplat-viewer → Desktop（WebGPU，自动回退 WebGL）/ XR（强制 WebGL）
+```
+
 | | Official `@playcanvas/supersplat-viewer` Runtime | Legacy `apps/viewer` |
 |---|---|---|
 | 位置 | `apps/web`（官方 npm 包依赖） | `apps/viewer`（FROZEN fork） |
@@ -44,8 +51,8 @@ GSPlatform 不再存在任何生产 legacy viewer 引用（SSV-09 已清理，�
 | 承载 | Gaussian 渲染、相机、annotation、skybox、collision、walk、LOD、streaming、splat budget | 无生产用途；仅供未来可能的 primitive-level 编辑（另开 ADR） |
 | 引用护栏 | — | `apps/web/src/__tests__/no-legacy-viewer-references.test.ts` 强制生产 Web 零引用 |
 
-- 生产 Scene Runtime 决策见 `docs/adr/ADR_SUPERSPLAT_RUNTIME.md`（LEGACY / FROZEN，不接受重新讨论）。
-- 迁移阶段顺序见 `docs/SSV_MIGRATION_PLAN.md`（SSV-00 ～ SSV-10，顺序固定）。
+- 生产 Scene Runtime 决策见 `docs/adr/ADR_SUPERSPLAT_RUNTIME.md`（LEGACY / FROZEN，不接受重新讨论；SSV-00 ～ SSV-10 迁移已闭环）。
+- 迁移记录见 `docs/SSV_MIGRATION_PLAN.md`（SSV-00 ～ SSV-10，全部完成）；最终验收见 `docs/reports/SSV_FINAL_ACCEPTANCE.md`。
 - `apps/viewer` 保留但**冻结**：不参与 dev / build / deploy / acceptance（root 聚合脚本已去除）。
 
 ## Quick Start

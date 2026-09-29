@@ -6,13 +6,12 @@
  * mode (double-click → world position → create annotation).
  */
 import { useCallback, useState } from 'react';
-import { Card, List, Button, Tag, Popconfirm, InputNumber, Select, Input, Space, Typography } from 'antd';
+import { Card, List, Button, Tag, Popconfirm, Input, Space, Typography } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
   EyeInvisibleOutlined,
   EyeOutlined,
-  DragOutlined,
 } from '@ant-design/icons';
 import type { SceneAnnotation, AnnotationStyle } from '../../services/annotationApi';
 
@@ -37,7 +36,6 @@ const STYLE_LABELS: Record<AnnotationStyle, string> = {
 export function AnnotationPanel({
   annotations,
   picking,
-  onCreate,
   onUpdate,
   onDelete,
   onPickFromViewer,

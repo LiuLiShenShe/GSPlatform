@@ -60,7 +60,7 @@ export function BackgroundMusicPanel({
       if (!assetId) {
         throw new Error('upload response missing asset id');
       }
-      const updated = await apiUpdateBackgroundAudio(sceneId, { assetId });
+      await apiUpdateBackgroundAudio(sceneId, { assetId });
       const presentationWithAudio = await fetchPresentation(sceneId);
       onUpdated(presentationWithAudio);
       message.success('背景音乐已上传');

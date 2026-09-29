@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.core.errors import ConflictError, NotFoundError
 from app.core.identity import RequestIdentity
 from app.db.models.enums import SceneStatus, UploadSessionStatus
 from app.db.models.scene import Scene
+from app.db.models.upload_session import UploadSession
 from app.repositories.uploads import UploadRepository
 from app.schemas.uploads import (
     CreateUploadRequest,
@@ -36,7 +38,7 @@ class UploadService:
         session: Session,
         storage: Storage,
         settings: Settings,
-        send_task: object | None = None,
+        send_task: Callable[..., object] | None = None,
     ) -> None:
         self._session = session
         self._storage = storage
@@ -214,7 +216,7 @@ class UploadService:
     # ------------------------------------------------------------------ #
     # internals
     # ------------------------------------------------------------------ #
-    def _owned_or_raise(self, upload_id: uuid.UUID, identity: RequestIdentity):
+    def _owned_or_raise(self, upload_id: uuid.UUID, identity: RequestIdentity) -> UploadSession:
         us = self._repo.get_owned(upload_id, identity.user_id)
         if us is None:
             raise NotFoundError("上传会话不存在或不属于当前用户")
@@ -222,7 +224,7 @@ class UploadService:
 
     def _create_draft_scene(
         self,
-        us,
+        us: UploadSession,
         identity: RequestIdentity,
         *,
         size: int,
@@ -243,7 +245,7 @@ class UploadService:
         self._session.flush()
         return scene
 
-    def _to_out(self, us) -> UploadSessionOut:
+    def _to_out(self, us: UploadSession) -> UploadSessionOut:
         return UploadSessionOut(
             uploadId=us.id,
             status=us.status,
@@ -256,6 +258,6 @@ class UploadService:
             purpose=us.purpose,
         )
 
-    def _to_status(self, us) -> UploadStatusOut:
+    def _to_status(self, us: UploadSession) -> UploadStatusOut:
         out = self._to_out(us)
         return UploadStatusOut(**out.model_dump(), ownerId=us.owner_id, sha256=us.declared_sha256)

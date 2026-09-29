@@ -3,7 +3,7 @@
 - 状态：ACTIVE（顺序 FROZEN）
 - 日期：2026-09-28
 - 架构依据：`docs/adr/ADR_SUPERSPLAT_RUNTIME.md`
-- 当前阶段：**SSV-09 — Legacy Cleanup（已完成）**
+- 当前阶段：**SSV-10 — Production Acceptance and Deployment Closure（已完成）**
 
 ---
 
@@ -30,6 +30,11 @@
 | **SSV-08** | Streamed SOG / LOD | Streamed SOG、LOD、splat budget、performance mode 迁移 | 大场景流式加载可用 |
 | **SSV-09** | Legacy Cleanup | 清理 `apps/xr-viewer`、旧契约与测试；`apps/viewer` 标记 LEGACY/DEPRECATED | `apps/xr-viewer` 删除；`apps/viewer` 冻结为不参与生产的独立包；生产 Web 对 legacy 引用 = 0（护栏测试） |
 | **SSV-10** | Production Acceptance | 生产验收（含真实头显硬件验证） | 全部能力在官方 runtime 上验收通过 |
+
+> **SSV-00 ～ SSV-10 全部完成（2026-09-29）**：生产 Web typecheck 0 错误、全质量门通过、
+> 28 项生产功能矩阵验证、性能三档实测、legacy 引用 = 0。验收见
+> `docs/reports/SSV_FINAL_ACCEPTANCE.md`（RESULT = PASS，遗留：真实 Quest/PICO 实机
+> 与真实域名 HTTPS 站点属部署 runbook，未在本环境执行）。
 
 ---
 
