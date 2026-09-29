@@ -1,15 +1,21 @@
 /**
- * Official XR 诊断页（SSV-04）—— `/xr/test`。
+ * Official XR 诊断页（FIX-04 §3）—— `/xr/test` 与 `/xr/diagnostics/:sceneId`。
  *
- * 保留作为 diagnostics 页面，但同样必须调用 SuperSplatRuntime(mode='xr')，
- * 禁止第二套 Viewer 创建逻辑（旧 createXRRuntime 已删除）。
+ * 所有工程诊断集中在 **这里**（正式 /xr/:sceneId 不显示工程面板）：
+ *   Secure Context / navigator.xr / Immersive VR / UA / renderer / frame.gsplats /
+ *   runtime state / asset URL / collision / walk / 进入 VR 前相机 pose。
  *
+ * 同样必须调用 SuperSplatRuntime(mode='xr')，禁止第二套 Viewer 创建逻辑。
  * 运行态真相来自官方 state：canStartVR / canStartAR / xrMode / loaded。
- * 场景：?scene=<url> ?? env VITE_XR_TEST_SCENE_URL ?? /local-scenes/local-garden/scene.sog
+ *
+ * 场景：
+ *   - `/xr/diagnostics/:sceneId`：DB 合同场景（与正式 /xr/:sceneId 同链路）
+ *   - `/xr/test`：`?scene=<url>` ?? env VITE_XR_TEST_SCENE_URL ??
+ *     /local-scenes/local-garden/scene.sog（URL 调试场景）
  * 无 iframe / postMessage / setTimeout 中间跳。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { descriptorFromSceneUrl } from '../scene-runtime/descriptorResolver';
 import { useSuperSplatXR } from '../features/viewer-official/useSuperSplatXR';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
@@ -31,17 +37,22 @@ function resolveTestScene(search: string): string {
 export default function XRTestPage() {
   useDocumentTitle('XR 测试');
   const location = useLocation();
+  const { sceneId } = useParams<{ sceneId?: string }>();
+  const routeSceneId = sceneId && sceneId.length > 0 ? sceneId : null;
   const testScene = useMemo(() => resolveTestScene(location.search), [location.search]);
 
-  // URL 调试场景：能推断格式就合成描述走官方链路，否则给 hook 传 null 显示错误。
+  // 路由场景（/xr/diagnostics/:sceneId）→ DB 合同链路；否则 URL 调试场景合成描述。
   const testDescriptor = useMemo(() => {
+    if (routeSceneId) return undefined; // 走 DB 合同（useSuperSplatXR 传 sceneId）
     try {
       return descriptorFromSceneUrl('xr-test', testScene);
     } catch {
       return null;
     }
-  }, [testScene]);
-  const { containerRef, ...state } = useSuperSplatXR(testDescriptor);
+  }, [routeSceneId, testScene]);
+
+  const input = routeSceneId ?? testDescriptor ?? null;
+  const { containerRef, ...state } = useSuperSplatXR(input);
 
   const [frameSceneCount, setFrameSceneCount] = useState(0);
   const prevLoadedRef = useRef(false);
@@ -72,7 +83,7 @@ export default function XRTestPage() {
         .xr-page__link { color: #4a90d9; }
       `}</style>
 
-      <h1>WebXR Diagnostic (/xr/test)</h1>
+      <h1>WebXR Diagnostic {routeSceneId ? `/xr/diagnostics/${routeSceneId}` : '(/xr/test)'}</h1>
       <div className="xr-page__state" data-testid="xr-state">
         WebXR state: {state.status.toUpperCase()} | XR mode: {state.xrMode ?? 'null'}
       </div>
@@ -97,7 +108,11 @@ export default function XRTestPage() {
           </tr>
           <tr>
             <td>Test Scene URL</td>
-            <td data-testid="diag-scene-url">{testScene}</td>
+            <td data-testid="diag-scene-url">{routeSceneId ?? testScene}</td>
+          </tr>
+          <tr>
+            <td>User Agent</td>
+            <td data-testid="diag-user-agent">{typeof navigator !== 'undefined' ? navigator.userAgent : '—'}</td>
           </tr>
           <tr>
             <td>Scene</td>
@@ -122,12 +137,37 @@ export default function XRTestPage() {
             <td data-testid="diag-can-start-vr">{state.canStartVR ? 'true' : 'false'}</td>
           </tr>
           <tr>
+            <td>state.canStartAR</td>
+            <td data-testid="diag-can-start-ar">{state.canStartAR ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
             <td>state.xrMode</td>
             <td data-testid="diag-xr-mode">{state.xrMode ?? 'null'}</td>
           </tr>
           <tr>
             <td>frame.gsplats</td>
             <td data-testid="diag-gsplats">{state.gsplats}</td>
+          </tr>
+          <tr>
+            <td>state.hasCollision</td>
+            <td data-testid="diag-has-collision">{state.hasCollision ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
+            <td>state.walkAllowed</td>
+            <td data-testid="diag-walk-allowed">{state.walkAllowed ? 'true' : 'false'}</td>
+          </tr>
+          <tr>
+            <td>Camera (pre-XR)</td>
+            <td data-testid="diag-camera">
+              {(() => {
+                const pose = state.getCameraPose();
+                return pose
+                  ? `${pose.position
+                      .map((v) => Number(v.toFixed(3)))
+                      .join(', ')} / ${pose.target.map((v) => Number(v.toFixed(3))).join(', ')} / ${Number(pose.fov.toFixed(2))}`
+                  : '—';
+              })()}
+            </td>
           </tr>
           <tr>
             <td>Frame Scene runs</td>
@@ -174,13 +214,27 @@ export default function XRTestPage() {
       )}
 
       <div className="xr-page__hint">
-        <Link className="xr-page__link" to="/">
-          首页
-        </Link>
-        {' · '}
-        <Link className="xr-page__link" to="/xr/local-garden">
-          /xr/local-garden
-        </Link>
+        {routeSceneId ? (
+          <>
+            <Link className="xr-page__link" to={`/scene/${routeSceneId}`}>
+              Desktop Viewer
+            </Link>
+            {' · '}
+            <Link className="xr-page__link" to={`/xr/${routeSceneId}`}>
+              正式 XR 页
+            </Link>
+          </>
+        ) : (
+          <>
+            <Link className="xr-page__link" to="/">
+              首页
+            </Link>
+            {' · '}
+            <Link className="xr-page__link" to="/xr/local-garden">
+              /xr/local-garden
+            </Link>
+          </>
+        )}
       </div>
     </div>
   );

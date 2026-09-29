@@ -45,6 +45,7 @@ export const appRouter = createBrowserRouter([
     children: [{ index: true, element: <SceneViewerPage /> }],
   },
   { path: '/xr/test', element: <XRTestPage /> },
+  { path: '/xr/diagnostics/:sceneId', element: <XRTestPage /> },
   { path: '/xr/:sceneId', element: <XRViewerPage /> },
   { path: '/runtime-test/:sceneId', element: <RuntimeTestPage /> },
   { path: '/s/:token', element: <ShareRedirectPage /> },

@@ -865,3 +865,175 @@ a {
 .gs-panorama__error {
   color: #f2a0a0;
 }
+/* ---------------------------------------------------------------------------
+ * .gs-xr —— 正式 XR 页面（FIX-04 §2）：Viewer 铺满 viewport，极简产品 UI。
+ * -------------------------------------------------------------------------- */
+.gs-xr {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #000;
+  overflow: hidden;
+  color: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.gs-xr__mount {
+  position: absolute;
+  inset: 0;
+}
+
+.gs-xr__topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+  pointer-events: none;
+  z-index: 10;
+}
+
+.gs-xr__topbar > * {
+  pointer-events: auto;
+}
+
+.gs-xr__scene-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #eef2ff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  max-width: 45vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-xr__topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gs-xr__back {
+  color: #dbe4ff;
+  text-decoration: none;
+  font-size: 13px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(10, 16, 32, 0.5);
+}
+
+.gs-xr__back:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.gs-xr__btn {
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.08s ease, opacity 0.15s ease;
+}
+
+.gs-xr__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gs-xr__btn--enter {
+  padding: 14px 40px;
+  font-size: 17px;
+  color: #fff;
+  background: #4a90d9;
+  box-shadow: 0 8px 28px rgba(74, 144, 217, 0.45);
+}
+
+.gs-xr__btn--enter:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: #5ea0e6;
+}
+
+.gs-xr__btn--exit {
+  padding: 8px 16px;
+  color: #fff;
+  background: rgba(190, 60, 60, 0.85);
+}
+
+.gs-xr__enter {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+}
+
+.gs-xr__hint {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 999px;
+  padding: 5px 14px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.gs-xr__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(4, 8, 20, 0.72);
+  z-index: 20;
+  text-align: center;
+  padding: 24px;
+}
+
+.gs-xr__overlay-text {
+  margin: 0;
+  font-size: 15px;
+  color: #dfe7ff;
+  max-width: 560px;
+}
+
+.gs-xr__overlay-text--error {
+  color: #ffb3b3;
+  white-space: pre-wrap;
+}
+
+.gs-xr__spinner {
+  width: 34px;
+  height: 34px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #4a90d9;
+  border-radius: 50%;
+  animation: gs-xr-spin 0.9s linear infinite;
+}
+
+@keyframes gs-xr-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 视觉隐藏的诊断读数（e2e 取证；正式 UI 不显示工程面板） */
+.gs-xr__diag {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

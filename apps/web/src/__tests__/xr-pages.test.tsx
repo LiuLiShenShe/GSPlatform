@@ -337,4 +337,70 @@ describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数�
     expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
     u.unmount();
   });
+
+  // ------------------------------------------------------------------ //
+  // FIX-04 §2/§3 —— 正式页产品化 + 诊断迁移
+  // ------------------------------------------------------------------ //
+
+  it('FIX-04 §2: /xr/:sceneId 是正式产品页（极简 UI，工程诊断表不显示）', async () => {
+    const u = renderApp({ route: '/xr/r-8c4e2264e86a' });
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-state-loaded').textContent).toBe('true');
+    });
+    // 极简产品 UI：Scene Name / Enter VR / Back（退出 VR 仅在会话中显示）
+    expect(screen.getByTestId('xr-scene-name')).toBeInTheDocument();
+    expect(screen.getByTestId('enter-vr-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('xr-back-link')).toBeInTheDocument();
+    expect(screen.getByTestId('xr-hint')).toBeInTheDocument();
+    // 正式页不显示开发诊断面板（绿色 monospace 表格 / .xr-page）
+    expect(document.querySelector('.xr-page__table')).toBeNull();
+    expect(document.querySelector('.xr-page')).toBeNull();
+    // 进入 VR 前隐藏 Exit VR（仅在会话中显示）
+    expect(screen.queryByTestId('exit-vr-btn')).toBeNull();
+    u.unmount();
+  });
+
+  it('FIX-04 §2: 诊断读数经视觉隐藏 span 暴露（e2e 取证契约保留，不可见）', async () => {
+    const u = renderApp({ route: '/xr/r-8c4e2264e86a' });
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-state-loaded').textContent).toBe('true');
+    });
+    for (const id of [
+      'diag-state-loaded',
+      'diag-renderer',
+      'diag-can-start-vr',
+      'diag-gsplats',
+      'diag-has-collision',
+      'diag-walk-allowed',
+      'diag-camera',
+    ]) {
+      const el = screen.getByTestId(id);
+      expect(el.getAttribute('class')).toContain('gs-xr__diag');
+    }
+    // 汇总诊断 JSON（含 renderer / gsplats / camera）
+    const json = JSON.parse(screen.getByTestId('ov-xr-diagnostics').textContent ?? '{}');
+    expect(json.renderer).toBe('webgl2');
+    expect(json.canStartVR).toBe(true);
+    u.unmount();
+  });
+
+  it('FIX-04 §3: /xr/diagnostics/:sceneId 路由存在并走 DB 合同同链路（renderer webgl）', async () => {
+    const paths = appRouter.routes.map((r) => r.path);
+    expect(paths).toContain('/xr/diagnostics/:sceneId');
+
+    const u = renderApp({ route: '/xr/diagnostics/r-8c4e2264e86a' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(1);
+    });
+    const call = createViewerCalls[0];
+    expect(call.contentUrl).toBe(runtimeDescriptorFixture.content.url);
+    expect(call.renderer).toBe('webgl');
+    // 诊断页完整工程读数（UA / collision / walk / camera）
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-user-agent').textContent?.length).toBeGreaterThan(0);
+    });
+    expect(screen.getByTestId('diag-has-collision')).toBeInTheDocument();
+    expect(screen.getByTestId('diag-walk-allowed')).toBeInTheDocument();
+    u.unmount();
+  });
 });

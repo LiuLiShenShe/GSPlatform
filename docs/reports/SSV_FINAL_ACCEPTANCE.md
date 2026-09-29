@@ -9,8 +9,16 @@
 
 ## OVERALL RESULT
 
-**PASS** —— 全部 Production blocking 项通过；无阻塞遗留。遗留项均为环境性
-（真实 Quest/PICO 实机、真实域名 HTTPS 站点属部署 runbook，本环境未执行，如实记录）。
+> ⚠️ **FIX-04 历史纠正（2026-09-29）**：SSV-10 的 OVERALL RESULT=PASS 是 **SSV 阶段
+> （软件迁移）范围内**的验收结论 —— 明确排除真实 Quest/PICO 硬件与真实域名 HTTPS
+> （见下文 KNOWN LIMITATIONS）。按 FIX-04 的 Production Acceptance 规则（§21），
+> 未执行真机验收时**不得**写作生产级 PASS。生产级最终验收见
+> **`docs/reports/PRODUCTION_RUNTIME_ACCEPTANCE.md`**（OVERALL RESULT=BLOCKED —
+> XR HARDWARE ACCEPTANCE NOT EXECUTED，本环境无头显硬件）。
+
+**PASS（SSV-10 软件迁移验收范围）** —— 全部 Production blocking 项（软件/自动化）通过；
+无阻塞遗留。遗留项均为环境性（真实 Quest/PICO 实机、真实域名 HTTPS 站点属部署
+runbook，本环境未执行，如实记录）。
 
 迁移闭环：**GSPlatform → SceneRuntimeDescriptor → ExperienceSettings v2 →
 @playcanvas/supersplat-viewer → Desktop / XR**，legacy 引用 = 0，质量门全绿。
