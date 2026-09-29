@@ -3,7 +3,7 @@
 - 状态：ACTIVE（顺序 FROZEN）
 - 日期：2026-09-28
 - 架构依据：`docs/adr/ADR_SUPERSPLAT_RUNTIME.md`
-- 当前阶段：**SSV-07 — Collision / Walk（已完成）**
+- 当前阶段：**SSV-08 — Streaming / LOD / Performance（已完成）**
 
 ---
 

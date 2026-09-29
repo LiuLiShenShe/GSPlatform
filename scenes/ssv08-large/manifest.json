@@ -1,0 +1,33 @@
+{
+ "schemaVersion": 1,
+ "sceneId": "ssv08-large",
+ "assetVersion": "ffb4584fa2d7",
+ "format": "streamed-sog",
+ "stream": {
+  "entryUrl": "versions/ffb4584fa2d7/lod-meta.json",
+  "byteLength": 1199092,
+  "sha256": "1ed8e1121f29c5a7a7600fa86dcbeb0b765e757367f54106110e8e975197e3d2",
+  "transport": "range",
+  "lodLevels": 3,
+  "counts": [
+   180000,
+   540000,
+   1800000
+  ]
+ },
+ "title": "SSV-08 Large LOD (1.8M)",
+ "posterUrl": null,
+ "camera": {
+  "position": [
+   0,
+   1.2,
+   3.5
+  ],
+  "target": [
+   0,
+   0.8,
+   0
+  ],
+  "fov": 55
+ }
+}

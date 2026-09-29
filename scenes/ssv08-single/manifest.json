@@ -1,0 +1,22 @@
+{
+ "schemaVersion": 1,
+ "sceneId": "ssv08-single",
+ "assetVersion": "dfe917b41859",
+ "format": "sog",
+ "assetUrl": "/local-scenes/ssv08-single/scene.sog",
+ "title": "SSV-08 Single SOG (1.8M)",
+ "posterUrl": null,
+ "camera": {
+  "position": [
+   0,
+   1.2,
+   3.5
+  ],
+  "target": [
+   0,
+   0.8,
+   0
+  ],
+  "fov": 55
+ }
+}

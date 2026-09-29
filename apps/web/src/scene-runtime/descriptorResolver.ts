@@ -9,7 +9,10 @@ import { getSceneRuntime, RuntimeApiError } from './runtimeApi';
 import type { SceneRuntimeDescriptorV1 } from './types';
 
 /** manifest 解析失败分类。 */
-export type ManifestFallbackErrorKind = 'SCENE_NOT_FOUND' | 'ASSET_FETCH_FAILED' | 'ASSET_INVALID' | 'STREAMED_SOG_UNSUPPORTED';
+export type ManifestFallbackErrorKind =
+  | 'SCENE_NOT_FOUND'
+  | 'ASSET_FETCH_FAILED'
+  | 'ASSET_INVALID';
 
 export class ManifestFallbackError extends Error {
   readonly kind: ManifestFallbackErrorKind;
@@ -121,25 +124,44 @@ async function resolveFromManifest(sceneId: string): Promise<SceneRuntimeDescrip
     throw new ManifestFallbackError('ASSET_INVALID', `场景清单不是合法 JSON: ${url}`);
   }
 
-  const isStreamed = raw.format === 'streamed-sog' || typeof raw.stream === 'object';
+  // SSV-08：官方 runtime 原生消费 streamed-sog（lod-meta.json + Range chunks，
+  // LOD/streaming/budget 全在官方 viewer 内），不再拒绝 —— 移除了
+  // STREAMED_SOG_UNSUPPORTED。legacy ViewerAdapter（使用本 manifest 直连
+  // @gsplatform/viewer 的路径）仍可自行不支持，但 official runtime 必须支持。
+  const sceneRoot = `/local-scenes/${encodeURIComponent(sceneId)}`;
+  const stream =
+    typeof raw.stream === 'object' && raw.stream !== null
+      ? (raw.stream as Record<string, unknown>)
+      : null;
+  const isStreamed = raw.format === 'streamed-sog' || stream?.transport === 'range';
+
+  let assetUrl: string | undefined;
+  let contentFormat: string | null;
   if (isStreamed) {
-    throw new ManifestFallbackError(
-      'STREAMED_SOG_UNSUPPORTED',
-      `场景 ${sceneId} 为 streamed-sog：非 DB 场景，请先通过上传/发布流程入 DB 后访问。`,
-    );
-  }
-  const format = raw.format;
-  if (format !== 'sog' && format !== 'ply' && format !== 'splat') {
-    throw new ManifestFallbackError('ASSET_INVALID', `场景清单缺少合法 format: ${url}`);
-  }
-  const assetUrl = typeof raw.assetUrl === 'string' ? raw.assetUrl : undefined;
-  if (!assetUrl) {
-    throw new ManifestFallbackError('ASSET_INVALID', `场景清单缺少 assetUrl: ${url}`);
+    const entryUrl = typeof stream?.entryUrl === 'string' ? stream.entryUrl : undefined;
+    if (!entryUrl) {
+      throw new ManifestFallbackError(
+        'ASSET_INVALID',
+        `streamed-sog 场景清单缺少 stream.entryUrl: ${url}`,
+      );
+    }
+    assetUrl = `${sceneRoot}/${entryUrl}`;
+    contentFormat = formatFromFilename(entryUrl) ?? 'lod-meta';
+  } else {
+    const format = raw.format;
+    if (format !== 'sog' && format !== 'ply' && format !== 'compressed-ply' && format !== 'splat') {
+      throw new ManifestFallbackError('ASSET_INVALID', `场景清单缺少合法 format: ${url}`);
+    }
+    assetUrl = typeof raw.assetUrl === 'string' ? raw.assetUrl : undefined;
+    if (!assetUrl) {
+      throw new ManifestFallbackError('ASSET_INVALID', `场景清单缺少 assetUrl: ${url}`);
+    }
+    const filename = assetUrl.split('/').pop() ?? '';
+    contentFormat = formatFromFilename(filename);
   }
 
   const title = typeof raw.title === 'string' ? raw.title : sceneId;
   const posterUrl = typeof raw.posterUrl === 'string' ? raw.posterUrl : null;
-  const filename = assetUrl.split('/').pop() ?? '';
 
   // manifest.camera 为 [x,y,z] 数组形式
   const cam = (raw.camera ?? {}) as { position?: number[]; target?: number[]; fov?: number };
@@ -150,7 +172,7 @@ async function resolveFromManifest(sceneId: string): Promise<SceneRuntimeDescrip
   return {
     schemaVersion: 1,
     scene: { id: sceneId, name: title, posterUrl },
-    content: { url: assetUrl, format: formatFromFilename(filename) },
+    content: { url: assetUrl, format: contentFormat },
     presentation: {
       worldTransform: { position: null, rotation: null, scale: null },
       initialCamera: hasCamera
