@@ -178,25 +178,6 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@24.13.3)(jsdom@30.0.1)(lightningcss@1.33.0)(sass@1.104.0)(terser@5.51.2)
 
-  apps/xr-viewer:
-    dependencies:
-      playcanvas:
-        specifier: 2.22.0
-        version: 2.22.0
-    devDependencies:
-      '@playcanvas/splat-transform':
-        specifier: 3.3.3
-        version: 3.3.3(playcanvas@2.22.0)
-      '@webgpu/types':
-        specifier: 0.1.72
-        version: 0.1.72
-      typescript:
-        specifier: ~5.8.0
-        version: 5.8.3
-      vite:
-        specifier: ^6.0.0
-        version: 6.4.3(@types/node@24.13.3)(lightningcss@1.33.0)(sass@1.104.0)(terser@5.51.2)
-
 packages:
 
   '@adobe/css-tools@4.5.0':
@@ -3624,11 +3605,6 @@ packages:
   typed-array-length@1.0.8:
     resolution: {integrity: sha512-phPGCwqr2+Qo0fwniCE8e4pKnGu/yFb5nD5Y8bf0EEeiI5GklnACYA9GFy/DrAeRrKHXvHn+1SUsOWgJp6RO+g==}
     engines: {node: '>= 0.4'}
-
-  typescript@5.8.3:
-    resolution: {integrity: sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==}
-    engines: {node: '>=14.17'}
-    hasBin: true
 
   typescript@6.0.3:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
@@ -7244,8 +7220,6 @@ snapshots:
       is-typed-array: 1.1.15
       possible-typed-array-names: 1.1.0
       reflect.getprototypeof: 1.0.10
-
-  typescript@5.8.3: {}
 
   typescript@6.0.3: {}
 

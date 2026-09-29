@@ -126,8 +126,8 @@ async function resolveFromManifest(sceneId: string): Promise<SceneRuntimeDescrip
 
   // SSV-08：官方 runtime 原生消费 streamed-sog（lod-meta.json + Range chunks，
   // LOD/streaming/budget 全在官方 viewer 内），不再拒绝 —— 移除了
-  // STREAMED_SOG_UNSUPPORTED。legacy ViewerAdapter（使用本 manifest 直连
-  // @gsplatform/viewer 的路径）仍可自行不支持，但 official runtime 必须支持。
+  // STREAMED_SOG_UNSUPPORTED。SSV-09 起生产 Web 已无 legacy ViewerAdapter 路径
+  // （apps/viewer 不再被引用），streamed 场景一律解析为 lod-meta 发射给官方 runtime。
   const sceneRoot = `/local-scenes/${encodeURIComponent(sceneId)}`;
   const stream =
     typeof raw.stream === 'object' && raw.stream !== null

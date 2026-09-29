@@ -1,3 +1,19 @@
+> ## ⚠️ LEGACY / DEPRECATED
+>
+> **本目录已冻结，不参与生产场景查看。** 生产 Scene Runtime 一律是官方
+> `@playcanvas/supersplat-viewer`（见 `apps/web`，于 SSV-03 ～ SSV-08 迁移完成）。
+>
+> **Not used by production scene viewing.** Production `apps/web` must not
+> import, serve, or build against this package (enforced by
+> `apps/web/src/__tests__/no-legacy-viewer-references.test.ts`). It is retained
+> only as a frozen, optionally-buildable standalone (root scripts
+> `legacy:viewer:*`); it does not participate in `dev` / `build` / deploy /
+> acceptance.
+>
+> 如未来确需 primitive-level Gaussian Editor（剪裁/编辑/导出），另行开 ADR，
+> 不得直接复用本 fork。历史 fork 记录见下方与 `UPSTREAM.md`；SSV-09 决策见
+> `docs/SSV_09_REPORT.md`。
+
 # SuperSplat Editor
 
 [![Github Release](https://img.shields.io/github/v/release/playcanvas/supersplat)](https://github.com/playcanvas/supersplat/releases)

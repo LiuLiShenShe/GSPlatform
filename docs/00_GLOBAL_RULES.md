@@ -69,8 +69,8 @@ GSPlatform/
 
 规则：
 
-- `apps/web` 负责产品页面与业务状态，不实现高斯渲染器。
-- `apps/viewer` 负责渲染、相机、性能和 Viewer UI 接口，不直接访问数据库。
+- `apps/web` 负责产品页面与业务状态，不实现高斯渲染器；生产 Scene 渲染一律由官方 `@playcanvas/supersplat-viewer` runtime 承担（SSV-09 起无 legacy viewer 引用）。
+- `apps/viewer`（LEGACY / DEPRECATED）：不参与生产查看、不直接访问数据库；仅作为冻结的独立包保留（如需 primitive-level Gaussian Editor 另行 ADR）。
 - `apps/api` 负责鉴权、元数据、上传会话、作品与任务 API。
 - `workers` 负责耗时任务；Web 请求不得同步执行 FFmpeg、COLMAP、gsplat 或格式转换。
 - `scenes`、上传文件、训练输出、SOG 分片、日志、数据库备份不得提交到 Git。

@@ -16,17 +16,21 @@
 
 | 目录 | 状态 | 说明 |
 |---|---|---|
-| `apps/viewer` | **LEGACY / FROZEN** | SuperSplat **Editor** 派生 fork（WebGPU-only）。不得继续增加任何生产 Viewer 功能。本阶段不删除。 |
-| `apps/xr-viewer` | **LEGACY / FROZEN** | 基于 PlayCanvas Engine 直接构建的独立 WebXR viewer（`playcanvas@2.22.0` 直接依赖，不使用 supersplat-viewer）。同样冻结。本阶段不删除。 |
+| `apps/viewer` | **LEGACY / DEPRECATED**（FROZEN） | SuperSplat **Editor** 派生 fork（WebGPU-only）。不得继续增加任何生产 Viewer 功能；**不参与生产查看**（`apps/web` 零引用，护栏见 `no-legacy-viewer-references.test.ts`）。SSV-09 不物理删除，仅供未来可能的 primitive-level Gaussian Editor（另开 ADR）。 |
+| `apps/xr-viewer` | **已删除（SSV-09）** | 基于 PlayCanvas Engine 直接构建的独立 WebXR viewer。SSV-04 后已退役为 FROZEN，SSV-09 Legacy Cleanup 随生产零引用确认后删除（目录、workspace ref、root 脚本、docs 启动说明）。 |
 
-两个目录在 **SSV-09 Legacy Cleanup** 才允许清理；SSV-00～SSV-08 期间只允许维持现状（构建 / 修复阻断性缺陷），不允许新增功能。
+`apps/xr-viewer` 已在 **SSV-09 Legacy Cleanup** 删除；`apps/viewer` 保留但冻结为
+LEGACY / DEPRECATED（不参与 dev / build / deploy / acceptance，root 聚合脚本已去除，仅保留
+`legacy:viewer:*` 显式独立脚本）。二者在 SSV-00～SSV-08 期间只允许维持现状（构建 / 修复阻断性缺陷），不允许新增功能。
 
 ### 渲染路径
 
 - **Desktop** → 官方 SuperSplat Viewer（WebGPU 优先，官方自行回退 WebGL）。
 - **XR** → **同一个**官方 SuperSplat Viewer，**强制 WebGL**。
   理由（已由源码确认，见 `docs/reports/WEBXR_REPAIR_REPORT.md` §2）：官方 supersplat-viewer 的 `createViewer()` 在 `useWebGPU` 时设 `deviceTypes:['webgpu']`，且 `startXR` 在 WebGPU 下抛 `startXR: reload with WebGL to start this session`。因此 XR 路径必须以 `renderer: 'webgl'` 创建 runtime。
-  现状实现：`apps/web/src/xr/XRViewerRuntime.ts`（`createViewer({ renderer: 'webgl', ui: false, settings })`）—— 这是 SSV-02 官方 wrapper 的基线，保留并继续演进。
+  现状实现：SSV-02 以 `apps/web/src/xr/XRViewerRuntime.ts` 泛化为官方 wrapper；该文件
+  已在 SSV-04 随 XR 统一删除，Desktop 与 XR 现共用 `SuperSplatRuntime`
+  （`rendererForMode('xr')` 固定 `'webgl'`）。
 
 ### Authoring 数据流（唯一方向）
 
