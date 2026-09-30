@@ -151,6 +151,12 @@ class RuntimeCollision(BaseModel):
 
     ``format`` is ``voxel`` (native octree; preferred) or ``glb`` (mesh
     fallback). The official viewer routes by the served url extension.
+
+    FIX-05 §22-§25: the official viewer cannot reliably re-transform a built
+    collision, so a collision is STALE once the scene's world transform
+    changes after the build (``worldTransformHash`` mismatch) — the UI must
+    disable walk and ask the owner to rebuild. ``worldTransformHash`` records
+    the transform the build was performed under (``None`` = identity/absent).
     """
 
     url: str | None = None  # served via GET /api/v1/scenes/{scene_id}/collision/*
@@ -161,6 +167,8 @@ class RuntimeCollision(BaseModel):
     stepOffset: float = Field(alias="stepOffset")
     playerHeight: float = Field(alias="playerHeight")
     enabled: bool
+    stale: bool = False
+    worldTransformHash: str | None = Field(alias="worldTransformHash", default=None)
 
     model_config = {"populate_by_name": True}
 

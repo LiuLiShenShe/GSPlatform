@@ -824,22 +824,44 @@ describe('相机 pose 封装（SSV-05）', () => {
     expect(injected.camera.initial.fov).toBe(120); // clamp 进官方界
   });
 
-  it('pickWorldPosition(0,0) 中心 = 相机正前方焦点深度点', async () => {
+  it('FIX-05 §26-§28：setCameraPose 100 次只保留 1 条临时标注（固定 key 复用）', async () => {
+    const fake = makeCameraHandle();
+    (fake.annotations as unknown as unknown[]).length = 0;
+    mockedCreateViewer.mockResolvedValueOnce(fake as unknown as ViewerHandle);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    for (let i = 0; i < 100; i += 1) {
+      runtime.setCameraPose({ position: [0, i / 2, 0], target: [0, 1, -5], fov: 60 });
+    }
+    expect(fake.selectAnnotation).toHaveBeenCalledTimes(100);
+    // 隐藏临时标注至多 1 条（每次复用同一条，不随调用次数增长）。
+    const injectedCount = (fake.annotations as unknown as Array<Record<string, unknown>>)
+      .filter((a) => (a.extras as { gsplatform?: unknown } | undefined)?.gsplatform !== undefined)
+      .filter((a) => a.title === '')
+      .length;
+    expect(injectedCount).toBe(1);
+    // select 的始终是那同一条（index 稳定）。
+    const indexes = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls.map(
+      (c: unknown[]) => c[0] as number,
+    );
+    expect(new Set(indexes).size).toBe(1);
+  });
+
+  it('pickApproximateWorldPosition(0,0) 中心 = 相机正前方焦点深度点', async () => {
     const fake = makeCameraHandle();
     mockedCreateViewer.mockResolvedValueOnce(fake as unknown as ViewerHandle);
     const runtime = await SuperSplatRuntime.create(defaultOptions());
-    const hit = runtime.pickWorldPosition(0, 0);
+    const hit = runtime.pickApproximateWorldPosition(0, 0);
     expect(hit).not.toBeNull();
     expect(hit!.position[0]).toBeCloseTo(1, 5);
     expect(hit!.position[1]).toBeCloseTo(2, 5);
     expect(hit!.position[2]).toBeCloseTo(3 - SQRT11, 5);
   });
 
-  it('pickWorldPosition 相机缺失时返回 null', async () => {
+  it('pickApproximateWorldPosition 相机缺失时返回 null', async () => {
     const fake = makeFakeHandle();
     mockedCreateViewer.mockResolvedValueOnce(fake);
     const runtime = await SuperSplatRuntime.create(defaultOptions());
-    expect(runtime.pickWorldPosition(0, 0)).toBeNull();
+    expect(runtime.pickApproximateWorldPosition(0, 0)).toBeNull();
   });
 });
 
@@ -986,22 +1008,34 @@ describe('SSV-07 walk / collision / scale', () => {
 
 // ─── FIX-02 —— 世界变换施加 / 视角导航 / per-annotation camera ──────────────
 describe('FIX-02 world transform', () => {
-  it('恒等世界变换 applyWorldTransform = no-op（实体保持官方初始）', async () => {
+  it('恒等世界变换 applyWorldTransform 恢复加载基准 TRS（FIX-05 §18-§21 复位）', async () => {
     const setLocalEulerAngles = vi.fn();
     const setLocalPosition = vi.fn();
     const setLocalScale = vi.fn();
     const sync = vi.fn();
     const root = {
       findByName: (name: string) =>
-        name === 'gsplat' ? { setLocalEulerAngles, setLocalPosition, setLocalScale, sync } : null,
+        name === 'gsplat'
+          ? {
+              setLocalEulerAngles,
+              setLocalPosition,
+              setLocalScale,
+              getLocalPosition: () => ({ x: 0, y: 0, z: 0 }),
+              getLocalEulerAngles: () => ({ x: 0, y: 0, z: 180 }),
+              getLocalScale: () => ({ x: 1, y: 1, z: 1 }),
+              sync,
+            }
+          : null,
     };
     const fake = makeFakeHandle({ root });
     mockedCreateViewer.mockResolvedValueOnce(fake);
     const runtime = await SuperSplatRuntime.create(defaultOptions());
+    // FIX-05：恒等 W 不再「早退 no-op」，而是显式恢复加载基准 TRS
+    // （保证此后设过非恒等 W 后再改回恒等能真正复位）。
     expect(runtime.applyWorldTransform()).toBe(true);
-    expect(setLocalEulerAngles).not.toHaveBeenCalled();
-    expect(setLocalPosition).not.toHaveBeenCalled();
-    expect(setLocalScale).not.toHaveBeenCalled();
+    expect(setLocalPosition).toHaveBeenCalledWith(0, 0, 0);
+    expect(setLocalEulerAngles).toHaveBeenCalledWith(0, 0, 180);
+    expect(setLocalScale).toHaveBeenCalledWith(1, 1, 1);
   });
 
   it('非恒等 W 施加到 gsplat 实体（位置/旋转合成/缩放），幂等', async () => {
@@ -1011,7 +1045,17 @@ describe('FIX-02 world transform', () => {
     const sync = vi.fn();
     const root = {
       findByName: (name: string) =>
-        name === 'gsplat' ? { setLocalEulerAngles, setLocalPosition, setLocalScale, sync } : null,
+        name === 'gsplat'
+          ? {
+              setLocalEulerAngles,
+              setLocalPosition,
+              setLocalScale,
+              getLocalPosition: () => ({ x: 0, y: 0, z: 0 }),
+              getLocalEulerAngles: () => ({ x: 0, y: 0, z: 180 }),
+              getLocalScale: () => ({ x: 1, y: 1, z: 1 }),
+              sync,
+            }
+          : null,
     };
     const fake = makeFakeHandle({ root });
     mockedCreateViewer.mockResolvedValueOnce(fake);
@@ -1055,7 +1099,17 @@ describe('FIX-02 world transform', () => {
     const sync = vi.fn();
     const root = {
       findByName: (name: string) =>
-        name === 'gsplat' ? { setLocalEulerAngles, setLocalPosition, setLocalScale, sync } : null,
+        name === 'gsplat'
+          ? {
+              setLocalEulerAngles,
+              setLocalPosition,
+              setLocalScale,
+              getLocalPosition: () => ({ x: 0, y: 0, z: 0 }),
+              getLocalEulerAngles: () => ({ x: 0, y: 0, z: 180 }),
+              getLocalScale: () => ({ x: 1, y: 1, z: 1 }),
+              sync,
+            }
+          : null,
     };
     const fake = makeFakeHandle({ root });
     mockedCreateViewer.mockResolvedValueOnce(fake);
@@ -1067,9 +1121,12 @@ describe('FIX-02 world transform', () => {
     expect(runtime.worldTransform.isIdentity).toBe(false);
     expect(runtime.worldTransform.sceneToRuntimePoint({ x: 0, y: 0, z: 0 })).toEqual({ x: 3, y: 0, z: 0 });
     expect(setLocalPosition).toHaveBeenCalledWith(3, 0, 0);
-    // 传 null → 恢复恒等（实体复位到官方初始，但不再写实体，因为恒等 = no-op）。
+    // 传 null → 恢复恒等；FIX-05 §18-§21：恒等 W 显式复位实体到加载基准 TRS。
     expect(runtime.setWorldTransform(null)).toBe(true);
     expect(runtime.worldTransform.isIdentity).toBe(true);
+    expect(setLocalPosition).toHaveBeenLastCalledWith(0, 0, 0);
+    expect(setLocalEulerAngles).toHaveBeenLastCalledWith(0, 0, 180);
+    expect(setLocalScale).toHaveBeenLastCalledWith(1, 1, 1);
   });
 
   it('setWorldTransform 实体未就绪时更新适配器并返回 false（不抛错）', async () => {
@@ -1079,6 +1136,76 @@ describe('FIX-02 world transform', () => {
     expect(runtime.setWorldTransform({ position: { x: 0, y: 5, z: 0 }, rotation: null, scale: null })).toBe(false);
     // 适配器已更新 → 下次 applyWorldTransform 会用新 W。
     expect(runtime.worldTransform.sceneToRuntimePoint({ x: 0, y: 0, z: 0 })).toEqual({ x: 0, y: 5, z: 0 });
+  });
+});
+
+// ─── FIX-05 §18-§21 —— 世界变换复位 / 基准 TRS 捕获 ─────────────────────────
+describe('FIX-05 world transform reset (base capture)', () => {
+  /** 共享的实体 mock：加载基准 = 官方 Rz180 非恒等（position 0 / euler 0,0,180 / scale 1）。 */
+  function entityWithBase(
+    base: { pos: { x: number; y: number; z: number }; rot: { x: number; y: number; z: number }; scale: { x: number; y: number; z: number } },
+  ) {
+    const setLocalPosition = vi.fn();
+    const setLocalEulerAngles = vi.fn();
+    const setLocalScale = vi.fn();
+    const sync = vi.fn();
+    const root = {
+      findByName: (name: string) =>
+        name === 'gsplat'
+          ? {
+              setLocalPosition,
+              setLocalEulerAngles,
+              setLocalScale,
+              getLocalPosition: () => ({ ...base.pos }),
+              getLocalEulerAngles: () => ({ ...base.rot }),
+              getLocalScale: () => ({ ...base.scale }),
+              sync,
+            }
+          : null,
+    };
+    return { setLocalPosition, setLocalEulerAngles, setLocalScale, sync, root };
+  }
+
+  const OFFICIAL_BASE = {
+    pos: { x: 0, y: 0, z: 0 },
+    rot: { x: 0, y: 0, z: 180 },
+    scale: { x: 1, y: 1, z: 1 },
+  };
+
+  it('base 非恒等（官方 Rz180）→ W 旋转 90° 合成 → W 改回恒等恢复 base', async () => {
+    const { setLocalPosition, setLocalEulerAngles, setLocalScale, root } = entityWithBase(OFFICIAL_BASE);
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    // 旋转 90°（Y 轴）+ 平移：合成 = W ∘ base。
+    expect(runtime.setWorldTransform({ position: null, rotation: { x: 0, y: 90, z: 0 }, scale: null })).toBe(true);
+    expect(setLocalEulerAngles).toHaveBeenCalledTimes(1);
+    // 第二次同一 W（幂等）：仍合成，不叠加。
+    expect(runtime.setWorldTransform({ position: null, rotation: { x: 0, y: 90, z: 0 }, scale: null })).toBe(true);
+    expect(setLocalEulerAngles).toHaveBeenCalledTimes(2);
+    // 改回恒等 → 显式恢复加载基准（FIX-05 §18-§21 核心断言）。
+    expect(runtime.setWorldTransform(null)).toBe(true);
+    expect(setLocalPosition).toHaveBeenLastCalledWith(0, 0, 0);
+    expect(setLocalEulerAngles).toHaveBeenLastCalledWith(0, 0, 180);
+    expect(setLocalScale).toHaveBeenLastCalledWith(1, 1, 1);
+  });
+
+  it('base 非恒等（任意旋转）→ 合成 → 恒等恢复 base 非恒等', async () => {
+    const base = { pos: { x: 5, y: 2, z: 0 }, rot: { x: 0, y: 45, z: 0 }, scale: { x: 2, y: 2, z: 2 } };
+    const { setLocalPosition, setLocalEulerAngles, setLocalScale, root } = entityWithBase(base);
+    const fake = makeFakeHandle({ root });
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    // W = 平移 + 缩放，无旋转 → 合成位置 = W.position + R(W)·S(W)·base.position
+    // = (10,0,0) + 3*(5,2,0) = (25,6,0)。
+    expect(runtime.setWorldTransform({ position: { x: 10, y: 0, z: 0 }, rotation: null, scale: { x: 3, y: 3, z: 3 } })).toBe(true);
+    expect(setLocalPosition).toHaveBeenCalledWith(25, 6, 0);
+    expect(setLocalScale).toHaveBeenCalledWith(6, 6, 6); // W.scale * base.scale
+    // 改回恒等 → 恢复 base 非恒等（position/rotation/scale 全部回原值）。
+    expect(runtime.setWorldTransform(null)).toBe(true);
+    expect(setLocalPosition).toHaveBeenLastCalledWith(5, 2, 0);
+    expect(setLocalEulerAngles).toHaveBeenLastCalledWith(0, 45, 0);
+    expect(setLocalScale).toHaveBeenLastCalledWith(2, 2, 2);
   });
 });
 

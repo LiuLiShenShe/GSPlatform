@@ -24,6 +24,8 @@ function fakeState(overrides: Partial<OfficialDesktopViewerState> = {}): Officia
     isFullscreen: false,
     hasCollision: true,
     walkAllowed: true,
+    collisionStale: false,
+    effectiveWalkAllowed: true,
     collisionFormat: 'voxel',
     sceneScale: { horizontalExtent: 10, verticalExtent: 3, status: 'ok', needsCalibration: false },
     canStartVR: false,
@@ -72,6 +74,33 @@ describe('Walk button (SSV-07 §3 / §4)', () => {
       />,
     );
     expect(screen.getByTestId('ov-walk')).toBeDisabled();
+  });
+
+  it('FIX-05 §24：碰撞 STALE（世界变换构建后改变）→ 禁用，即使官方 walkAllowed', () => {
+    render(
+      <OfficialViewerToolbar
+        state={fakeState({
+          walkAllowed: true,
+          collisionStale: true,
+          effectiveWalkAllowed: false,
+        })}
+      />,
+    );
+    const button = screen.getByTestId('ov-walk');
+    expect(button).toBeDisabled();
+  });
+
+  it('FIX-05 §24：碰撞未 STALE → 可点击（有效 walk 允许）', () => {
+    const toggleWalk = vi.fn();
+    render(
+      <OfficialViewerToolbar
+        state={fakeState({ walkAllowed: true, collisionStale: false, effectiveWalkAllowed: true, toggleWalk })}
+      />,
+    );
+    const button = screen.getByTestId('ov-walk');
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    expect(toggleWalk).toHaveBeenCalledTimes(1);
   });
 
   it('cameraMode=walk → 按钮呈激活态（Walk ✓）', () => {

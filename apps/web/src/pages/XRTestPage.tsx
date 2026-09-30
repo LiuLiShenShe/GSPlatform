@@ -157,6 +157,12 @@ export default function XRTestPage() {
             <td data-testid="diag-walk-allowed">{state.walkAllowed ? 'true' : 'false'}</td>
           </tr>
           <tr>
+            <td>FIX-05 collisionStale / effectiveWalkAllowed</td>
+            <td data-testid="diag-collision-stale">
+              {state.collisionStale ? 'true' : 'false'} / {state.effectiveWalkAllowed ? 'true' : 'false'}
+            </td>
+          </tr>
+          <tr>
             <td>Camera (pre-XR)</td>
             <td data-testid="diag-camera">
               {(() => {

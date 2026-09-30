@@ -52,6 +52,7 @@ from app.schemas.scene_runtime import (
     RuntimeWorldTransform,
     SceneRuntimeDescriptorV1,
 )
+from app.services.collision import world_transform_hash
 from app.services.scene_access import SceneAccessPolicy
 
 # Business URL prefixes produced by the serving layer. Never filesystem paths.
@@ -67,6 +68,25 @@ _SINGLE_FILE_DEFAULTS = {
     "ply": "scene.ply",
     "splat": "scene.splat",
 }
+
+
+def _version_segment(version: SceneVersion | None) -> str | None:
+    """The ``versions/<asset_version>`` URL segment for *version* (FIX-05 §8).
+
+    Content-addressed ``versions/<ver>/...`` URLs are immutable and cachable
+    for a year; the ``current`` alias is a repointable pointer and must stay
+    ``no-cache``.  Prefer the versioned segment whenever the on-disk tree for
+    that version is known to exist (asset_version is the same key the publish
+    bridge links as ``scenes/<slug>/versions/<ver>``).  Returns ``None`` when
+    there is no trustworthy version segment (then ``current/...`` is used).
+    """
+    if version is None:
+        return None
+    asset_version = (version.asset_version or "").strip()
+    if not asset_version or not asset_version.replace("_", "").isalnum():
+        # A version key must be a bare content id; anything else is untrusted.
+        return None
+    return f"versions/{asset_version}"
 
 
 def _vec3(raw: Any) -> RuntimeVec3 | None:
@@ -257,7 +277,15 @@ class SceneRuntimeService:
             if isinstance(entry, str) and entry:
                 url = self._content_url(scene, entry)
             else:
-                url = f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/current/lod-meta.json"
+                # No explicit entryUrl: fall back to the well-known entry
+                # file, preferring the immutable versioned path (FIX-05 §8).
+                seg = _version_segment(version)
+                if seg:
+                    url = (
+                        f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/{seg}/lod-meta.json"
+                    )
+                else:
+                    url = f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/current/lod-meta.json"
             return RuntimeContentOut(url=url, format="lod-meta")
 
         # Single-file: prefer the manifest's assetUrl, then the on-disk
@@ -282,7 +310,13 @@ class SceneRuntimeService:
                 name = _SINGLE_FILE_DEFAULTS.get(version_format)
             if name is None:
                 return RuntimeContentOut(url=None, format=None)
-            url = f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/current/{name}"
+            seg = _version_segment(version) if asset_row is not None else None
+            if seg:
+                # The version tree exists (we found the SOG asset row) — serve
+                # the immutable versioned URL instead of the `current` alias.
+                url = f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/{seg}/{name}"
+            else:
+                url = f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/current/{name}"
 
         filename = url.rsplit("/", 1)[-1] if url else ""
         return RuntimeContentOut(url=url, format=content_format_from_filename(filename))
@@ -462,6 +496,22 @@ class SceneRuntimeService:
             url, fmt = f"{base}/mesh", "glb"
         pres = self._presentations.get_by_scene(scene.id)
         enabled = pres.collision_enabled if pres is not None else False
+
+        # FIX-05 §23/§24：STALE = 世界变换在构建后发生改变。官方 runtime 无法对
+        # 已构建碰撞可靠地重施加变换，所以比较「构建时记录的世界变换 hash」与
+        # 当前 hash；不匹配 → UI 必须禁用 walk 并要求重建。恒等/未记录（None）对
+        # 恒等/未记录（None）视为一致（存量场景零回归）。
+        build_params = collision.build_params or {}
+        recorded_hash = build_params.get("worldTransformHash")
+        current_hash = (
+            world_transform_hash(
+                pres.world_position, pres.world_rotation, pres.world_scale
+            )
+            if pres is not None
+            else None
+        )
+        stale = recorded_hash != current_hash
+
         return RuntimeCollision(
             url=url,
             format=fmt,
@@ -471,4 +521,6 @@ class SceneRuntimeService:
             stepOffset=collision.step_offset,
             playerHeight=collision.player_height,
             enabled=enabled,
+            stale=stale,
+            worldTransformHash=current_hash,
         )

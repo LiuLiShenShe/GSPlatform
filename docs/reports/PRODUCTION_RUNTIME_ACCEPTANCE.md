@@ -175,6 +175,23 @@ chunk 请求），真实 GPU 复核见 KNOWN LIMITATIONS。
 7. dev API 以身份绕过运行（GS_DEV_IDENTITY_ENABLED），匿名访问私有场景返回 200 为
    dev 行为；强制鉴权由自动化测试锁定。
 
+## FIX-05：软件 Blocker vs 硬件 Blocker（§31/§38）
+
+**软件 Blocker —— 全部已清（FIX-05 PASS）**
+
+独立生产审计（FIX-05）确认的 9 项软件问题已全部修复并验证（详见
+`FIX_05_AUDIT_REMEDIATION_REPORT.md`）：dev 隧道暴露、`current/*` 错误 immutable、
+私有/分享资产错误 `public`、世界变换恒等无法复位、碰撞与变换未同步（STALE 语义）、
+发布信任根过宽、publish bridge repo root、setCameraPose 隐藏标注增长、拾取近似标记。
+软件门禁：backend `pytest` **208 passed** / `mypy` Success；web `typecheck` 0 errors /
+`vitest` **213 passed** / lint clean；workers 13 passed；`nginx -t` syntax ok。
+
+**硬件 Blocker —— 仍未执行（保持不变）**
+
+`XR HARDWARE ACCEPTANCE NOT EXECUTED`：无 Quest/PICO 头显。硬件项（6DoF、左右眼视差、
+Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全量首帧真实 GPU 复核）
+待真机环境执行 —— 这是**唯一剩余 blocker**，与软件无关。
+
 ## DEPLOYMENT
 
 - **Test Deployment（当前可用）**：Cloudflare Quick Tunnel → `https://barcelona-academic-glen-still.trycloudflare.com`

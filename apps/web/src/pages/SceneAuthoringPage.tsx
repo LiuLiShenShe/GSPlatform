@@ -168,11 +168,13 @@ export default function SceneAuthoringPage() {
     const rect = e.currentTarget.getBoundingClientRect();
     const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const ndcY = 1 - ((e.clientY - rect.top) / rect.height) * 2;
-    const hit = runtime.pickWorldPosition(ndcX, ndcY);
+    const hit = runtime.pickApproximateWorldPosition(ndcX, ndcY);
     if (!hit) {
       message.error('拾取位置失败，请确保场景已加载');
       return;
     }
+    // FIX-05 §29：拾取为「近似锚点」（bbox 深度近似，不保证命中 splat 表面）——
+    // 页面在拾取提示中明示，避免把近似值当成精确表面坐标。
     // FIX-02 §5/§13：拾取点是引擎（RUNTIME）空间 —— 存回 SCENE 空间。
     const sceneAnchor = runtime.worldTransform.runtimeToScenePoint({
       x: hit.position[0],

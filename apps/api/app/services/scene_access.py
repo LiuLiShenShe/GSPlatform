@@ -58,6 +58,7 @@ from app.db.models.enums import SceneStatus, Visibility
 from app.db.models.scene import Scene
 from app.db.models.share_link import ShareLink
 from app.repositories.scenes import SceneRepository
+from app.services.scene_asset import SceneAssetAccessScope
 
 
 def is_publicly_visible(scene: Scene) -> bool:
@@ -154,6 +155,26 @@ class SceneAccessPolicy:
         if user_id is None:
             raise UnauthorizedError("该场景需要登录后访问")
         raise ForbiddenError("该场景不可见或未发布")
+
+    # ------------------------------------------------------------------ #
+    # cache scope (FIX-05 §11)
+    # ------------------------------------------------------------------ #
+    def cache_scope(
+        self,
+        scene: Scene,
+        share_token: str | None = None,
+    ) -> SceneAssetAccessScope:
+        """Cache scope for a scene that already passed ``resolve_readable_scene``.
+
+        Only PUBLIC+PUBLISHED scenes may be cached by shared caches/CDNs; a
+        share-token grant and an owner-only read both stay private (P1-3).
+        Single source — call sites never re-derive visibility here.
+        """
+        if is_publicly_visible(scene):
+            return SceneAssetAccessScope.PUBLIC
+        if share_token and self._share_token_grants(scene, share_token):
+            return SceneAssetAccessScope.SHARE
+        return SceneAssetAccessScope.OWNER
 
     # ------------------------------------------------------------------ #
     # share grants

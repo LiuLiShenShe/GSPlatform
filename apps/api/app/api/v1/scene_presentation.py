@@ -140,7 +140,7 @@ def serve_cover(
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "public, no-cache"},  # mutable single URL (re-uploadable) — never immutable
     )
 
 
@@ -195,7 +195,7 @@ def serve_background(
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "public, no-cache"},  # mutable single URL (re-uploadable) — never immutable
     )
 
 
@@ -303,7 +303,7 @@ def serve_background_audio(
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "public, no-cache"},  # mutable single URL (re-uploadable) — never immutable
     )
 
 
@@ -414,5 +414,5 @@ def serve_annotation_media(
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": "public, no-cache"},  # mutable single URL (re-uploadable) — never immutable
     )

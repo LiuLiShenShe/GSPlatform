@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import NotFoundError
+from app.core.paths import get_repo_root
 from app.db.models.asset import Asset
 from app.db.models.enums import (
     AssetKind,
@@ -204,7 +205,9 @@ class PublishService:
                 return
             scenes_root = Path(settings.scene_origin_root)
         elif settings.env in {"development", "test"}:
-            repo_root = Path(__file__).resolve().parents[3]
+            # FIX-05 P1-7：禁止 Path(__file__).parents[N]（文件移动即失效）；
+            # repo root 统一走共享 helper（app.core.paths.get_repo_root）。
+            repo_root = get_repo_root()
             scenes_root = repo_root / "scenes"
         else:
             return

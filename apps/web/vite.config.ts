@@ -5,6 +5,22 @@ import type { Plugin } from 'vite'
 /// <reference types="vitest/config" />
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+import {
+  DEV_SCENE_ALLOWLIST_ENV,
+  DEV_TUNNEL_ENV,
+  parseDevSceneAllowlist,
+  resolveLocalSceneAccess,
+} from './src/scene-dev/sceneAllowlist.ts'
+
+// The Cloudflare quick tunnel (Quest/PICO WebXR real-device debugging) must be
+// OPT-IN: it makes the dev origin reachable from the public internet, so it is
+// gated behind GS_ENABLE_DEV_TUNNEL=1.  Never default it on, never use
+// `allowedHosts: true` (FIX-01 P0-2).  Production is Nginx + a real domain —
+// untouched by this flag.
+const devTunnelEnabled = process.env[DEV_TUNNEL_ENV] === '1'
+// FIX-05 §4: tunnel mode only exposes an explicit smoke-test allowlist
+// (XR_DEV_PUBLIC_SCENES=local-garden,xr-smoke-test).  Empty/unset → nothing.
+const devSceneAllowlist = parseDevSceneAllowlist(process.env[DEV_SCENE_ALLOWLIST_ENV])
 
 const MIME_TYPES: Record<string, string> = {
   '.js': 'application/javascript',
@@ -52,7 +68,7 @@ const serveStreamedScenes = (): Plugin => {
   const scenesRoot = path.resolve(import.meta.dirname, '../../scenes')
   // Mirrors the API's settings.storage_root / GS_STORAGE_ROOT (dev default),
   // where published versions live; `scenes/<slug>/versions/<ver>` symlinks
-  // point there.  Only `<storage>/published` is trusted.
+  // point there.
   const publishedRoot = path.resolve(
     process.env.GS_STORAGE_ROOT ?? '/home/test/gsplatform-data',
     'published',
@@ -164,6 +180,16 @@ const serveStreamedScenes = (): Plugin => {
   return {
     name: 'gs-serve-streamed-scenes',
     configureServer(server) {
+      // FIX-05 §5: when the tunnel is on, /local-scenes must be explicitly
+      // allowlisted — warn loudly if nothing is publicly exposed.
+      if (devTunnelEnabled) {
+        const listed = [...devSceneAllowlist].join(', ')
+        server.config.logger.warn(
+          `[gs-serve-streamed-scenes] DEV TUNNEL ENABLED (${
+            listed ? `/local-scenes 白名单: ${listed}` : 'NO LOCAL SCENE IS PUBLICLY EXPOSED'
+          })`,
+        )
+      }
       server.middlewares.use((req, res, next) => {
         const rawUrl = req.url ?? ''
         if (!rawUrl.startsWith('/local-scenes/')) { next(); return }
@@ -175,6 +201,14 @@ const serveStreamedScenes = (): Plugin => {
         //    traversal/encoding attack → 403 (mirrors the API policy).
         const sceneId = decodeOnce(segments[0])
         if (sceneId === null || !SCENE_SLUG_RE.test(sceneId)) {
+          reject(res, 403)
+          return
+        }
+
+        // FIX-05 §3-§5: tunnel mode (public-internet reachable) only serves
+        // explicitly allowlisted scenes.  Tunnel OFF = normal local dev,
+        // unchanged.  No default-allow-all, no query-param bypass.
+        if (devTunnelEnabled && !resolveLocalSceneAccess(devTunnelEnabled, devSceneAllowlist, sceneId)) {
           reject(res, 403)
           return
         }
@@ -223,11 +257,37 @@ const serveStreamedScenes = (): Plugin => {
         }
 
         const trusted: string[] = [realSceneRoot]
+        // FIX-05 §15: trust ONLY this scene's OWN published version dirs —
+        // the realpaths of the symlinks under `scenes/<slug>/versions/`.
+        // Previously the whole `<storage>/published` tree was trusted, which
+        // let one scene's chain resolve into a *sibling* scene's published
+        // bytes.  A planted symlink under another scene's published dir is no
+        // longer reachable here.
+        let realPublishedRoot: string | null = null
         try {
-          const realPublished = fs.realpathSync(publishedRoot)
-          if (!trusted.includes(realPublished)) trusted.push(realPublished)
+          realPublishedRoot = fs.realpathSync(publishedRoot)
         } catch {
-          /* storage root missing in dev — scene root is the only trust anchor */
+          /* storage root missing in dev */
+        }
+        try {
+          const versionsDir = path.join(realSceneRoot, 'versions')
+          for (const entry of fs.readdirSync(versionsDir)) {
+            let realEntry: string
+            try {
+              realEntry = fs.realpathSync(path.join(versionsDir, entry))
+            } catch {
+              continue // broken symlink — nothing to trust
+            }
+            if (
+              realPublishedRoot !== null &&
+              (realEntry === realPublishedRoot ||
+                realEntry.startsWith(realPublishedRoot + path.sep))
+            ) {
+              if (!trusted.includes(realEntry)) trusted.push(realEntry)
+            }
+          }
+        } catch {
+          /* no versions tree — scene root is the only trust anchor */
         }
         if (!trusted.some((root) => isWithin(realResolved, root))) {
           // Symlink escape: /etc, a sibling scene, anywhere else.
@@ -252,12 +312,8 @@ const serveStreamedScenes = (): Plugin => {
   }
 }
 
-// The Cloudflare quick tunnel (Quest/PICO WebXR real-device debugging) must be
-// OPT-IN: it makes the dev origin reachable from the public internet, so it is
-// gated behind GS_ENABLE_DEV_TUNNEL=1.  Never default it on, never use
-// `allowedHosts: true` (FIX-01 P0-2).  Production is Nginx + a real domain —
-// untouched by this flag.
-const devTunnelEnabled = process.env.GS_ENABLE_DEV_TUNNEL === '1'
+// The Cloudflare quick tunnel gate + allowlist are defined at the top of
+// this file (imported from src/scene-dev/sceneAllowlist).
 
 export default defineConfig({
   plugins: [react(), serveStreamedScenes()],

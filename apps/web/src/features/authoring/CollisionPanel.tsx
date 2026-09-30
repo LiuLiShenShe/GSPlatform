@@ -206,12 +206,25 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
               </Space>
 
               {collision.status === 'SUCCEEDED' && (
-                <Alert
-                  message="碰撞已就绪"
-                  description={`状态: ${collision.status}, 尝试次数: ${collision.attempt}`}
-                  type="success"
-                  showIcon
-                />
+                <>
+                  <Alert
+                    message="碰撞已就绪"
+                    description={`状态: ${collision.status}, 尝试次数: ${collision.attempt}`}
+                    type="success"
+                    showIcon
+                  />
+                  {/* FIX-05 §23/§25：世界变换在构建后改变 → STALE，walk 已禁用，
+                      必须重建。官方 runtime 无法可靠重变换碰撞几何。 */}
+                  {collision.stale && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message="Scene transform changed. Collision must be rebuilt."
+                      description="场景世界变换在碰撞构建后发生改变，碰撞与场景不再对齐；Walk 入口已禁用，请点击「重建碰撞」后重新启用。"
+                      data-testid="collision-stale-notice"
+                    />
+                  )}
+                </>
               )}
 
               {collision.status === 'FAILED' && (

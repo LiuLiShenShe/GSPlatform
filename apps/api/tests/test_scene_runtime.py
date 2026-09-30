@@ -77,10 +77,12 @@ class TestBasic:
             body["scene"]["posterUrl"]
             == f"/api/v1/scenes/{public_scene.slug}/assets/poster.webp"
         )
-        # default fixture version is streamed-sog without entryUrl → lod-meta fallback
+        # default fixture version is streamed-sog without entryUrl → lod-meta
+        # fallback. FIX-05 §8：优先不可变版本化 URL（versions/<asset_version>/）
+        # —— current 是可重指向别名，只用于无法获得版本段时兜底。
         assert (
             body["content"]["url"]
-            == f"/api/v1/scenes/{public_scene.slug}/assets/current/lod-meta.json"
+            == f"/api/v1/scenes/{public_scene.slug}/assets/versions/{public_scene.current_version.asset_version}/lod-meta.json"
         )
         assert body["content"]["format"] == "lod-meta"
 

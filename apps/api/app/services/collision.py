@@ -2,10 +2,18 @@
 
 Provides use-cases for building, reading, updating, and rebuilding collision
 meshes. The actual Celery build is dispatched through the shared producer.
+
+FIX-05 §22-§25: the official viewer cannot reliably re-transform a built
+collision mesh, so each build records the world transform it was performed
+under (``build_params.worldTransformHash``). The runtime descriptor compares
+that hash with the scene's current transform and reports ``stale`` when the
+transform changed after the build — the walk entry must then be disabled.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import uuid
 from typing import Any
@@ -33,6 +41,28 @@ logger = logging.getLogger("gsplatform.collision")
 def _validate_owner(scene: Scene, owner_id: uuid.UUID) -> None:
     if scene.owner_id != owner_id:
         raise ForbiddenError("只有场景所有者可以编辑")
+
+
+def world_transform_hash(
+    position: dict[str, float] | None,
+    rotation: dict[str, float] | None,
+    scale: dict[str, float] | None,
+) -> str | None:
+    """Content hash of a scene world transform (FIX-05 §23).
+
+    ``None`` when no transform component is set — the identity/absent case,
+    which always aligns with a locally-built collision.  Any non-empty
+    component produces a stable short hash used to detect a *change* of the
+    transform after the collision was built (mismatch → STALE).
+    """
+    if not position and not rotation and not scale:
+        return None
+    payload = json.dumps(
+        {"position": position, "rotation": rotation, "scale": scale},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 
 
 class CollisionService:
@@ -66,6 +96,33 @@ class CollisionService:
             .first()
         )
 
+    def _current_world_hash(self, scene_id: uuid.UUID) -> str | None:
+        """World-transform content hash in effect right now (FIX-05 §23).
+
+        Recorded on the collision at build/rebuild dispatch; the runtime
+        descriptor compares it with the freshest value to flag STALE.
+        """
+        pres = self._get_presentation(scene_id)
+        if pres is None:
+            return None
+        return world_transform_hash(
+            pres.world_position, pres.world_rotation, pres.world_scale
+        )
+
+    def _record_build_transform(
+        self, collision: "Any", world_hash: str | None
+    ) -> None:
+        """Persist the build-time world transform on the collision's build_params.
+
+        Merges so the worker's own artifact metadata (``to_params()``) is not
+        overwritten at dispatch; the worker re-records the same key on
+        SUCCEEDED (threaded through the task args).
+        """
+        params = dict(collision.build_params or {})
+        params["worldTransformHash"] = world_hash
+        collision.build_params = params
+        self._session.flush()
+
     def get_collision(self, slug: str, user_id: uuid.UUID | None) -> CollisionAssetOut:
         """Get collision asset status for a scene."""
         scene = self._get_scene(slug)
@@ -74,6 +131,10 @@ class CollisionService:
             raise NotFoundError(f"场景 {slug} 没有碰撞资产")
         presentation = self._get_presentation(scene.id)
         enabled = presentation.collision_enabled if presentation else False
+        # FIX-05 §23/§25：STALE = 构建时世界变换 hash 与当前不一致。
+        build_params = collision.build_params or {}
+        current_hash = self._current_world_hash(scene.id)
+        stale = build_params.get("worldTransformHash") != current_hash
         return CollisionAssetOut(
             id=str(collision.id),
             scene_id=str(collision.scene_id),
@@ -90,6 +151,8 @@ class CollisionService:
             attempt=collision.attempt,
             created_at=collision.created_at,
             updated_at=collision.updated_at,
+            stale=stale,
+            world_transform_hash=current_hash,
         )
 
     def serve_collision_mesh(self, slug: str) -> tuple[bytes, str]:
@@ -195,11 +258,14 @@ class CollisionService:
         self._session.flush()
 
         collision.job_id = job.id
+        # FIX-05 §23：记录构建时的世界变换（STALE 判定的基准）。
+        world_hash = self._current_world_hash(scene.id)
+        self._record_build_transform(collision, world_hash)
         self._session.flush()
 
         # Dispatch task
         task_name = "tasks.build_collision"
-        args = [str(job.id), str(scene.id), str(collision.id), req.mode]
+        args = [str(job.id), str(scene.id), str(collision.id), req.mode, world_hash]
         if self._send_task is not None:
             result = self._send_task(task_name, args=args)
             job.celery_task_id = str(result.id)
@@ -273,10 +339,13 @@ class CollisionService:
         self._session.flush()
 
         collision.job_id = job.id
+        # FIX-05 §23：重建同样记录当前世界变换 —— 重建后 hash 与场景一致 → 不 STALE。
+        world_hash = self._current_world_hash(scene.id)
+        self._record_build_transform(collision, world_hash)
         self._session.flush()
 
         task_name = "tasks.build_collision"
-        args = [str(job.id), str(scene.id), str(collision.id), collision.mode]
+        args = [str(job.id), str(scene.id), str(collision.id), collision.mode, world_hash]
         if self._send_task is not None:
             result = self._send_task(task_name, args=args)
             job.celery_task_id = str(result.id)

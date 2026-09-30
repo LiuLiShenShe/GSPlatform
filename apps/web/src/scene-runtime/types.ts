@@ -157,6 +157,10 @@ export interface RuntimeCollision {
   stepOffset: number;
   playerHeight: number;
   enabled: boolean;
+  /** FIX-05 §23-§25：世界变换在构建后改变 → STALE，UI 必须禁用 walk 并要求重建。 */
+  stale: boolean;
+  /** 构建时的世界变换内容 hash（恒等/未设置 = null）。 */
+  worldTransformHash: string | null;
 }
 
 /** 统一运行时场景合同（schemaVersion = 1）。 */

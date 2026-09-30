@@ -51,6 +51,14 @@ class CollisionAssetOut(BaseModel):
     attempt: int
     created_at: datetime
     updated_at: datetime
+    # FIX-05 §23/§25：STALE = 世界变换在构建后改变（官方 runtime 无法可靠重变换
+    # 碰撞几何）。Authoring 面板据此提示「碰撞需重建」并可由 UI 禁用 walk。
+    # worldTransformHash 以 camelCase 输出（与运行时描述符同形），Stale 无下划线
+    # 两种拼写一致。
+    stale: bool = False
+    world_transform_hash: str | None = Field(
+        default=None, alias="worldTransformHash"
+    )
 
     model_config = {"populate_by_name": True}
 

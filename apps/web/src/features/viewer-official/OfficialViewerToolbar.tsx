@@ -38,8 +38,10 @@ export function OfficialViewerToolbar({ state }: OfficialViewerToolbarProps) {
 
   // SSV-07 §3：Walk 只走官方 toggleWalk / walkAllowed / cameraMode。
   // §4：尺度异常（needsCalibration）时禁走 —— 不默默用错误尺度走路。
+  // FIX-05 §24：碰撞 STALE（世界变换在构建后改变）也禁走 —— 官方 runtime 无法
+  // 可靠重变换碰撞几何，STALE 时碰撞与场景不再对齐。
   const walkEnabled =
-    loaded && state.walkAllowed && !state.sceneScale.needsCalibration;
+    loaded && state.walkAllowed && !state.collisionStale && !state.sceneScale.needsCalibration;
   const walking = cameraMode === 'walk';
 
   // FIX-02 §10：Saved Views —— enabled 视角（按 orderIndex 排序）可点击导航。
@@ -61,9 +63,11 @@ export function OfficialViewerToolbar({ state }: OfficialViewerToolbarProps) {
               ? '退出 Walk（恢复 walk 前模式）'
               : !state.walkAllowed
                 ? '需要碰撞数据（场景未提供碰撞或场景过小）'
-                : state.sceneScale.needsCalibration
-                  ? '场景尺度需要校准（Scene scale needs calibration）'
-                  : '进入 Walk 模式（官方碰撞 + 重力 + WASD）'
+                : state.collisionStale
+                  ? '场景变换已改变，碰撞需重建（Collision must be rebuilt）'
+                  : state.sceneScale.needsCalibration
+                    ? '场景尺度需要校准（Scene scale needs calibration）'
+                    : '进入 Walk 模式（官方碰撞 + 重力 + WASD）'
           }
         >
           <Button

@@ -321,3 +321,66 @@ class TestTraversal:
         scene4.deleted_at = datetime.now(UTC)
         db.commit()
         assert is_publicly_visible(scene4) is False
+
+
+# ── FIX-05 §13/§14 —— published trusted root 场景级收窄 ─────────────────────
+class TestSceneSpecificPublishedRoot:
+    """Trusted root = ``<storage>/published/<scene.id>`` ONLY.
+
+    Scene A 自己的版本目录可达（versions/<ver> symlink）；任何指向其他场景
+    ``published/<B>/...`` 的 symlink（哪怕整个 published/ 都在 storage 内）必须
+    拒绝 —— P1-6 之前信任整个 published/ 会让 A 的链解析进 B 的资产。
+    """
+
+    def _layout(self, tmp_path_factory, monkeypatch):
+        origin = tmp_path_factory.mktemp("published-root-origin")
+        storage = tmp_path_factory.mktemp("published-root-storage")
+        monkeypatch.setattr(settings, "scene_origin_root", str(origin))
+        monkeypatch.setattr(settings, "storage_root", str(storage))
+        return origin, storage
+
+    def test_own_published_version_allowed_and_sibling_denied(self, tmp_path_factory, monkeypatch, db):
+        import os
+
+        origin, storage = self._layout(tmp_path_factory, monkeypatch)
+        scene_a = create_scene(
+            session=db,
+            visibility="PUBLIC",
+            status="PUBLISHED",
+            slug=f"proota-{uuid.uuid4().hex[:8]}",
+        )
+        scene_b = create_scene(
+            session=db,
+            visibility="PUBLIC",
+            status="PUBLISHED",
+            slug=f"prootb-{uuid.uuid4().hex[:8]}",
+        )
+
+        # Scene A 的发布目录 + origin 树的版本 symlink（真实发布布局）。
+        a_pub = storage / "published" / str(scene_a.id) / "versions" / "v1"
+        a_pub.mkdir(parents=True, exist_ok=True)
+        (a_pub / "lod-meta.json").write_text('{"entryUrl":"versions/v1/lod-meta.json"}')
+        a_dir = origin / scene_a.slug
+        (a_dir / "versions").mkdir(parents=True, exist_ok=True)
+        os.symlink(
+            str(a_pub), a_dir / "versions" / "v1", target_is_directory=True
+        )
+
+        # Scene B 的发布目录 —— 场景 A 不得经由任何 symlink 触达它。
+        b_pub = storage / "published" / str(scene_b.id) / "versions" / "v1"
+        b_pub.mkdir(parents=True, exist_ok=True)
+        (b_pub / "lod-meta.json").write_text('{"entryUrl":"versions/v1/lod-meta.json","owner":"B"}')
+        os.symlink(
+            str(b_pub), a_dir / "versions" / "v1-b", target_is_directory=True
+        )
+
+        svc = SceneAssetService()
+        # A 自己的版本 → 允许。
+        own = svc.resolve(scene_a, "versions/v1/lod-meta.json")
+        assert own.absolute_path is not None
+        assert own.absolute_path.read_text().startswith('{"entryUrl"')
+        # B 的版本目录（通过 planted symlink）→ 拒绝（P1-6 回归）。
+        from app.core.errors import NotFoundError
+
+        with pytest.raises(NotFoundError):
+            svc.resolve(scene_a, "versions/v1-b/lod-meta.json")

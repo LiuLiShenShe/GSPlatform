@@ -92,6 +92,8 @@ export const runtimeDescriptorFixture: SceneRuntimeDescriptorV1 = {
     stepOffset: 0.3,
     playerHeight: 1.8,
     enabled: true,
+    stale: false,
+    worldTransformHash: null,
   },
 };
 

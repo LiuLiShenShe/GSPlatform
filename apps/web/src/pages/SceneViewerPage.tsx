@@ -121,7 +121,11 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
             isManifestFallback: state.isManifestFallback,
             error: state.error,
             // SSV-07：walk/碰撞/尺度真相 + 相机位置（e2e 取证用）
+            // FIX-05 §24：collisionStale 世界变换构建后改变；effectiveWalkAllowed
+            // = 官方 walkAllowed AND 碰撞未 STALE（入口与工具栏已按它禁用）。
             walkAllowed: state.walkAllowed,
+            effectiveWalkAllowed: state.walkAllowed && !state.collisionStale,
+            collisionStale: state.collisionStale,
             hasCollision: state.hasCollision,
             collisionFormat: state.collisionFormat,
             sceneScale: {

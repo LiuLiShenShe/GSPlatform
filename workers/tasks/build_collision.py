@@ -69,8 +69,14 @@ def build_collision(
     scene_id: str,
     collision_id: str,
     mode: str,
+    world_transform_hash: str | None = None,
 ) -> dict:
-    """Build collision mesh for a scene."""
+    """Build collision mesh for a scene.
+
+    ``world_transform_hash`` (FIX-05 §23) is the world transform the API
+    recorded at dispatch; it is stored on the SUCCEEDED build so the runtime
+    descriptor can flag the collision STALE when the transform later changes.
+    """
     session = SessionLocal()
 
     job = _load_job(session, job_id)
@@ -208,7 +214,10 @@ def build_collision(
 
         collision.asset_id = preferred_asset.id
         collision.job_id = uuid.UUID(job_id)
-        collision.build_params = result.to_params()
+        build_params = result.to_params()
+        # FIX-05 §23：保留 API 在派发时记录的世界变换哈希（STALE 判定基准）。
+        build_params["worldTransformHash"] = world_transform_hash
+        collision.build_params = build_params
         mark_status("SUCCEEDED", 100)
 
         session.commit()

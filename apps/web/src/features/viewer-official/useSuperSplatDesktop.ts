@@ -54,6 +54,14 @@ export interface OfficialDesktopViewerState {
   hasCollision: boolean;
   /** 官方 walkAllowed —— 碰撞已加载且场景足够大（官方 state.walkAllowed）。 */
   walkAllowed: boolean;
+  /** FIX-05 §22-§25：碰撞是否 STALE（世界变换在构建后改变 → 禁用 walk）。 */
+  collisionStale: boolean;
+  /**
+   * FIX-05 §24：有效 walk 允许 = 官方 walkAllowed AND 碰撞未 STALE。
+   * 世界变换改变后碰撞不再与场景对齐，入口必须禁用（官方 API 无法可靠重变换
+   * 碰撞几何）。STALE 时 Authoring 侧要求重建。
+   */
+  effectiveWalkAllowed: boolean;
   /** 碰撞工件格式（voxel = 官方体素，glb = 官方 mesh）。 */
   collisionFormat: string | null;
   /**
@@ -130,6 +138,7 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [hasCollision, setHasCollision] = useState(false);
   const [walkAllowed, setWalkAllowed] = useState(false);
+  const [collisionStale, setCollisionStale] = useState(false);
   const [collisionFormat, setCollisionFormat] = useState<string | null>(null);
   const [sceneScale, setSceneScale] = useState<SceneScaleAssessment>({
     horizontalExtent: 0,
@@ -164,6 +173,10 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
         setDescriptor(desc);
         setIsManifestFallback(fromManifest);
         setCollisionFormat(desc.collision?.enabled ? desc.collision.format ?? null : null);
+        // FIX-05 §23-§25：碰撞 STALE = 世界变换在构建后改变。描述符已计算；
+        // 非恒等 W 下官方 runtime 无法可靠重变换碰撞几何 → 该状态驱动
+        // effectiveWalkAllowed（walkAllowed AND !collisionStale）。
+        setCollisionStale(desc.collision?.stale ?? false);
 
         if (!desc.content.url) {
           setStatus('error');
@@ -369,13 +382,14 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
 
   const toggleWalk = useCallback(() => {
     const runtime = runtimeRef.current;
-    if (!runtime || !runtime.loaded || !runtime.walkAllowed) return;
+    // FIX-05 §24：有效 walk 允许 = 官方 walkAllowed AND 碰撞未 STALE。
+    if (!runtime || !runtime.loaded || !runtime.walkAllowed || collisionStale) return;
     try {
       runtime.toggleWalk(); // 官方 walk 模式（不做自建物理/控制器）
     } catch (err) {
       console.error('[viewer] toggleWalk failed', err);
     }
-  }, []);
+  }, [collisionStale]);
 
   return {
     status,
@@ -390,6 +404,8 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
     isFullscreen,
     hasCollision,
     walkAllowed,
+    collisionStale,
+    effectiveWalkAllowed: walkAllowed && !collisionStale,
     collisionFormat,
     sceneScale,
     canStartVR,

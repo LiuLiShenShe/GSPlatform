@@ -33,6 +33,7 @@ from app.schemas.collision import (
 from app.services.celery_client import send_task
 from app.services.collision import CollisionService
 from app.services.scene_access import SceneAccessPolicy
+from app.services.scene_asset import SceneAssetAccessScope, build_cache_control
 from app.storage import LocalDiskStorage
 
 router = APIRouter()
@@ -68,6 +69,25 @@ def _readable_slug(
     return slug
 
 
+def _readable_scope(
+    db: Session,
+    slug: str,
+    request: Request,
+    identity: RequestIdentity | None,
+    share: str | None,
+) -> SceneAssetAccessScope:
+    """Cache scope for a readable collision asset (FIX-05 §10/§11).
+
+    Collision bytes are served at a stable URL that is rebuilt in place — they
+    are mutable and must never be ``immutable``, and a private/shared scene
+    must never come back ``Cache-Control: public``.
+    """
+    token = share or request.cookies.get(get_settings().share_cookie_name) or None
+    policy = SceneAccessPolicy(db)
+    scene = policy.resolve_readable_scene(slug, identity, share_token=token)
+    return policy.cache_scope(scene, token)
+
+
 # ------------------------------------------------------------------ #
 # Get collision status
 # ------------------------------------------------------------------ #
@@ -101,12 +121,12 @@ def serve_collision_mesh(
     ``.glb``-suffixed url (``/collision/collision.glb``) because the official
     viewer selects mesh-vs-voxel by the url extension.
     """
-    _readable_slug(db, slug, request, identity, share)
+    scope = _readable_scope(db, slug, request, identity, share)
     data, mime = svc.serve_collision_mesh(slug)
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": build_cache_control(scope, "current/collision")},
     )
 
 
@@ -120,12 +140,12 @@ def serve_collision_glb_url(
     svc: CollisionService = Depends(_service),
 ) -> Response:
     """Serve the collision GLB under a ``.glb`` url (official mesh loader)."""
-    _readable_slug(db, slug, request, identity, share)
+    scope = _readable_scope(db, slug, request, identity, share)
     data, mime = svc.serve_collision_mesh(slug)
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": build_cache_control(scope, "current/collision")},
     )
 
 
@@ -143,12 +163,12 @@ def serve_collision_voxel_json(
     The official viewer derives the binary url by replacing ``.voxel.json``
     with ``.voxel.bin``, taking it to ``/collision/collision.voxel.bin``.
     """
-    _readable_slug(db, slug, request, identity, share)
+    scope = _readable_scope(db, slug, request, identity, share)
     data, mime = svc.serve_collision_voxel(slug, binary=False)
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": build_cache_control(scope, "current/collision")},
     )
 
 
@@ -162,12 +182,12 @@ def serve_collision_voxel_bin(
     svc: CollisionService = Depends(_service),
 ) -> Response:
     """Serve the voxel leaf octree binary."""
-    _readable_slug(db, slug, request, identity, share)
+    scope = _readable_scope(db, slug, request, identity, share)
     data, mime = svc.serve_collision_voxel(slug, binary=True)
     return Response(
         content=data,
         media_type=mime,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={"Cache-Control": build_cache_control(scope, "current/collision")},
     )
 
 

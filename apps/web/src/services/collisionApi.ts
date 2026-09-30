@@ -21,6 +21,9 @@ export interface CollisionAsset {
   attempt: number;
   createdAt: string;
   updatedAt: string;
+  /** FIX-05 §23/§25：世界变换在构建后改变 → STALE，需重建。 */
+  stale?: boolean;
+  worldTransformHash?: string | null;
 }
 
 export interface CollisionBuildRequest {

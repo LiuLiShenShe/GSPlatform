@@ -30,7 +30,9 @@ import type { SceneBounds } from './sceneScale';
 import {
   SceneTransformAdapter,
   composeEntityEulerDeg,
+  type AdapterVec3,
 } from './SceneTransformAdapter';
+import type { ScenePickingAdapter } from './ScenePickingAdapter';
 import { applyUiScopeStyles } from './superSplatUiCompatibility';
 import type { RuntimeViewpoint, RuntimeWorldTransform } from './types';
 
@@ -44,6 +46,13 @@ import type { RuntimeViewpoint, RuntimeWorldTransform } from './types';
  * 未加载/未找到时回退固定距离。见 {@link CameraPose}。
  */
 const CAMERA_POSE_FALLBACK_DISTANCE = 3;
+
+/**
+ * FIX-05 §27：setCameraPose 注入隐藏 pose 标注的**固定** key —— 反复调用只
+ * 复用同一条临时条目（更新 pose、保持 index 稳定），不会按调用次数堆积隐藏
+ * 标注。区别于已保存视角的稳定 key（``viewpoint:<id>``）。
+ */
+const TEMP_CAMERA_POSE_KEY = '__gsplatform_temp_camera_pose__';
 
 /** 场景 gsplat 包围盒访问器（避免依赖 playcanvas 具体类型）。 */
 interface GsplatAabbLike {
@@ -127,7 +136,7 @@ export type CameraModeCallback = (mode: RuntimeCameraMode) => void;
  * 通过 {@link SuperSplatRuntime.create} 构造；页面只能拿到这个封装面的方法，
  * 底层 handle 不对外暴露（除 app 用于读取 renderer / gsplats 诊断）。
  */
-export class SuperSplatRuntime {
+export class SuperSplatRuntime implements ScenePickingAdapter {
   /** 引擎 app（只读，用于 renderer 类型 / frame.stats 诊断）。 */
   readonly app: RuntimeEngineApp;
   /** 官方 Observable state（只读视图；写入被官方忽略/覆盖）。 */
@@ -161,9 +170,22 @@ export class SuperSplatRuntime {
    * 运行时注入的 pose 导航标注（FIX-02 §10/A6 调查结论：官方公开 API 无任意
    * pose setter；唯一受支持路径 = selectAnnotation → annotation.camera.initial）。
    * 注入发生在导航时刻（官方 UI 热点已在 createViewer 时构建完毕），因此不会
-   * 生成多余 hotspot。key = 视角 id 或 `pose:<随机>`。
+   * 生成多余 hotspot。key = 视角 id（``viewpoint:<id>``，稳定）或固定临时 key
+   * （FIX-05 §27：``__gsplatform_temp_camera_pose__``，反复 setCameraPose 复用
+   * 同一条 → 隐藏标注不随调用次数增长）。
    */
   private readonly injectedPoseAnnotations: { key: string; index: number }[] = [];
+
+  /**
+   * 加载后实体原始 TRS（FIX-05 §18-21）。首次观察到 gsplat 实体时捕获，之后
+   * 恒等 W 用它复位、非恒等 W 用它作合成基底 —— 不再假设基底恒等。null = 尚未
+   * 捕获（实体未出现）。
+   */
+  private baseGsplatTransform: {
+    position: AdapterVec3;
+    rotation: AdapterVec3;
+    scale: AdapterVec3;
+  } | null = null;
 
   private constructor(handle: ViewerHandle, viewerOptions: CreateViewerOptions) {
     this.handle = handle;
@@ -410,8 +432,9 @@ export class SuperSplatRuntime {
    * 用于 /scene 视角导航、已保存视角、?spawn= 测试定位、authoring 定位。
    */
   setCameraPose(pose: CameraPose): void {
-    const key = `pose:${this.injectedPoseAnnotations.length}:${Math.random()}`;
-    this.navigateToPose(pose, key);
+    // FIX-05 §26-§28：固定临时 key —— 100 次调用至多 1 条隐藏临时标注（更新
+    // 复用），不随调用次数增长；已保存视角仍用稳定 `viewpoint:<id>` key。
+    this.navigateToPose(pose, TEMP_CAMERA_POSE_KEY);
   }
 
   /**
@@ -446,29 +469,61 @@ export class SuperSplatRuntime {
 
   /**
    * 施加世界变换到官方 gsplat 实体（方案A runtime Scene Root Transform，
-   * FIX-02 §5-§9）。恒等时 no-op（实体保持官方 setLocalEulerAngles(0,0,180)）。
+   * FIX-02 §5-§9；FIX-05 §18-§21 修复复位）。
    *
-   * 与官方烘焙的 180°Z 旋转合成（composeEntityEulerDeg → W.rot ∘ Rz180），
-   * 使 W 作用在默认世界空间。诊断：施加前后 getSceneBounds()（读实体世界变换）
-   * 反映包围盒变化。
+   * 语义：首次观察到实体时捕获其加载后的原始 TRS 为 baseGsplatTransform；
+   * 之后每次调用都施加 ``actualTransform = W ∘ base``（恒等 W = 恢复 base）——
+   * 不再假定 base 恒等，也不存在「恒等早退」导致变换后无法复位的问题。
    *
-   * 幂等：重复调用安全。实体尚未出现（加载中）时返回 false 不抛错。
+   * 旋转合成（composeEntityEulerDeg）：W.rot ∘ base.rot（官方烘焙 Rz180 为
+   * 默认 base）；位置 = W 作用于 base 原点；缩放按轴相乘（对齐轴时精确）。
+   *
+   * 幂等：重复调用安全；base 只捕获一次（首次实体出现时，即官方 onLoaded 装配
+   * 完成、尚未施加任何 W 的 pristine 状态）。
    */
   applyWorldTransform(): boolean {
-    if (this.worldTransform.isIdentity) return true; // 恒等：实体保持官方初始
     const gsplat = this.gsplatEntity();
     if (!gsplat) return false; // 加载中/实体未就绪
+    if (this.baseGsplatTransform === null) {
+      // 捕获基准：此后 setWorldTransform / setWorldTransform(null) 都能复位。
+      this.baseGsplatTransform = this.captureBaseTransform(gsplat);
+    }
+    const base = this.baseGsplatTransform;
+    if (this.worldTransform.isIdentity) {
+      // FIX-05 §18-21：恒等 W → 恢复实体原始 TRS（此前 early-return 留旧位）。
+      gsplat.setLocalPosition(base.position.x, base.position.y, base.position.z);
+      gsplat.setLocalEulerAngles(base.rotation.x, base.rotation.y, base.rotation.z);
+      gsplat.setLocalScale(base.scale.x, base.scale.y, base.scale.z);
+      gsplat.sync?.();
+      return true;
+    }
     const { position, rotation, scale } = this.worldTransform;
-    const euler = composeEntityEulerDeg({
-      position: { ...position },
-      rotation: { ...rotation },
-      scale: { ...scale },
-    });
-    gsplat.setLocalPosition(position.x, position.y, position.z);
+    const composedPos = this.worldTransform.sceneToRuntimePoint(base.position);
+    const euler = composeEntityEulerDeg(
+      { position, rotation, scale },
+      [base.rotation.x, base.rotation.y, base.rotation.z],
+    );
+    gsplat.setLocalPosition(composedPos.x, composedPos.y, composedPos.z);
     gsplat.setLocalEulerAngles(euler[0], euler[1], euler[2]);
-    gsplat.setLocalScale(scale.x, scale.y, scale.z);
+    gsplat.setLocalScale(scale.x * base.scale.x, scale.y * base.scale.y, scale.z * base.scale.z);
     gsplat.sync?.();
     return true;
+  }
+
+  /** 捕获实体当前局部 TRS（只读，拷贝值不让调用方改到实体）。 */
+  private captureBaseTransform(gsplat: {
+    getLocalPosition(): { x: number; y: number; z: number };
+    getLocalEulerAngles(): { x: number; y: number; z: number };
+    getLocalScale(): { x: number; y: number; z: number };
+  }): { position: AdapterVec3; rotation: AdapterVec3; scale: AdapterVec3 } {
+    const p = gsplat.getLocalPosition();
+    const r = gsplat.getLocalEulerAngles();
+    const s = gsplat.getLocalScale();
+    return {
+      position: { x: p.x, y: p.y, z: p.z },
+      rotation: { x: r.x, y: r.y, z: r.z },
+      scale: { x: s.x, y: s.y, z: s.z },
+    };
   }
 
   /** 世界变换诊断：原始 position/rotation/scale + 施加后的场景包围盒。 */
@@ -551,13 +606,14 @@ export class SuperSplatRuntime {
   }
 
   /**
-   * 拾取 NDC 坐标（-1..1，x 向右、y 向上）对应的 3D 世界位置。
+   * 近似拾取 NDC 坐标（-1..1，x 向右、y 向上）对应的 3D 世界位置。
    *
-   * 实现：从相机位置沿解投影后的视线方向取「场景包围盒中心深度」的点 ——
-   * 作为标注锚点的合理近似（精确到 splat 表面的 GPU 拾取不在官方公开 API 内，
-   * SSV-06 标注迁移时按需增强）。相机缺失/未就绪返回 null。
+   * FIX-05 §29-§30：**不保证命中 splat 表面**。实现只是沿解投影视线取「场景
+   * 包围盒中心深度」的点 —— 作为标注锚点的近似（bbox 深度近似，非 GPU 表面
+   * 拾取；官方 1.35.0 公开 API 无精确拾取）。未来精确接口见
+   * {@link ScenePickingAdapter.pickSurfaceWorldPosition}。相机缺失/未就绪返回 null。
    */
-  pickWorldPosition(x: number, y: number): { position: [number, number, number] } | null {
+  pickApproximateWorldPosition(x: number, y: number): { position: [number, number, number] } | null {
     const camera = this.cameraEntity();
     if (!camera?.camera) return null;
     const position = camera.getPosition();
@@ -719,6 +775,10 @@ export class SuperSplatRuntime {
     setLocalPosition(x: number, y: number, z: number): void;
     setLocalEulerAngles(x: number, y: number, z: number): void;
     setLocalScale(x: number, y: number, z: number): void;
+    // FIX-05 §18-21：读取加载后的基准 TRS（恒等 W 复位用）。
+    getLocalPosition(): { x: number; y: number; z: number };
+    getLocalEulerAngles(): { x: number; y: number; z: number };
+    getLocalScale(): { x: number; y: number; z: number };
     sync?(): void;
   } | null {
     try {
@@ -730,6 +790,9 @@ export class SuperSplatRuntime {
             setLocalPosition(x: number, y: number, z: number): void;
             setLocalEulerAngles(x: number, y: number, z: number): void;
             setLocalScale(x: number, y: number, z: number): void;
+            getLocalPosition(): { x: number; y: number; z: number };
+            getLocalEulerAngles(): { x: number; y: number; z: number };
+            getLocalScale(): { x: number; y: number; z: number };
             sync?(): void;
           }
         | null

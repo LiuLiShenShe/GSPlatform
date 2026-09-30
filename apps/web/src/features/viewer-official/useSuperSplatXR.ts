@@ -48,6 +48,13 @@ export interface OfficialXRViewerState {
   hasCollision: boolean;
   /** 官方 state.walkAllowed（VR 中同样为碰撞+尺度判定）。 */
   walkAllowed: boolean;
+  /** FIX-05 §22-§25：碰撞是否 STALE（世界变换在构建后改变）。 */
+  collisionStale: boolean;
+  /**
+   * FIX-05 §24：有效 walk 允许 = 官方 walkAllowed AND 碰撞未 STALE
+   * （官方 runtime 无法可靠重变换碰撞几何 —— 变换改变后碰撞与场景不再对齐）。
+   */
+  effectiveWalkAllowed: boolean;
   /** 官方 state.xrMode（vr / ar / null）——运行态真相。 */
   xrMode: 'vr' | 'ar' | null;
   /** 内容加载进度 0..100（官方 onProgress）。 */
@@ -114,6 +121,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
   const [canStartAR, setCanStartAR] = useState(false);
   const [hasCollision, setHasCollision] = useState(false);
   const [walkAllowed, setWalkAllowed] = useState(false);
+  const [collisionStale, setCollisionStale] = useState(false);
   const [xrMode, setXrMode] = useState<'vr' | 'ar' | null>(null);
   const [progress, setProgress] = useState(0);
   const [renderer, setRenderer] = useState('—');
@@ -182,6 +190,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
         if (cancelled) return;
         setDescriptor(desc);
         setIsManifestFallback(fromManifest);
+        // FIX-05 §23-§25：碰撞 STALE = 世界变换在构建后改变（描述符已计算）。
+        setCollisionStale(desc.collision?.stale ?? false);
 
         if (!desc.content.url) {
           setStatus('error');
@@ -366,6 +376,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     canStartAR,
     hasCollision,
     walkAllowed,
+    collisionStale,
+    effectiveWalkAllowed: walkAllowed && !collisionStale,
     xrMode,
     progress,
     renderer,

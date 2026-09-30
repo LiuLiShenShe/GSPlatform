@@ -82,10 +82,13 @@ def get_scene_asset(
     dev/test serve a ``FileResponse`` (Starlette's native Range support).
     """
     token = _share_grant(request, share)
-    scene = SceneAccessPolicy(db).resolve_readable_scene(
+    policy = SceneAccessPolicy(db)
+    scene = policy.resolve_readable_scene(
         scene_id, identity, share_token=token
     )
-    resolved = SceneAssetService().resolve(scene, asset_path)
+    resolved = SceneAssetService().resolve(
+        scene, asset_path, access_scope=policy.cache_scope(scene, token)
+    )
 
     if resolved.x_accel_path is not None:
         # Nginx internal redirect: FastAPI never reads the file body.

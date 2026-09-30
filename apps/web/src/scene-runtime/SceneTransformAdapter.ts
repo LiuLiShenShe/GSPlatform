@@ -13,7 +13,7 @@
  *     composeEntityEuler() 见下），场景轮廓移到 W(scene)；
  *   - 初始相机 / 标注 anchors + cameras / viewpoints 全部经本层 scene→runtime
  *     换算，与移动后的场景保持粘合；
- *   - 作者侧捕获（getCameraPose / pickWorldPosition 是 runtime 空间读数）经
+ *   - 作者侧捕获（getCameraPose / pickApproximateWorldPosition 是 runtime 空间读数）经
  *     runtime→scene 存回 SCENE 空间 —— 世界变换变化后存量坐标依然钉在原内容上。
  *
  * 由此 Gaussian/Annotations/Viewpoints/Camera 共用同一 W，不做部分变换、不散落
@@ -353,27 +353,30 @@ export class SceneTransformAdapter {
 const OFFICIAL_GSPLAT_BAKED_ROT_DEG: [number, number, number] = [0, 0, 180];
 
 /**
- * 计算施加到 gsplat 实体的**局部 Euler 度数**：W ∘ Rz180。
+ * 计算施加到 gsplat 实体的**局部 Euler 度数**：W ∘ base。
  *
- * 官方加载器把实体初始化为 euler(0,0,180)（Z-up→Y-up 翻转）。世界变换 W 要在
- * 默认世界空间（合成基底之后）生效，所以最终局部旋转 = W.rot ∘ Rz180（先 180°Z
- * 内转、再 W 外转）。位置 = W.pos、缩放 = W.scale（Rz180 缩放为 1）。
+ * 官方加载器把实体初始化为 euler(0,0,180)（Z-up→Y-up 翻转）—— 这就是默认
+ * base（OFFICIAL_GSPLAT_BAKED_ROT_DEG）。世界变换 W 要在默认世界空间（合成
+ * 基底之后）生效，所以最终局部旋转 = W.rot ∘ base.rot（先 base 内转、再 W
+ * 外转）。位置 = W.pos、缩放 = W.scale（base 的 Rz180 缩放为 1）。
  *
- * 恒等 W 时返回 [0,0,180] —— 与官方初始一致，对存量场景零改动。
- * 旋转顺序与 quatFromEulerDeg / eulerFromQuatDeg 一致（可单测验证互逆）。
+ * FIX-05 §18-21：恒等 W 时返回 base 本身（此前写死 Rz180，等于假定 base 恒等；
+ * 现在允许显式传入实体加载时的原始旋转），对存量场景行为不变。
  *
+ * @param baseEuler 实体加载时的基准局部 Euler 度数（默认官方烘焙 Rz180）。
  * @returns [x, y, z] 度数，直接喂 setLocalEulerAngles。
  */
 export function composeEntityEulerDeg(
   wt: RuntimeWorldTransform | null | undefined,
+  baseEuler: [number, number, number] = OFFICIAL_GSPLAT_BAKED_ROT_DEG,
 ): [number, number, number] {
   const norm = normalizeWorldTransform(wt);
   if (norm.isIdentity) {
-    return OFFICIAL_GSPLAT_BAKED_ROT_DEG;
+    return [...baseEuler] as [number, number, number];
   }
   const qW = quatFromEulerDeg(norm.rotation.x, norm.rotation.y, norm.rotation.z);
-  const qZ180 = quatFromEulerDeg(...OFFICIAL_GSPLAT_BAKED_ROT_DEG);
-  const qTotal = quatMul(qW, qZ180);
+  const qBase = quatFromEulerDeg(...baseEuler);
+  const qTotal = quatMul(qW, qBase);
   return eulerFromQuatDeg(qTotal);
 }
 

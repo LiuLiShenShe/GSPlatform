@@ -66,6 +66,8 @@ export function AnnotationPanel({
         picking ? (
           <Space>
             <Tag color="processing">双击场景拾取位置…</Tag>
+            {/* FIX-05 §29：拾取为近似锚点（bbox 深度近似，不保证命中 splat 表面）。 */}
+            <Tag color="warning">近似锚点</Tag>
             <Button size="small" onClick={onCancelPick}>取消</Button>
           </Space>
         ) : (
