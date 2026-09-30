@@ -339,7 +339,9 @@ class TestSceneSpecificPublishedRoot:
         monkeypatch.setattr(settings, "storage_root", str(storage))
         return origin, storage
 
-    def test_own_published_version_allowed_and_sibling_denied(self, tmp_path_factory, monkeypatch, db):
+    def test_own_published_version_allowed_and_sibling_denied(
+        self, tmp_path_factory, monkeypatch, db,
+    ):
         import os
 
         origin, storage = self._layout(tmp_path_factory, monkeypatch)

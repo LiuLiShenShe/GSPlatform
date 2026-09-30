@@ -5,6 +5,17 @@
 - 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS · FIX-04（生产验收，软件项）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4`（**未升级**，§32 FORBIDDEN 遵守）
 
+> **POST-AUDIT NOTE（FIX-05B，2026-09-30）—— 不改写本报告历史结论。**
+> FIX-05 当时对 **API（scene_asset.py）与 Nginx** 的缓存/信任根修复是正确且完整的，
+> 本报告结论保持。但 FIX-05B 后续逐项源码复核发现：**Vite 开发中间件
+> （`apps/web/vite.config.ts` 的 `/local-scenes`）不在 FIX-05 覆盖内** —— 其
+> `send()` 仍按文件名给 `current/*` 打 `immutable` 缓存头（P0/P1-2 的漏网），其信任根
+> 仍枚举 `versions/*` symlink 的 realpath 并信任任何解析进 `<storage>/published`
+> 的条目（P1-6 的漏网）；另有 2 项文档未同步（`RuntimeAnnotation` 注释、
+> `PRODUCTION_RUNTIME_ACCEPTANCE.md`）。这 4 项 + 1 项门禁复核（FIX-05 声称 ruff
+> clean，实测 11 处 lint 违规，本阶段已零行为修复）全部关闭于
+> **`FIX_05B_FINAL_REMEDIATION_REPORT.md`**。
+
 ---
 
 ## RESULT

@@ -11,6 +11,10 @@ import {
   parseDevSceneAllowlist,
   resolveLocalSceneAccess,
 } from './src/scene-dev/sceneAllowlist.ts'
+import {
+  buildDevSceneCacheControl,
+  buildDevSceneTrustedRoots,
+} from './src/scene-dev/sceneAssetPolicy.ts'
 
 // The Cloudflare quick tunnel (Quest/PICO WebXR real-device debugging) must be
 // OPT-IN: it makes the dev origin reachable from the public internet, so it is
@@ -51,28 +55,29 @@ const MIME_TYPES: Record<string, string> = {
 // exactly like the API path so a dev server can never serve files it should
 // not (FIX-01 P0-2).
 //
-// Security model (FIX-01 §8-§10):
+// Security model (FIX-01 §8-§10, FIX-05B issue 2):
 //   1. The sceneId must match the same slug grammar the API accepts —
 //      `^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`.  Anything else → 403.
 //   2. URL-encoded components are decoded exactly once; a value that still
 //      contains `%` after that (double-encoding) or any `%`/`\`/NUL is
 //      rejected with 400 — no second decode is ever performed.
 //   3. Path containment is verified with `fs.realpathSync` on the final
-//      target against the real scene root (and the real published-storage
-//      root, because `versions/<ver>` legitimately symlinks into it), using a
-//      component-aware check — never a bare `startsWith`.
+//      target against the real scene root (component-aware, never a bare
+//      `startsWith`).  FIX-05B Plan A: ONLY the scene's own real root is
+//      trusted — the middleware no longer follows `storage/published`
+//      symlinks at all (the previous versions/*-realpath trust let a planted
+//      symlink `scenes/A/versions/x -> published/<B>/…` make A able to read
+//      B's bytes).  Repo-level dev scenes (local-garden / ssv08-* /
+//      stream-*) keep their versions as **real directories**, so `current`
+//      and `versions/<ver>` still resolve inside the scene root; real
+//      DB/published scenes are served by the API via
+//      `/api/v1/scenes/<id>/assets/*` where the trusted root is
+//      `published/<scene.id>` only (FIX-05 P1-6).
 //   4. Range semantics: 206 + Content-Range, 416 for invalid ranges, HEAD
 //      with length, and byte streams that never return the whole file for a
 //      partial request.
 const serveStreamedScenes = (): Plugin => {
   const scenesRoot = path.resolve(import.meta.dirname, '../../scenes')
-  // Mirrors the API's settings.storage_root / GS_STORAGE_ROOT (dev default),
-  // where published versions live; `scenes/<slug>/versions/<ver>` symlinks
-  // point there.
-  const publishedRoot = path.resolve(
-    process.env.GS_STORAGE_ROOT ?? '/home/test/gsplatform-data',
-    'published',
-  )
 
   const SCENE_SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
 
@@ -136,11 +141,10 @@ const serveStreamedScenes = (): Plugin => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Range, Accept, Origin, Content-Type')
 
-    const isManifest = path.basename(rel) === 'manifest.json'
-    res.setHeader(
-      'Cache-Control',
-      isManifest ? 'public, max-age=60' : 'public, max-age=31536000, immutable',
-    )
+    // FIX-05B issue 1: path-semantics cache policy (never filename-only) —
+    // `current/*` is a repointable alias → no-cache; `versions/<ver>/*` is
+    // content-addressed → immutable; manifest/poster specials otherwise.
+    res.setHeader('Cache-Control', buildDevSceneCacheControl(rel))
 
     if (req.method === 'OPTIONS') {
       res.statusCode = 204
@@ -256,39 +260,16 @@ const serveStreamedScenes = (): Plugin => {
           return
         }
 
-        const trusted: string[] = [realSceneRoot]
-        // FIX-05 §15: trust ONLY this scene's OWN published version dirs —
-        // the realpaths of the symlinks under `scenes/<slug>/versions/`.
-        // Previously the whole `<storage>/published` tree was trusted, which
-        // let one scene's chain resolve into a *sibling* scene's published
-        // bytes.  A planted symlink under another scene's published dir is no
-        // longer reachable here.
-        let realPublishedRoot: string | null = null
-        try {
-          realPublishedRoot = fs.realpathSync(publishedRoot)
-        } catch {
-          /* storage root missing in dev */
-        }
-        try {
-          const versionsDir = path.join(realSceneRoot, 'versions')
-          for (const entry of fs.readdirSync(versionsDir)) {
-            let realEntry: string
-            try {
-              realEntry = fs.realpathSync(path.join(versionsDir, entry))
-            } catch {
-              continue // broken symlink — nothing to trust
-            }
-            if (
-              realPublishedRoot !== null &&
-              (realEntry === realPublishedRoot ||
-                realEntry.startsWith(realPublishedRoot + path.sep))
-            ) {
-              if (!trusted.includes(realEntry)) trusted.push(realEntry)
-            }
-          }
-        } catch {
-          /* no versions tree — scene root is the only trust anchor */
-        }
+        // FIX-05B issue 2 (Plan A): the scene's OWN real root is the ONLY
+        // trust anchor.  The pre-FIX-05B code additionally trusted the
+        // realpaths of `scenes/<slug>/versions/*` symlinks that resolved
+        // anywhere under `<storage>/published` — a planted symlink
+        // `scenes/A/versions/evil -> published/<B>/…` then made A able to
+        // read B's bytes (the dev origin has no DB to prove which published
+        // UUID belongs to slug A).  No published traversal at all: repo-level
+        // scenes keep real `versions/` directories, and DB/published scenes
+        // go through `/api/v1/scenes/<id>/assets/*` (scene-specific root).
+        const trusted = buildDevSceneTrustedRoots(realSceneRoot)
         if (!trusted.some((root) => isWithin(realResolved, root))) {
           // Symlink escape: /etc, a sibling scene, anywhere else.
           reject(res, 403)

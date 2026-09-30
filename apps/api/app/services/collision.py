@@ -110,7 +110,7 @@ class CollisionService:
         )
 
     def _record_build_transform(
-        self, collision: "Any", world_hash: str | None
+        self, collision: Any, world_hash: str | None
     ) -> None:
         """Persist the build-time world transform on the collision's build_params.
 

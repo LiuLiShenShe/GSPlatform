@@ -113,7 +113,15 @@ export interface RuntimeViewpoint {
   enabled: boolean;
 }
 
-/** 3D 热点标注，锚定在 Gaussian 表面。 */
+/**
+ * 3D 热点标注。
+ *
+ * `anchor` 是场景（SCENE）坐标系中的一个 3D 锚点。**它并不保证落在 Gaussian
+ * 表面上** —— 作者态拾取是「沿视线取场景包围盒中心深度」的**近似**（见
+ * `ScenePickingAdapter.pickApproximateWorldPosition`），锚点通常悬浮在场景
+ * 附近而非贴在 splat 面上。精确表面拾取（GPU 命中测试）目前只有预留接口
+ * `pickSurfaceWorldPosition`，尚未实现。
+ */
 export interface RuntimeAnnotation {
   id: string;
   title: string;

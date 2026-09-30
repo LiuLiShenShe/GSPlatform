@@ -1,8 +1,8 @@
 # PRODUCTION_RUNTIME_ACCEPTANCE：GSPlatform Production XR Acceptance
 
-- 日期：2026-09-29
-- 阶段：FIX-04 — 最终 Production Acceptance（本轮无新业务功能，仅产品化/验收/性能/纠错）
-- 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS
+- 日期：2026-09-30（FIX-05B 最终复核；原始验收 2026-09-29）
+- 阶段：FIX-05B — 最终 Production Acceptance 复核（本轮无新业务功能，仅产品化/验收/性能/纠错）
+- 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS · FIX-05（独立审计整改）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4` + `@photo-sphere-viewer/core@5.15.1` + `three@0.185.1`
 - 说明：SSV_FINAL_ACCEPTANCE.md 的 PASS 为软件迁移范围结论，**已被本报告纠正/接续**
   （该历史报告顶部已加 FIX-04 纠正声明）。
@@ -191,6 +191,42 @@ chunk 请求），真实 GPU 复核见 KNOWN LIMITATIONS。
 `XR HARDWARE ACCEPTANCE NOT EXECUTED`：无 Quest/PICO 头显。硬件项（6DoF、左右眼视差、
 Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全量首帧真实 GPU 复核）
 待真机环境执行 —— 这是**唯一剩余 blocker**，与软件无关。
+
+## FIX-05B：最终复核（2026-09-30）
+
+- **Acceptance Stage**：**FIX-05B**（Vite Dev Asset / Cache / Trust Boundary 最终整改 +
+  本报告同步）。详见 `FIX_05B_FINAL_REMEDIATION_REPORT.md`；FIX-05 报告顶部已加
+  Post-audit note（Vite 中间件为 FIX-05 漏网之鱼），历史结论未改写。
+- **Software blockers**：**NONE**（FIX-05 9 项 + FIX-05B 4 项 + 1 项门禁复核全部关闭；
+  无 P0/P1 遗留）。
+- **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 无 Quest/PICO 头显
+  （6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、
+  LOD 全量首帧真实 GPU 复核待真机执行）。这是**唯一剩余 blocker**，与软件无关。
+
+| 门禁 | 结果 |
+|---|---|
+| Frontend tests（web vitest） | **227 passed / 26 files** |
+| Frontend typecheck | **0 errors**（`tsc -b --noEmit`） |
+| Backend tests（pytest） | **208 passed**（ruff All checks passed；mypy Success / 84 files） |
+| Worker tests | **13 passed** |
+| 仓库 `pnpm test` / `pnpm lint` / `pnpm api:check` | 227 / exit 0 / clean |
+
+各子系统状态（FIX-05B 之后）：
+
+- **Security** ✅ PASS —— dev 隧道白名单（`GS_ENABLE_DEV_TUNNEL=1` + `XR_DEV_PUBLIC_SCENES`）、
+  Vite `/local-scenes` Plan A 不再跟随 `storage/published`、真实场景级 published 根
+  （API）、slug 语法 / 单次解码 / realpath containment / Range/416 全部保留且实测
+  （traversal 400/403、跨场景 symlink 403、隧道非白名单 403）。
+- **Cache** ✅ PASS —— `current/*` 一律 `no-cache`、`versions/<ver>/*` 不可变，
+  **API（Nginx map 兜底 + API scope-aware 头权威）与 Vite 开发中间件（路径语义纯函数
+  `buildDevSceneCacheControl`）两侧一致**；私有/分享永不 `public`。
+- **World Transform** ✅ PASS —— 恒等复位（`baseGsplatTransform` 恢复）、`W ∘ base`
+  合成（FIX-05，本阶段未动）。
+- **Collision stale** ✅ PASS —— `worldTransformHash` 记录/比对、`stale` 语义、
+  walk 禁用门禁（FIX-05，本阶段未动）。
+- **Picking** ✅ PASS —— 近似拾取语义文档化：`RuntimeAnnotation` 注释已修正为
+  「不保证落在 Gaussian 表面」，approximate 与 future exact surface
+  （`ScenePickingAdapter` 预留接口）明确区分，不伪造精确。
 
 ## DEPLOYMENT
 

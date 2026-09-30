@@ -31,7 +31,7 @@ from __future__ import annotations
 import mimetypes
 import re
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 from app.core.config import Settings, get_settings
@@ -75,7 +75,7 @@ _PRIVATE_NO_CACHE = "private, no-cache"
 _VERSIONED_SEGMENT_RE = re.compile(r"^versions/[^/]+/")
 
 
-class SceneAssetAccessScope(str, Enum):
+class SceneAssetAccessScope(StrEnum):
     """Who was allowed to read this asset (FIX-05 P1-3 / §11).
 
     The asset service needs this to pick a cache scope: only PUBLIC assets

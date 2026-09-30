@@ -7,7 +7,6 @@ which broke when files moved — P1-7).
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from app.core.paths import get_repo_root, get_scene_storage_root
