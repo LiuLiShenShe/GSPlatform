@@ -1,7 +1,7 @@
 # PRODUCTION_RUNTIME_ACCEPTANCE：GSPlatform Production XR Acceptance
 
-- 日期：2026-09-30（FIX-05B 最终复核；原始验收 2026-09-29）
-- 阶段：FIX-05B — 最终 Production Acceptance 复核（本轮无新业务功能，仅产品化/验收/性能/纠错）
+- 日期：2026-10-01（FIX-05C 最终复核；原始验收 2026-09-29，FIX-05B 复核 2026-09-30）
+- 阶段：FIX-05C — 最终 Production Acceptance 复核（本轮无新业务功能，仅缓存策略收口/验收/纠错）
 - 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS · FIX-05（独立审计整改）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4` + `@photo-sphere-viewer/core@5.15.1` + `three@0.185.1`
 - 说明：SSV_FINAL_ACCEPTANCE.md 的 PASS 为软件迁移范围结论，**已被本报告纠正/接续**
@@ -26,7 +26,7 @@
 | LOD PASS | 🟡 PARTIAL（流式 chunk 加载/157K 渲染/331 请求实测；**全量首帧在软件渲染下不可达** —— 需真实 GPU 复核） |
 | Quest/PICO real XR PASS | ❌ **NOT EXECUTED**（无硬件 → BLOCKER） |
 | Production Web typecheck | ✅ 0 errors（web 全量 tsc -b） |
-| Automated tests PASS | ✅ PASS（web 200 / backend 183 / e2e 17 / 安全 78） |
+| Automated tests PASS | ✅ PASS（web 227 / backend 234 / workers 13 / e2e 17 / 安全 78） |
 
 **Blocker**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 需要 Quest 或 PICO 头显
 （含 6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot、碰撞不破坏 XR 等
@@ -56,7 +56,7 @@ GSPlatform
 ## SECURITY RESULT
 
 - FIX-01 回归全绿：`test_scene_access` / `test_scene_assets` / `test_shares` /
-  `test_scenes_owner` = **78 passed**；完整后端套件 **183 passed**。
+  `test_scenes_owner` = **78 passed**；完整后端套件 **234 passed**（FIX-05C 最终）。
 - 实测（dev origin，语义与生产 nginx 同源）：`Range: bytes=0-99` → **206**
   `Content-Range: bytes 0-99/476`；越界 → **416**；路径穿越（`../` 编码）→ **404**。
 - 私有/公开/删除场景、READY vs PUBLISHED 公开、Share token：自动化测试覆盖
@@ -151,13 +151,14 @@ chunk 请求），真实 GPU 复核见 KNOWN LIMITATIONS。
 
 | 门禁 | 结果 |
 |---|---|
-| web `pnpm test` | **200 passed / 24 files**（含 FIX-04 新增：正式页极简 UI、隐藏诊断契约、/xr/diagnostics 路由） |
+| web `pnpm test` | **227 passed / 26 files**（FIX-05C 最终） |
 | web `pnpm typecheck` | **0 errors**（`tsc -b --noEmit`，production web 全量） |
 | web `pnpm lint` | exit 0（oxlint） |
 | web `pnpm build` | exit 0（tsc -b + vite build） |
 | e2e（Playwright headless SwiftShader WebGPU） | **17 passed / 8 specs**（47.8s；含 FIX-03 音频/PANORAMA、FIX-02 语义、安全无关回归全绿） |
-| backend `pytest` | **183 passed** |
-| backend `ruff` / `mypy` | clean（前置 FIX-01/02/03 门禁保持） |
+| backend `pytest` | **234 passed**（FIX-05C 最终，含 cache 矩阵 39） |
+| backend `ruff` / `mypy` | clean（All checks passed / Success，84 files） |
+| workers pytest | **13 passed**（FIX-05C 最终） |
 | FIX-01 安全回归 | **78 passed**（scene_access / scene_assets / shares / scenes_owner） |
 
 ## KNOWN LIMITATIONS
@@ -176,6 +177,8 @@ chunk 请求），真实 GPU 复核见 KNOWN LIMITATIONS。
    dev 行为；强制鉴权由自动化测试锁定。
 
 ## FIX-05：软件 Blocker vs 硬件 Blocker（§31/§38）
+
+> 以下为 **FIX-05 时点历史快照**；当前权威测试计数以本文档顶部表格与 FIX-05C 段为准。
 
 **软件 Blocker —— 全部已清（FIX-05 PASS）**
 
@@ -203,7 +206,7 @@ Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全�
   （6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、
   LOD 全量首帧真实 GPU 复核待真机执行）。这是**唯一剩余 blocker**，与软件无关。
 
-| 门禁 | 结果 |
+| 门禁 | 结果（FIX-05B 时点快照；FIX-05C 最终计数见本文档顶部） |
 |---|---|
 | Frontend tests（web vitest） | **227 passed / 26 files** |
 | Frontend typecheck | **0 errors**（`tsc -b --noEmit`） |
@@ -227,6 +230,23 @@ Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全�
 - **Picking** ✅ PASS —— 近似拾取语义文档化：`RuntimeAnnotation` 注释已修正为
   「不保证落在 Gaussian 表面」，approximate 与 future exact surface
   （`ScenePickingAdapter` 预留接口）明确区分，不伪造精确。
+
+## FIX-05C：最终缓存策略收口（2026-10-01）
+
+- **Acceptance Stage**：**FIX-05C**（Cache-Control 优先级收口）。详见
+  `FIX_05C_CACHE_POLICY_REMEDIATION.md`。软件侧最后一项缓存问题已关闭：
+  `SceneAssetService.build_cache_control()` 此前「文件名特例（manifest/poster）
+  优先于 scope/路径语义」，导致 `current/manifest.json` 60s、`current/poster.webp` 1d、
+  `versions/<v>/manifest.json` 60s、`SHARE + poster.webp` 长缓存。现优先级修正为
+  **SHARE → current/* → versions/* → 顶层 manifest/poster → default**，并与
+  Nginx fallback map（新增 `current/* → no-cache` 规则）一致；scope-aware 权威值
+  仍由 Backend response 决定。
+- **Software blockers**：**NONE**。
+- **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED`（唯一剩余 blocker，
+  与软件无关）。
+- **FIX-05C 最终门禁**：cache 矩阵 targeted 39 passed；backend 全量 **234 passed**；
+  web **227 passed / 26 files**；workers **13 passed**；ruff All checks passed；
+  mypy Success（84 files）；`nginx -t` syntax ok。test counts 已全文档统一（见顶部）。
 
 ## DEPLOYMENT
 

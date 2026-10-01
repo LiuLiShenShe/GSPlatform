@@ -50,17 +50,25 @@ SCENE_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 # ``GS_SCENE_ORIGIN_ROOT`` and that alias must point at the same tree.
 X_ACCEL_BASE = "/_scene-origin/"
 
-# Cache policy (FIX-05): computed from BOTH the access scope and the asset's
-# mutability — never from the relative path alone, so a private / share-
-# controlled scene can never come back ``Cache-Control: public`` (P1-3), and
-# a repointed ``current`` can never be ``immutable`` (P0/P1-2).
+# Cache policy (FIX-05, precedence corrected in FIX-05C): computed from BOTH
+# the access scope and the asset path's mutability — never from the filename
+# alone.  FIX-05C: the manifest/poster filename special-cases used to be
+# checked FIRST, so ``current/manifest.json`` got 60s, ``current/poster.webp``
+# got 1d, ``versions/<v>/manifest.json`` got 60s instead of immutable, and
+# SHARE + poster kept a long max-age.  The priority is now scope/path first:
+#
+#   1. SHARE        → private, no-cache       (tokens can be revoked — never
+#                                              public / immutable / long max-age)
+#   2. current/*    → no-cache                (repointable alias — never immutable)
+#   3. versions/*   → immutable               (content-addressed bytes)
+#   4. top-level manifest.json / poster.webp  (per-path scope-aware TTLs)
+#   5. default      → no-cache
 #
 #   PUBLIC  versioned → public, max-age=31536000, immutable
 #   PUBLIC  current   → public, no-cache
 #   OWNER   versioned → private, max-age=31536000, immutable
 #   OWNER   current   → private, no-cache
-#   SHARE   anything   → private, no-cache        (share tokens can be revoked)
-#   manifest/poster    → scope-aware short caches (per-path special cases)
+#   SHARE   anything  → private, no-cache
 _MANIFEST_CACHE_PUBLIC = "public, max-age=60"
 _MANIFEST_CACHE_PRIVATE = "private, no-cache"
 _POSTER_CACHE_PUBLIC = "public, max-age=86400"
@@ -109,22 +117,33 @@ def build_cache_control(scope: SceneAssetAccessScope, rel_path: str) -> str:
     """Cache-Control for one scene asset given its access scope + path.
 
     ``rel_path`` is the scene-relative asset path (``current/...`` or
-    ``versions/<ver>/...`` or a named file like ``manifest.json`` /
-    ``poster.webp``).  Versioned (content-addressed immutable) URLs may be
-    cached long-term; everything mutable is ``no-cache``; non-public scopes
-    never produce a ``public`` directive (P1-3).
+    ``versions/<ver>/...`` or a top-level named file like ``manifest.json`` /
+    ``poster.webp``).  Precedence (FIX-05C): SHARE first, then ``current/*``,
+    then ``versions/*``, then the top-level manifest/poster special-cases,
+    then default.  The filename special-cases NEVER override a scope or path
+    rule — ``current/manifest.json`` is ``no-cache``, ``versions/v1/poster.webp``
+    is immutable, and any SHARE asset is ``private, no-cache``.  Non-public
+    scopes never produce a ``public`` directive (P1-3).
     """
+    if scope is SceneAssetAccessScope.SHARE:
+        # Share tokens can be revoked — keep shared bytes out of any long
+        # cache (even the browser's), matching "share → private" (§10/§12).
+        return _PRIVATE_NO_CACHE
+
+    if rel_path.startswith("current/"):
+        # current is a repointable alias: publish swaps the symlink target,
+        # so these URLs must never be immutable (P0/P1-2).
+        return _PUBLIC_NO_CACHE if scope.is_public else _PRIVATE_NO_CACHE
+
+    if _VERSIONED_SEGMENT_RE.match(rel_path):
+        # Content-addressed immutable bytes whose URL never changes.
+        return _PUBLIC_IMMUTABLE_CACHE if scope.is_public else _PRIVATE_IMMUTABLE_CACHE
+
     name = rel_path.rsplit("/", 1)[-1]
     if name == "manifest.json":
         return _MANIFEST_CACHE_PUBLIC if scope.is_public else _MANIFEST_CACHE_PRIVATE
     if name == "poster.webp":
         return _POSTER_CACHE_PUBLIC if scope.is_public else _POSTER_CACHE_PRIVATE
-    if scope is SceneAssetAccessScope.SHARE:
-        # Share tokens can be revoked — keep shared bytes out of any long
-        # cache (even the browser's), matching "share → private" (§10/§12).
-        return _PRIVATE_NO_CACHE
-    if _VERSIONED_SEGMENT_RE.match(rel_path):
-        return _PUBLIC_IMMUTABLE_CACHE if scope.is_public else _PRIVATE_IMMUTABLE_CACHE
     return _PUBLIC_NO_CACHE if scope.is_public else _PRIVATE_NO_CACHE
 
 
