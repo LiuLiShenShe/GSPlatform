@@ -159,6 +159,58 @@ class TestCachePriorityRegression:
         assert header == PRIVATE_NO_CACHE
 
 
+# ── FIX-05C.1 §5：manifest/poster 特例只对顶层文件生效 ────────────────────────
+class TestTopLevelSpecialCaseOnly:
+    """top-level special-case ≠ basename special-case (nested → default)."""
+
+    @pytest.mark.parametrize(
+        ("rel", "expected_public"),
+        [
+            # 顶层 → 特例保留（FIX-05C 不回归）
+            ("manifest.json", MANIFEST_PUBLIC),
+            ("poster.webp", POSTER_PUBLIC),
+            # 嵌套 → 回落 default（no-cache），不再继承顶层 TTL
+            ("foo/manifest.json", PUBLIC_NO_CACHE),
+            ("foo/poster.webp", PUBLIC_NO_CACHE),
+            ("nested/path/manifest.json", PUBLIC_NO_CACHE),
+            ("nested/path/poster.webp", PUBLIC_NO_CACHE),
+            ("media/poster.webp", PUBLIC_NO_CACHE),
+        ],
+    )
+    def test_public_nested_paths_fall_back_to_no_cache(self, rel, expected_public):
+        assert build_cache_control(SceneAssetAccessScope.PUBLIC, rel) == expected_public
+
+    @pytest.mark.parametrize("rel", ["foo/manifest.json", "foo/poster.webp"])
+    def test_owner_nested_paths_are_private_no_cache(self, rel):
+        # OWNER 嵌套路径 → 默认 private no-cache（不是 poster 的 1day 特例）
+        assert build_cache_control(SceneAssetAccessScope.OWNER, rel) == PRIVATE_NO_CACHE
+
+    @pytest.mark.parametrize(
+        "rel", ["manifest.json", "poster.webp", "foo/manifest.json", "foo/poster.webp"]
+    )
+    def test_share_nested_and_top_level_both_private_no_cache(self, rel):
+        assert build_cache_control(SceneAssetAccessScope.SHARE, rel) == PRIVATE_NO_CACHE
+
+    def test_current_and_versioned_precedence_not_regressed(self):
+        # 顶层特例绝不覆盖 current/* 与 versions/*
+        assert (
+            build_cache_control(SceneAssetAccessScope.PUBLIC, "current/manifest.json")
+            == PUBLIC_NO_CACHE
+        )
+        assert (
+            build_cache_control(SceneAssetAccessScope.PUBLIC, "current/poster.webp")
+            == PUBLIC_NO_CACHE
+        )
+        assert (
+            build_cache_control(SceneAssetAccessScope.PUBLIC, "versions/v1/manifest.json")
+            == PUBLIC_IMMUTABLE
+        )
+        assert (
+            build_cache_control(SceneAssetAccessScope.PUBLIC, "versions/v1/poster.webp")
+            == PUBLIC_IMMUTABLE
+        )
+
+
 # ── endpoint: real asset response headers（§9 / FIX-05C）──────────────────────
 class TestRealEndpointCacheHeaders:
     def test_public_current_no_cache_and_versioned_immutable(self, db, origin, anon_client):

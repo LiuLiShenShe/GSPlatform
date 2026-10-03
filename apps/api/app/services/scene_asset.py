@@ -119,11 +119,13 @@ def build_cache_control(scope: SceneAssetAccessScope, rel_path: str) -> str:
     ``rel_path`` is the scene-relative asset path (``current/...`` or
     ``versions/<ver>/...`` or a top-level named file like ``manifest.json`` /
     ``poster.webp``).  Precedence (FIX-05C): SHARE first, then ``current/*``,
-    then ``versions/*``, then the top-level manifest/poster special-cases,
-    then default.  The filename special-cases NEVER override a scope or path
-    rule — ``current/manifest.json`` is ``no-cache``, ``versions/v1/poster.webp``
-    is immutable, and any SHARE asset is ``private, no-cache``.  Non-public
-    scopes never produce a ``public`` directive (P1-3).
+    then ``versions/*``, then the EXACT top-level ``manifest.json`` /
+    ``poster.webp`` special-cases (FIX-05C.1 — nested ``foo/manifest.json``
+    does NOT inherit those TTLs), then default.  The filename special-cases
+    NEVER override a scope or path rule — ``current/manifest.json`` is
+    ``no-cache``, ``versions/v1/poster.webp`` is immutable, and any SHARE
+    asset is ``private, no-cache``.  Non-public scopes never produce a
+    ``public`` directive (P1-3).
     """
     if scope is SceneAssetAccessScope.SHARE:
         # Share tokens can be revoked — keep shared bytes out of any long
@@ -139,10 +141,13 @@ def build_cache_control(scope: SceneAssetAccessScope, rel_path: str) -> str:
         # Content-addressed immutable bytes whose URL never changes.
         return _PUBLIC_IMMUTABLE_CACHE if scope.is_public else _PRIVATE_IMMUTABLE_CACHE
 
-    name = rel_path.rsplit("/", 1)[-1]
-    if name == "manifest.json":
+    if rel_path == "manifest.json":
+        # EXACT top-level file only (FIX-05C.1): a nested ``foo/manifest.json``
+        # must NOT inherit the short-TTL special — only the scene's own
+        # top-level descriptor manifest does.
         return _MANIFEST_CACHE_PUBLIC if scope.is_public else _MANIFEST_CACHE_PRIVATE
-    if name == "poster.webp":
+    if rel_path == "poster.webp":
+        # EXACT top-level file only (FIX-05C.1); ``foo/poster.webp`` → default.
         return _POSTER_CACHE_PUBLIC if scope.is_public else _POSTER_CACHE_PRIVATE
     return _PUBLIC_NO_CACHE if scope.is_public else _PRIVATE_NO_CACHE
 

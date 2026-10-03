@@ -42,14 +42,15 @@ export const DEV_POSTER_CACHE = 'public, max-age=86400'
  * The manifest/poster special-cases never override the `current` rule:
  * `current/manifest.json` and `current/poster.webp` are still no-cache,
  * because `current` is a symlink alias that a republish may re-point.
+ * They also apply ONLY to the exact top-level file (FIX-05C.1): a nested
+ * `foo/manifest.json` / `foo/poster.webp` must NOT inherit those TTLs.
  */
 export function buildDevSceneCacheControl(relPath: string): string {
   const segments = relPath.split('/').filter(Boolean)
   if (segments[0] === 'current') return DEV_NO_CACHE
   if (segments[0] === 'versions' && segments.length >= 2) return DEV_IMMUTABLE_CACHE
-  const name = segments[segments.length - 1] ?? ''
-  if (name === 'manifest.json') return DEV_MANIFEST_CACHE
-  if (name === 'poster.webp') return DEV_POSTER_CACHE
+  if (segments.length === 1 && segments[0] === 'manifest.json') return DEV_MANIFEST_CACHE
+  if (segments.length === 1 && segments[0] === 'poster.webp') return DEV_POSTER_CACHE
   return DEV_NO_CACHE
 }
 

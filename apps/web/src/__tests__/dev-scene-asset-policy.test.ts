@@ -86,6 +86,20 @@ describe('buildDevSceneCacheControl — manifest / poster / other', () => {
     expect(cacheOf('poster.webp')).toBe(DEV_POSTER_CACHE);
   });
 
+  it('nested manifest.json / poster.webp do NOT inherit the top-level TTLs (FIX-05C.1)', () => {
+    // Only the exact top-level file gets the special TTL; a nested basename
+    // falls back to no-cache (mirrors the Backend EXACT top-level rule).
+    for (const rel of [
+      'foo/manifest.json',
+      'foo/poster.webp',
+      'nested/path/manifest.json',
+      'nested/path/poster.webp',
+      'media/poster.webp',
+    ]) {
+      expect(cacheOf(rel)).toBe(DEV_NO_CACHE);
+    }
+  });
+
   it('unknown / other paths → no-cache (never immutable by default)', () => {
     expect(cacheOf('other/file.bin')).toBe(DEV_NO_CACHE);
     expect(cacheOf('scene.sog')).toBe(DEV_NO_CACHE);

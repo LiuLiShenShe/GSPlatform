@@ -26,7 +26,7 @@
 | LOD PASS | 🟡 PARTIAL（流式 chunk 加载/157K 渲染/331 请求实测；**全量首帧在软件渲染下不可达** —— 需真实 GPU 复核） |
 | Quest/PICO real XR PASS | ❌ **NOT EXECUTED**（无硬件 → BLOCKER） |
 | Production Web typecheck | ✅ 0 errors（web 全量 tsc -b） |
-| Automated tests PASS | ✅ PASS（web 227 / backend 234 / workers 13 / e2e 17 / 安全 78） |
+| Automated tests PASS | ✅ PASS（web 228 / backend 248 / workers 13 / e2e 17 / 安全 78） |
 
 **Blocker**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 需要 Quest 或 PICO 头显
 （含 6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot、碰撞不破坏 XR 等
@@ -56,7 +56,7 @@ GSPlatform
 ## SECURITY RESULT
 
 - FIX-01 回归全绿：`test_scene_access` / `test_scene_assets` / `test_shares` /
-  `test_scenes_owner` = **78 passed**；完整后端套件 **234 passed**（FIX-05C 最终）。
+  `test_scenes_owner` = **78 passed**；完整后端套件 **248 passed**（FIX-05C.1 最终）。
 - 实测（dev origin，语义与生产 nginx 同源）：`Range: bytes=0-99` → **206**
   `Content-Range: bytes 0-99/476`；越界 → **416**；路径穿越（`../` 编码）→ **404**。
 - 私有/公开/删除场景、READY vs PUBLISHED 公开、Share token：自动化测试覆盖
@@ -151,12 +151,12 @@ chunk 请求），真实 GPU 复核见 KNOWN LIMITATIONS。
 
 | 门禁 | 结果 |
 |---|---|
-| web `pnpm test` | **227 passed / 26 files**（FIX-05C 最终） |
+| web `pnpm test` | **228 passed / 26 files**（FIX-05C.1 最终） |
 | web `pnpm typecheck` | **0 errors**（`tsc -b --noEmit`，production web 全量） |
 | web `pnpm lint` | exit 0（oxlint） |
 | web `pnpm build` | exit 0（tsc -b + vite build） |
 | e2e（Playwright headless SwiftShader WebGPU） | **17 passed / 8 specs**（47.8s；含 FIX-03 音频/PANORAMA、FIX-02 语义、安全无关回归全绿） |
-| backend `pytest` | **234 passed**（FIX-05C 最终，含 cache 矩阵 39） |
+| backend `pytest` | **248 passed**（FIX-05C.1 最终，含 cache 矩阵 53） |
 | backend `ruff` / `mypy` | clean（All checks passed / Success，84 files） |
 | workers pytest | **13 passed**（FIX-05C 最终） |
 | FIX-01 安全回归 | **78 passed**（scene_access / scene_assets / shares / scenes_owner） |
@@ -244,8 +244,9 @@ Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全�
 - **Software blockers**：**NONE**。
 - **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED`（唯一剩余 blocker，
   与软件无关）。
-- **FIX-05C 最终门禁**：cache 矩阵 targeted 39 passed；backend 全量 **234 passed**；
-  web **227 passed / 26 files**；workers **13 passed**；ruff All checks passed；
+- **FIX-05C 最终门禁**：cache 矩阵 targeted 53 passed（含 FIX-05C.1 嵌套路径回归）；
+  backend 全量 **248 passed**；web **228 passed / 26 files**；workers **13 passed**；
+  ruff All checks passed；mypy Success（84 files）；`nginx -t` syntax ok。
   mypy Success（84 files）；`nginx -t` syntax ok。test counts 已全文档统一（见顶部）。
 
 ## DEPLOYMENT

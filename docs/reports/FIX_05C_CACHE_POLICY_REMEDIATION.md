@@ -57,6 +57,7 @@ SHARE + poster.webp      → private, max-age=86400  ✗（应为 private, no-ca
 | OWNER | `versions/<v>/*`（含 manifest/poster/chunk） | `private, max-age=31536000, immutable` |
 | PUBLIC | 顶层 `manifest.json` / `poster.webp` | `public, max-age=60` / `public, max-age=86400` |
 | OWNER | 顶层 `manifest.json` / `poster.webp` | `private, no-cache` / `private, max-age=86400` |
+| 任意 scope | 嵌套 `*/manifest.json`、`*/poster.webp` | no-cache（**顶层特例只对顶层文件生效**，见 FIX-05C.1） |
 | 其它/未知 | 任意 | scope 对应 no-cache |
 
 ## HISTORICAL BUG REGRESSION（§8，专项锁定）
@@ -124,6 +125,25 @@ default                        → public, no-cache
 - `docs/reports/FIX_05C_CACHE_POLICY_REMEDIATION.md`（本报告，新）
 
 未改动：Vite 中间件/trust、share 授权模型、SuperSplat/Viewer/XR/LOD、Scene DB schema。
+
+## FIX-05C.1 SUPPLEMENT（2026-10-03，顶层特例对齐）
+
+**Previously the implementation used the basename for manifest/poster,
+which made nested `foo/manifest.json` and `foo/poster.webp` inherit
+top-level TTL rules. FIX-05C.1 aligns implementation with the existing
+documented contract: only exact top-level `manifest.json` and `poster.webp`
+receive the filename-specific TTL.**
+
+- Backend `build_cache_control()`：`rel_path == "manifest.json"` / `== "poster.webp"`
+  精确匹配（不再 basename）；优先级 SHARE → current → versions → top-level
+  manifest/poster → default **不变**，TTL 数值不变。
+- Vite `buildDevSceneCacheControl()`：`segments.length === 1 && segments[0] === ...`
+  精确顶层；current/versions 优先级与 trust boundary **不变**。
+- Nginx fallback regex：`~^/.*/assets/manifest\.json$` / `~^/.*/assets/poster\.webp$`
+  精确锚定 `/assets/` 顶层（不再匹配任意嵌套 basename）。Backend 仍为
+  scope-aware 权威，Nginx 仅 fallback/文档。
+- 测试：backend cache 矩阵 53 passed（新增 nested-path 回归 14）；
+  vite policy 15 passed；全量 backend 248 / web 228 / workers 13。
 
 ## FINAL STATUS
 
