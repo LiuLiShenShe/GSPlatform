@@ -1,9 +1,8 @@
 # PRODUCTION_RUNTIME_ACCEPTANCE：GSPlatform Production XR Acceptance
 
-- 日期：2026-10-06（FIX-06.2 生产验收脚本收口；FIX-06.1 最终软件收口；FIX-06 复核 2026-10-06；FIX-05C 最终复核 2026-10-01）
-- 阶段：FIX-06.2 — 生产验收脚本最终收口（smoke 改真实 GET 资产面、preflight
-  拆 host/release 双模式、systemd/部署 env 安全共享、runbook 同步；**非新 Phase、
-  无业务功能**）
+- 日期：2026-10-06（FIX-06.2.1 最终部署路径收口；FIX-06.2 生产验收脚本收口；FIX-06.1 最终软件收口；FIX-06 复核 2026-10-06；FIX-05C 最终复核 2026-10-01）
+- 阶段：FIX-06.2.1 — 最终部署路径收口（release preflight cwd 独立、first-deploy
+  rollback fail-closed、production smoke 严格 TLS；**非新 Phase、无业务功能**）
 - 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS ·
   FIX-05（独立审计整改）PASS · FIX-05B（Vite 收尾）PASS · FIX-05C（缓存策略收口）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4` + `@photo-sphere-viewer/core@5.15.1` + `three@0.185.1`
@@ -29,7 +28,7 @@
 | LOD PASS | 🟡 PARTIAL（流式 chunk 加载/157K 渲染/331 请求实测；**全量首帧在软件渲染下不可达** —— 需真实 GPU 复核） |
 | Quest/PICO real XR PASS | ❌ **NOT EXECUTED**（无硬件 → BLOCKER） |
 | Production Web typecheck | ✅ 0 errors（web 全量 tsc -b） |
-| Automated tests PASS | ✅ PASS（web 228 / backend 329（FIX-06.2 最终）/ workers 13 / e2e 17 / 安全 78） |
+| Automated tests PASS | ✅ PASS（web 228 / backend 342（FIX-06.2.1 最终）/ workers 13 / e2e 17 / 安全 78） |
 
 **Blocker**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 需要 Quest 或 PICO 头显
 （含 6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot、碰撞不破坏 XR 等
@@ -321,6 +320,22 @@ clean-checkout 门禁（提交后执行并记录，见 FIX_06_1 报告 GIT 节�
 | 安全 env 共享（C） | ✅ PASS | `lib_env.sh` 安全加载 `$GS_ENV_FILE`（无 `source` 任意路径、无 shell 展开、`$` 原样、密文不回显）；preflight/deploy/systemd 同一来源；`production.env.example` 注明 systemd `EnvironmentFile=` 不展开，`GS_CELERY_BROKER_URL`/`GS_CELERY_RESULT_BACKEND` 才是实际消费项 |
 | Runbook 同步（D） | ✅ PASS | `DEPLOYMENT_RUNBOOK.md`：base 包补 `postgresql-client`/`redis-tools`；首次部署 `--mode host` → deploy → `--mode release` 复查；smoke 需 `--public-scene`（PUBLIC+PUBLISHED+未删除+有 current），deploy 自动传入、无合格场景中止部署；GS_ENV_FILE 语义 |
 | 全量门禁 | ✅ PASS | backend **329 passed**（309+20）；FIX-06.1+06.2 targeted **51 passed**（31+20）；workers **13 passed**；ruff clean；mypy Success（84 files）；web 228/26 + typecheck 0 errors + lint + build exit 0；`nginx -t` ok；bash -n 全绿；GPU 门禁（真 venv，无 --allow-no-gpu，2× A6000）**PASS**；first-deploy 仿真（/tmp，host 生产 19/0）与 release 仿真（/tmp，28/0）**PASS**；clean-checkout 门禁（新 HEAD）**GATE_EXIT=0** |
+
+## FIX-06.2.1：最终部署路径收口（2026-10-06）
+
+- **Acceptance Stage**：**FIX-06.2.1**（Final Deploy-Path Closure —— FIX-06.2 的极小修正；
+  非新 Phase、无业务功能、不重构 SuperSplat/Viewer/XR/Quest-PICO/LOD/Gaussian/streamed-SOG/
+  cache/upload/publish/reconstruction/DB schema；无 Alembic migration）。
+  详见 `FIX_06_2_1_FINAL_DEPLOY_PATH_CLOSURE.md`。
+- **Software blockers**：**NONE**（A/B 两个 P1 blocker + C 加固全部关闭）。
+- **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED`（唯一剩余 blocker，与软件无关）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| Release preflight cwd 独立（A） | ✅ PASS | wheel 只打包 `["app"]`，`workers` 仅从 repo root 解析；deploy step 5 遗留 cwd=apps/api 让 `import workers.celery_app` 失败（clean tree 真复现 `ModuleNotFoundError`）。修复：preflight `[I]` 在 `( cd "$CURRENT_ROOT" )` 子 shell 跑完整导入闭包（deps+app.main+workers.celery_app+tasks），不依赖调用方 cwd/PYTHONPATH；deploy step5 后归一化 `cd $RELEASE_DIR`。回归：git-archive clean release 三 cwd（root / apps/api / /tmp）+ deploy 真实 cwd 链，PYTHONPATH 全 unset → 全 PASS |
+| First-deploy rollback fail-closed（B） | ✅ PASS | old 6b 只回滚「有旧版本」，first deploy 失败时 current 残留失败 release。新增 `lib_rollback.sh::rollback_current`：upgrade 恢复 previous；first deploy 仅当 current 解析到失败 release 时 `rm -f` 撤销（目录保留诊断）；unknown target → REFUSE 非零。真实 symlink 回归 4 项零 mock |
+| Production smoke 严格 TLS（C） | ✅ PASS | `C()` 不再默认 `-k`（`CURL_TLS_ARGS` 数组，`--resolve` 改数组）；`--insecure` 显式 staging/local opt-in，production 拒绝（exit 1）；deploy 仅 staging+`SMOKE_INSECURE=1` 才传；证书过期/主机名不匹配/未知 CA/链断裂 → curl 非零 → smoke FAIL；场景资产仍为真实 GET（无 `curl -I/-sI/--head` 回归） |
+| 全量门禁 | ✅ PASS | backend **342 passed**（329+13）；FIX-06.1+06.2+06.2.1 targeted **64 passed**（31+20+13）；workers **13 passed**；ruff clean；mypy Success（84 files）；web 228/26 + typecheck 0 errors + lint + build exit 0；`nginx -t` ok；`find deploy -name '*.sh' bash -n` 全绿；GPU 门禁（真 venv，无 --allow-no-gpu，2× A6000）**PASS**；clean-checkout 门禁（新 HEAD）**GATE_EXIT=0** |
 
 ## DEPLOYMENT
 
