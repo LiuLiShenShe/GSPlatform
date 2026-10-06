@@ -5,6 +5,11 @@
 #   ./deploy/scripts/smoke_test.sh --environment staging
 #   ./deploy/scripts/smoke_test.sh --environment production --base-url https://gsplatform.example.com
 #   ./deploy/scripts/smoke_test.sh --environment staging --base-url https://gsplatform.test --resolve gsplatform.test:443:127.0.0.1 --public-scene test-scene
+#   ./deploy/scripts/smoke_test.sh --environment staging --base-url https://localhost:9443 --insecure
+#
+# --insecure: staging/local diagnostic only (self-signed / temporary certs);
+#             REJECTED in production (production verifies the real TLS chain
+#             + hostname — FIX-06.2.1 §C/§17/§18).
 #
 # Verifies:
 #   1. HTTPS reachable + redirect from HTTP
@@ -18,6 +23,11 @@
 #
 # FIX-06.1 §C: when --public-scene is provided, an invalid/missing
 # stream.entryUrl is a FAIL (not a skip) — the versioned checks must run.
+#
+# FIX-06.2.1 §C: TLS is verified by DEFAULT (no -k/--insecure).  A production
+# smoke against a broken/expired/mismatched/untrusted certificate must FAIL
+# (curl exits non-zero).  --insecure (-k) is an explicit STAGING/LOCAL
+# diagnostic opt-in only and is REJECTED in production.
 #
 # FIX-06.2 §3-§9: all *scene asset* checks (current manifest, version manifest,
 # version entry, Range 206, Range 416) use a real GET via the g()/hdr() helper,
@@ -35,25 +45,38 @@ PARSE_MANIFEST="$SCRIPT_DIR/smoke_manifest.py"
 ENVIRONMENT=""
 BASE_URL=""
 PUBLIC_SCENE_SLUG=""
-RESOLVE_FLAG=""   # repeated: "--resolve host:port:addr --resolve ..."
+INSECURE=0          # FIX-06.2.1 §C: strict TLS by default
+RESOLVE_ARGS=()     # array of --resolve host:port:addr (no word-splitting)
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --environment)   ENVIRONMENT="$2"; shift 2 ;;
         --base-url)      BASE_URL="$2";    shift 2 ;;
         --public-scene)  PUBLIC_SCENE_SLUG="$2"; shift 2 ;;
-        --resolve)       RESOLVE_FLAG+=" --resolve $2"; shift 2 ;;
+        --resolve)       RESOLVE_ARGS+=(--resolve "$2"); shift 2 ;;
+        --insecure)      INSECURE=1; shift ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
 if [[ -z "$ENVIRONMENT" ]]; then
-    echo "Usage: $0 --environment <staging|production> [--base-url URL] [--resolve host:port:addr] [--public-scene slug]" >&2
+    echo "Usage: $0 --environment <staging|production> [--base-url URL] [--resolve host:port:addr] [--public-scene slug] [--insecure]" >&2
+    echo "  --insecure: staging/local diagnostic ONLY (self-signed certs). FORBIDDEN in production" >&2
+    exit 1
+fi
+# FIX-06.2.1 §18: never let a production acceptance bypass certificate checks.
+if [[ "$ENVIRONMENT" == "production" && "$INSECURE" -eq 1 ]]; then
+    echo "ERROR: --insecure is forbidden in production — production smoke MUST verify the real TLS certificate chain and hostname." >&2
+    echo "       For an internal CA, install the CA into the system trust store (or use --cacert in a future option)." >&2
     exit 1
 fi
 [[ -z "$BASE_URL" ]] && BASE_URL="https://${HOSTNAME:-localhost}"
 
-# Helper: all curl calls use $RESOLVE_FLAG for non-public-DNS hosts.
-C() { curl -sk $RESOLVE_FLAG "$@"; }
+# TLS posture: no -k by default; -k only for explicit --insecure (staging/local).
+CURL_TLS_ARGS=()
+[[ "$INSECURE" -eq 1 ]] && CURL_TLS_ARGS=(-k)
+
+# Helper: all curl calls share the strict-TLS posture + resolve args.
+C() { curl -sS "${CURL_TLS_ARGS[@]}" "${RESOLVE_ARGS[@]}" "$@"; }
 
 # ── Asset GET helper (FIX-06.2 §3-§9) ─────────────────────────────────────
 # Scene assets are GET-only (the FastAPI route has no HEAD surface — a HEAD
@@ -96,7 +119,7 @@ fi
 
 if [[ "$BASE_URL" =~ ^https:// ]]; then
     HTTP_URL="http://${BASE_URL#https://}"
-    REDIRECT=$(curl -s $RESOLVE_FLAG -o /dev/null -w '%{http_code}:%{redirect_url}' --max-time 15 "$HTTP_URL" 2>/dev/null || echo "000:")
+    REDIRECT=$(C -o /dev/null -w '%{http_code}:%{redirect_url}' --max-time 15 "$HTTP_URL" 2>/dev/null || echo "000:")
     HTTP_CODE="${REDIRECT%%:*}"
     if [[ "$HTTP_CODE" == "301" ]]; then
         pass "HTTP → HTTPS redirect (301)"

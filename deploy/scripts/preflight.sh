@@ -225,9 +225,12 @@ echo ""
 echo "[F] Release root & metadata"
 if [[ ! -d "${DEPLOY_ROOT}/current" ]]; then
     fail "${DEPLOY_ROOT}/current does not exist — RELEASE mode requires an installed release (run HOST mode + deploy_release.sh first)"
+    CURRENT_ROOT=""
 else
-    CURRENT=$(readlink -f "${DEPLOY_ROOT}/current" 2>/dev/null || echo "")
-    pass "current symlink points to $CURRENT"
+    # FIX-06.2.1 §A: CURRENT_ROOT is the release root the import closure runs
+    # from.  Resolved here once so [I]/[K] never depend on the caller's cwd.
+    CURRENT_ROOT="$(readlink -f "${DEPLOY_ROOT}/current" 2>/dev/null || echo "")"
+    pass "current symlink points to $CURRENT_ROOT"
 fi
 if [[ -f "${DEPLOY_ROOT}/current/.git-commit-hash" ]]; then
     HASH=$(cat "${DEPLOY_ROOT}/current/.git-commit-hash")
@@ -269,27 +272,28 @@ else
 fi
 
 # ── [I] RELEASE: Python dependencies & shared worker venv (FIX-06 §3/§4) ───
+# FIX-06.2.1 §A: the release import closure MUST be rooted at CURRENT_ROOT
+# (the release root), never the caller's cwd — deploy_release runs this right
+# after its Alembic step whose cwd is <release>/apps/api, and `workers` is only
+# importable from the repo root (the wheel packages just `["app"]`).  All
+# repo-root-relative imports run in a subshell cd'd to CURRENT_ROOT; the check
+# never depends on the caller's cwd or PYTHONPATH.
 echo ""
 echo "[I] Python API venv health (shared venv = apps/api/.venv)"
 API_VENV="${DEPLOY_ROOT}/current/apps/api/.venv"
-if [[ -x "${API_VENV}/bin/python" ]]; then
-    # Full production import closure: API + storage + worker entry.
-    if "${API_VENV}/bin/python" -c "
+if [[ -x "${API_VENV}/bin/python" && -n "$CURRENT_ROOT" ]]; then
+    # Full production import closure: API + storage + worker entry + tasks.
+    if ( cd "$CURRENT_ROOT" && "${API_VENV}/bin/python" -c "
 import fastapi, sqlalchemy, pydantic, pydantic_settings, uvicorn
 import celery, argon2, httpx, multipart, yaml, redis, numpy
 import app.storage, app.main
-print('deps OK')
-"; then
-        pass "API imports: fastapi/sqlalchemy/pydantic/uvicorn/celery/argon2/httpx/multipart/yaml/redis/numpy + app.storage + app.main"
+import workers.celery_app
+import workers.tasks.publish_scene, workers.tasks.reconstruct_scene, workers.tasks.build_collision
+print('release imports OK')
+" ); then
+        pass "release import closure (cwd=$CURRENT_ROOT): deps + app.storage + app.main + workers.celery_app + tasks"
     else
-        fail "API venv missing required packages"
-    fi
-    # Worker entry: module-level imports are celery/app only — must import
-    # without torch/gsplat in this shared venv.
-    if "${API_VENV}/bin/python" -c "import workers.celery_app; print('workers OK')"; then
-        pass "workers.celery_app importable in shared venv"
-    else
-        fail "workers.celery_app import failed in shared venv"
+        fail "release import closure FAILED (cwd=$CURRENT_ROOT) — app/workers must import from the release root, not the caller's cwd"
     fi
     CELERY_BIN="${API_VENV}/bin/celery"
     if [[ -x "$CELERY_BIN" ]]; then
@@ -298,7 +302,7 @@ print('deps OK')
         fail "celery executable missing: $CELERY_BIN"
     fi
 else
-    fail "API venv not found at ${API_VENV} — deploy never completes without it"
+    fail "API venv not found at ${API_VENV}, or CURRENT_ROOT unset — deploy never completes without both"
 fi
 
 # ── [J] RELEASE: systemd ExecStart paths (FIX-06 §4) ───────────────────────

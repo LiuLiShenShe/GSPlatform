@@ -149,6 +149,14 @@ explicit `SMOKE_PUBLIC_SCENE_SLUG` above the deterministic DB query
 version); a release deploy runs the smoke automatically and a missing public
 scene fails the deploy rather than silently skipping the asset checks.
 
+**TLS（FIX-06.2.1 §C/§16-§23）：** production smoke 默认严格验证**真实 TLS
+证书链与主机名**（不含 `-k` / `--insecure`）。证书过期 / 主机名不匹配 / 未知 CA /
+证书链断裂 → curl 非零 → smoke FAIL，绝不吞掉。`--insecure` 是**仅限 staging/local
+的显式诊断选项**（自签/临时证书）；生产环境直接拒绝
+（`--insecure + production` → 脚本 exit 1）。生产命令不带 `--insecure`；内部私有
+CA 场景走系统 CA trust（本任务不实现私有 CA 管理）。staging 自签可按需追加
+`--insecure`（deploy_release 亦支持 `SMOKE_INSECURE=1` 显式传入 staging smoke）。
+
 ## 6. Backups & maintenance
 
 - Daily DB + published-assets backup: `deploy/scripts/backup.sh --environment production`

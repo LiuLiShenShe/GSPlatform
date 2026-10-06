@@ -40,14 +40,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# ── Deployment env file (FIX-06.2 §24) ─────────────────────────────────────
-# The systemd units load /etc/gsplatform/env via EnvironmentFile=; manual
-# runs of this script and preflight.sh must read the SAME file so the
-# release inherits GS_DATABASE_URL / GS_STORAGE_ROOT / SMOKE_PUBLIC_SCENE_SLUG
-# etc. without requiring the operator to export them by hand.  Loaded safely
-# (no shell expansion — passwords with $ are preserved), never printed.
+# ── Shared env + rollback helpers (FIX-06.2 §24; FIX-06.2.1 §B/§15) ──────
+# lib_env.sh: the systemd units load /etc/gsplatform/env via EnvironmentFile=;
+# this script and preflight.sh read the SAME file so the release inherits
+# GS_DATABASE_URL / GS_STORAGE_ROOT / SMOKE_PUBLIC_SCENE_SLUG etc. without
+# the operator exporting them by hand.  Loaded safely (no shell expansion —
+# passwords with $ are preserved), never printed.
+# lib_rollback.sh: fail-closed `current` rollback used by step 6b.
 . "$SCRIPT_DIR/lib_env.sh"
 load_gsplatform_env
+. "$SCRIPT_DIR/lib_rollback.sh"
 
 # ── Defaults ────────────────────────────────────────────────────────────────
 RELEASE_ID=""
@@ -249,6 +251,11 @@ else
     echo "ERROR: migrations directory missing in release" >&2
     exit 1
 fi
+# FIX-06.2.1 §A/§7: the Alembic step above cd's into apps/api; normalize back
+# to the release root so every later step (6/6b/7/8/9) runs from a
+# deterministic cwd.  (release preflight is itself cwd-independent now, but the
+# deploy's own shell should not wander.)
+cd "$RELEASE_DIR"
 
 # ── 6. Atomic symlink switch ────────────────────────────────────────────────
 echo ""
@@ -270,13 +277,12 @@ if ! DEPLOY_ROOT="$DEPLOY_ROOT" "${RELEASE_DIR}/deploy/scripts/preflight.sh" \
         --environment "$ENVIRONMENT" --mode release; then
     echo "ERROR: release preflight FAILED on the new current release" >&2
     echo "       Rolling back the symlink and aborting deploy." >&2
-    # Roll the symlink back to the previous release so the host is not left
-    # pointing at an unvalidated release.
-    if [[ -n "$PREV_RELEASE" && -d "$PREV_RELEASE" ]]; then
-        ROLLBACK_NEXT="${DEPLOY_ROOT}/current.rollback.$$"
-        ln -sfn "$PREV_RELEASE" "$ROLLBACK_NEXT"
-        mv -Tf "$ROLLBACK_NEXT" "$PREVIOUS_LINK"
-        echo "       current rolled back to $PREV_RELEASE" >&2
+    # FIX-06.2.1 §B/§10: rollback_current implements BOTH rollback contracts —
+    # upgrade restores the previous release; FIRST DEPLOY (no previous) removes
+    # the failed `current` so an unvalidated release NEVER stays current.  The
+    # failed release directory is kept for diagnostics.
+    if ! rollback_current "$RELEASE_DIR" "$PREV_RELEASE"; then
+        echo "       WARNING: rollback refused — current does not resolve to the failed release; manual inspection required." >&2
     fi
     exit 1
 fi
@@ -426,10 +432,19 @@ PY
             echo "    ✗ No eligible public published scene for smoke (set SMOKE_PUBLIC_SCENE_SLUG or publish one)." >&2
             exit 1
         fi
+        # FIX-06.2.1 §C/§17: staging may opt into TLS-insecure smoke EXPLICITLY
+        # (self-signed staging certificates) via SMOKE_INSECURE=1.  Production
+        # never passes --insecure — the smoke itself rejects it, so production
+        # always verifies the real certificate chain and hostname.
+        SMOKE_TLS_ARGS=()
+        if [[ "$ENVIRONMENT" == "staging" && "${SMOKE_INSECURE:-0}" == "1" ]]; then
+            SMOKE_TLS_ARGS=(--insecure)
+        fi
         if ! "${RELEASE_DIR}/deploy/scripts/smoke_test.sh" \
             --environment "$ENVIRONMENT" \
             --public-scene "$SMOKE_SCENE" \
-            ${SMOKE_BASE_URL:+--base-url "$SMOKE_BASE_URL"}; then
+            ${SMOKE_BASE_URL:+--base-url "$SMOKE_BASE_URL"} \
+            "${SMOKE_TLS_ARGS[@]}"; then
             echo "    ✗ Smoke test FAILED — triggering rollback instructions" >&2
             echo "    ┌──────────────────────────────────────────────────────────┐"
             echo "    │ ROLLBACK:                                                │"
