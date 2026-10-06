@@ -209,7 +209,7 @@ import ...` → **任一缺失/版本漂移都让训练任务首行即崩**。�
 | nginx | `/home/test/bin/nginx -t` | **syntax ok / test successful** |
 | Alembic | `alembic heads` / `alembic current` | 单 head `c1d2e3f4a5b6`；`current == head`（实测） |
 | bash 语法 | `bash -n` 4 脚本 | 全部 OK |
-| clean-checkout 门禁 | `verify_release_source.sh`（提交后执行） | 见 GIT 节 |
+| clean-checkout 门禁 | `verify_release_source.sh`（提交后执行） | **GATE_EXIT=0**（305 passed + 4 有意 skip；recon 全新 venv 全绿；含退出码修复，见 §13） |
 
 ### FIX-06.1 测试组（31 项）
 
@@ -227,7 +227,35 @@ import ...` → **任一缺失/版本漂移都让训练任务首行即崩**。�
 `deploy/scripts/verify_release_source.sh`（git archive HEAD → 无 .git/.env/.venv/
 node_modules → storage 文件在 → 全新 venv `pip install -e apps/api[dev]` →
 import 闭包 → ruff → mypy → backend pytest → workers pytest → **§8 全新 recon venv
-安装合同并 verify**）。提交后执行并记录（见 GIT）。
+安装合同并 verify**）。
+
+**实测（提交后执行，两次）：**
+
+| 步 | 结果 |
+|---|---|
+| archive + 完整性 | ✅ archived HEAD；无 forbidden；storage 4 文件 + pyproject + workers.celery_app 在 |
+| fresh venv deps | ✅ `pip install -e apps/api[dev]` 成功 |
+| import 闭包 | ✅ IMPORT_OK |
+| ruff / mypy | ✅ All checks passed / Success（84 files） |
+| backend pytest | ✅ **305 passed + 4 skipped = 309 收集**（4 skip 均为有意：3 项 FIX-06 storage-tracking 需 git 工作树 —— 归档无 .git；1 项 FIX-06.1 recon-runtime 测试在**无 torch 的 API 专用 venv** 内按设计跳过，由 §8 覆责） |
+| workers pytest | ✅ 13 passed |
+| §8 重建运行时（全新 recon-venv） | ✅ torch 2.14.0+cu126 / gsplat 1.5.3 / trainer `--help` / CUDA（2× A6000）/ gsplat rasterization（JIT 构建后 OK） |
+| **退出码** | ✅ **GATE_EXIT=0** |
+
+**门禁暴露的既有缺陷（已修复，二次提交）**：`verify_release_source.sh` 末尾
+`[[ "$KEEP" -eq 1 ]] && echo ...` 在 `KEEP=0` 时让脚本以状态 1 退出 —— 全绿却
+`exit 1`（FIX-06 遗留）。已改为 `if` 块 + 显式 `exit 0`；复跑 GATE_EXIT=0。
+门禁行为：**PASS 必须以 0 退出**（绝不把假失败当通过，也不放过真失败）。
+
+## 13b. GIT
+
+| 提交 | commit | 内容 |
+|---|---|---|
+| fix | `aea3f94 fix(platform): close production runtime reproducibility gaps` | A–D 全部代码/脚本/env/测试/报告 |
+| test | `<二次提交> test(fix061): enforce final production closure gates` | verify_release_source.sh 退出码修复 + 本报告门禁实测记录 |
+
+基线 `1fbdea14..` `main`，正常 push（`1fbdea1..aea3f94 main -> main`，二次提交随后）。
+工作区提交后 clean。
 
 ## 14. NOT EXECUTED（如实标注）
 

@@ -157,4 +157,10 @@ fi
 echo ""
 echo "================================================================================"
 echo "RESULT: PASS — clean checkout → fresh deps → imports → lint/type/tests all green"
-[[ "$KEEP" -eq 1 ]] && echo "workdir kept at: $WORK"
+if [[ "$KEEP" -eq 1 ]]; then
+    echo "workdir kept at: $WORK"
+fi
+# Explicit exit 0: the KEEP guard above must never leak a false non-zero
+# status (FIX-06.1 gate: PASS must exit 0 or the harness reads a spurious
+# failure from an otherwise green run).
+exit 0
