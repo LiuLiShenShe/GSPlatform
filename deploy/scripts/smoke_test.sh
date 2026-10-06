@@ -18,6 +18,13 @@
 #
 # FIX-06.1 §C: when --public-scene is provided, an invalid/missing
 # stream.entryUrl is a FAIL (not a skip) — the versioned checks must run.
+#
+# FIX-06.2 §3-§9: all *scene asset* checks (current manifest, version manifest,
+# version entry, Range 206, Range 416) use a real GET via the g()/hdr() helper,
+# capturing status + headers + body in one request.  The asset API is GET-only,
+# so HEAD/curl -I would test a surface the product does not have.  HEAD is used
+# only for the SPA routes + root security headers (static Nginx files, where
+# HEAD is legitimate and not a scene asset).
 
 set -euo pipefail
 
@@ -47,6 +54,29 @@ fi
 
 # Helper: all curl calls use $RESOLVE_FLAG for non-public-DNS hosts.
 C() { curl -sk $RESOLVE_FLAG "$@"; }
+
+# ── Asset GET helper (FIX-06.2 §3-§9) ─────────────────────────────────────
+# Scene assets are GET-only (the FastAPI route has no HEAD surface — a HEAD
+# request would test something the product does not have and never exercise
+# the X-Accel→Nginx body path).  Every asset check below is therefore a REAL
+# GET that captures status + response headers + body in ONE request, never
+# `curl -I` / `--head` / `-sI`.
+ASSET_TMP="$(mktemp -d /tmp/gsplatform-smoke.XXXXXX)"
+trap 'rm -rf "$ASSET_TMP"' EXIT
+ASSET_HDRS="$ASSET_TMP/hdrs"
+
+# g <url> <body-file-or-/dev/null> [extra curl args...] → prints HTTP status.
+# Writes response headers to $ASSET_HDRS so callers read them back via hdr().
+g() {
+    local url="$1" body="$2"
+    shift 2
+    C -D "$ASSET_HDRS" -o "$body" -w '%{http_code}' --max-time 15 "$@" "$url" 2>/dev/null || echo 000
+}
+# hdr <name> → value of a response header from the LAST g() call (lowercase match).
+hdr() {
+    tr -d '\r' < "$ASSET_HDRS" | awk -F': ' -v n="$1" \
+        'tolower($1)==tolower(n){v=$0; sub(/^[^:]*: */, "", v); print v}'
+}
 
 PASS=0; FAIL=0
 pass() { echo "  ✓ $1"; ((PASS++)) || true; }
@@ -102,67 +132,87 @@ echo ""
 if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
     MANIFEST="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/current/manifest.json"
     echo "[4] Public scene manifest ($PUBLIC_SCENE_SLUG)"
-    CODE=$(C -o /tmp/gsplatform-manifest.json -w '%{http_code}' --max-time 15 "$MANIFEST" 2>/dev/null || echo 000)
+    # ONE real GET: status + Cache-Control header + body from the same response.
+    CODE=$(g "$MANIFEST" /tmp/gsplatform-manifest.json)
     if [[ "$CODE" == "200" ]]; then
-        pass "manifest.json → 200"
-        CACHE=$(C -sI --max-time 15 "$MANIFEST" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
+        pass "GET current/manifest.json → 200"
+        CACHE=$(hdr "cache-control")
         if [[ "$CACHE" == "public, no-cache" ]]; then
             pass "current/manifest Cache-Control → public, no-cache ($CACHE)"
         else
             fail "current/manifest Cache-Control should be 'public, no-cache', got: $CACHE"
         fi
         python3 -c "import json; json.load(open('/tmp/gsplatform-manifest.json'))" 2>/dev/null && pass "manifest is valid JSON" || fail "manifest not JSON"
-        # Versioned manifest → immutable (FIX-05C.1 / FIX-06.1 §C).  The
-        # contract is stream.entryUrl = "versions/<ver>/lod-meta.json"; the
-        # shared parser (smoke_manifest.py) enforces it.  With --public-scene
-        # given, an unparseable entryUrl is a FAIL, never a skip — the
-        # versioned checks must really run.
-        VER_PATH=$(python3 "$PARSE_MANIFEST" --manifest /tmp/gsplatform-manifest.json 2>/dev/null) || true
-        if [[ -z "$VER_PATH" ]]; then
+        # Parse stream.entryUrl with the shared parser — two stable machine
+        # lines: version path, then the REAL entry filename the manifest names
+        # (never re-hardcode lod-meta.json — FIX-06.2 §7).
+        ENTRY_INFO=$(python3 "$PARSE_MANIFEST" --manifest /tmp/gsplatform-manifest.json 2>/dev/null) || true
+        VER_PATH=$(printf '%s\n' "$ENTRY_INFO" | sed -n '1p')
+        ENTRY_FILE=$(printf '%s\n' "$ENTRY_INFO" | sed -n '2p')
+        if [[ -z "$VER_PATH" || -z "$ENTRY_FILE" ]]; then
             fail "stream.entryUrl invalid/missing — manifest must contain stream.entryUrl=versions/<ver>/<file> (got $(python3 -c "import json;print(repr(json.load(open('/tmp/gsplatform-manifest.json')).get('stream',{}).get('entryUrl','')))" 2>/dev/null))"
         else
+            # Versioned manifest → immutable: real GET, status + header together.
             VMAN="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/$VER_PATH/manifest.json"
-            VCODE=$(C -o /dev/null -w '%{http_code}' --max-time 15 "$VMAN" 2>/dev/null || echo 000)
-            VCACHE=$(C -sI --max-time 15 "$VMAN" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
+            VCODE=$(g "$VMAN" /dev/null)
+            VCACHE=$(hdr "cache-control")
             if [[ "$VCODE" == "200" && "$VCACHE" == "public, max-age=31536000, immutable" ]]; then
-                pass "versions/<ver>/manifest.json → 200 + immutable ($VCACHE)"
+                pass "GET versions/<ver>/manifest.json → 200 + immutable ($VCACHE)"
             elif [[ "$VCODE" == "200" ]]; then
                 fail "versions manifest → 200 but cache=$VCACHE (want 'public, max-age=31536000, immutable')"
             else
                 fail "versions manifest → $VCODE (want 200 + immutable)"
             fi
-            # Versioned entry bytes must be reachable too (Range against the
-            # immutable entry the viewer actually streams).
-            VENTRY="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/$VER_PATH/lod-meta.json"
-            VENTRY_CODE=$(C -o /dev/null -w '%{http_code}' --max-time 15 "$VENTRY" 2>/dev/null || echo 000)
+            # Versioned ENTRY: fetch the REAL file named by stream.entryUrl.
+            VENTRY="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/$VER_PATH/$ENTRY_FILE"
+            VENTRY_CODE=$(g "$VENTRY" /dev/null)
             if [[ "$VENTRY_CODE" == "200" ]]; then
-                pass "$VER_PATH/lod-meta.json → 200"
+                pass "GET $VER_PATH/$ENTRY_FILE → 200"
             else
-                fail "$VER_PATH/lod-meta.json → $VENTRY_CODE (want 200)"
+                fail "GET $VER_PATH/$ENTRY_FILE → $VENTRY_CODE (want 200)"
             fi
         fi
     else
-        fail "manifest.json → $CODE"
+        fail "GET current/manifest.json → $CODE"
     fi
 else
     echo "  ℹ No --public-scene provided — skipping manifest / Range checks."
 fi
 
-# ── 5. Streamed SOG Range 206 ─────────────────────────────────────────────
+# ── 5. Streamed SOG Range 206 / 416 (real GET, never HEAD) ────────────────
 echo ""
 if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
     echo "[5] Range 206 / 416"
     ASSET="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/current/lod-meta.json"
-    R206=$(C -o /tmp/gsplatform-range.json -w '%{http_code}' -H 'Range: bytes=0-1023' --max-time 15 "$ASSET" 2>/dev/null || echo 000)
+    R206=$(g "$ASSET" /tmp/gsplatform-range.bin -H 'Range: bytes=0-1023')
     if [[ "$R206" == "206" ]]; then
-        pass "Range bytes=0-1023 → 206"
-        CR=$(C -sI -H 'Range: bytes=0-1023' --max-time 15 "$ASSET" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1)=="content-range"{print $2}')
+        pass "GET Range bytes=0-1023 → 206"
+        CR=$(hdr "content-range")
         [[ -n "$CR" ]] && pass "Content-Range: $CR" || fail "missing Content-Range"
+        AR=$(hdr "accept-ranges")
+        if [[ -n "$AR" ]]; then
+            pass "Accept-Ranges: $AR"
+        fi
+        SIZE=$(wc -c < /tmp/gsplatform-range.bin 2>/dev/null | tr -d ' ' || echo 0)
+        if [[ "$SIZE" -gt 0 ]]; then
+            pass "Range response body length = $SIZE bytes (> 0)"
+        else
+            fail "Range response body is empty (want 1..1024 bytes)"
+        fi
+        if [[ "$SIZE" -le 1024 ]]; then
+            pass "Range response body ≤ 1024 bytes"
+        else
+            fail "Range response body $SIZE > 1024 bytes"
+        fi
     else
-        fail "Range bytes=0-1023 → $R206"
+        fail "GET Range bytes=0-1023 → $R206"
     fi
-    R416=$(C -o /dev/null -w '%{http_code}' -H 'Range: bytes=999999999999-' --max-time 15 "$ASSET" 2>/dev/null || echo 000)
-    [[ "$R416" == "416" ]] && pass "invalid Range → 416" || fail "invalid Range → $R416"
+    R416=$(g "$ASSET" /dev/null -H 'Range: bytes=999999999999-')
+    if [[ "$R416" == "416" ]]; then
+        pass "GET invalid Range → 416"
+    else
+        fail "GET invalid Range → $R416 (want 416)"
+    fi
 fi
 
 # ── 6. Security headers ────────────────────────────────────────────────────

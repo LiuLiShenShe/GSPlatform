@@ -10,9 +10,16 @@ checks silently never ran.
 This one parser is shared by both callers:
 
   * bash smoke:  ``python3 deploy/scripts/smoke_manifest.py --manifest <file>``
-    prints ``versions/<ver>`` (stdout) on success, exits 0; on any invalid
-    manifest it prints a safe reason to stderr and exits 1 (the smoke gate
-    then FAILs instead of skipping — FIX-06.1 §C).
+    prints TWO stable machine lines on success, exits 0:
+
+        versions/<ver>
+        <entry-filename>
+
+    (the version path for the versioned-manifest URL, then the REAL entry
+    filename from ``stream.entryUrl`` — the smoke must never re-hardcode
+    ``lod-meta.json``).  On any invalid manifest it prints a safe reason to
+    stderr and exits 1 (the smoke gate then FAILs instead of skipping —
+    FIX-06.1 §C / FIX-06.2 §7).
   * pytest regression: import :func:`parse_entry_url` directly.
 
 Validation rules (the contract, not guesswork):
@@ -87,6 +94,7 @@ def _main(argv: list[str]) -> int:
         return 1
 
     print(version_path)
+    print(filename)
     return 0
 
 

@@ -26,9 +26,11 @@ Run as root or via sudo on the fresh Ubuntu 24.04 host:
 
 ```bash
 # 1. Base packages
+# postgresql-client provides `pg_isready` (host preflight probe, FIX-06.2 §16);
+# redis-tools provides `redis-cli` (Redis host probe, FIX-06.2 §17).
 apt update && apt upgrade -y
-apt install -y nginx postgresql redis-server python3-venv python3-pip \
-    ffmpeg curl zstd openssl
+apt install -y nginx postgresql postgresql-client redis-server redis-tools \
+    python3-venv python3-pip ffmpeg curl zstd openssl
 
 # 2. Runtime accounts (non-root)
 useradd --system --home /opt/gsplatform --shell /usr/sbin/nologin gsplatform
@@ -81,16 +83,40 @@ with the real domain.
 
 ## 4. First deploy
 
+The preflight is split (FIX-06.2 §13-§21): `--mode host` validates the FRESH
+host (commands, filesystem/disk, env file, PostgreSQL/Redis reachability, the
+production rate-limiter config gate, NVIDIA runtime) **before any release
+exists**; `--mode release` validates the INSTALLED release (current symlink +
+metadata, web dist, storage package, venv imports, celery, systemd ExecStart,
+torch/gsplat/CUDA, alembic current==head, nginx).  Default mode is `host` —
+legacy calls without `--mode` stay on the host contract.
+
 ```bash
 cd /opt/gsplatform/releases
 # pull the repo, then:
-sudo -u gsplatform ./deploy/scripts/preflight.sh --environment production
+# 1. HOST readiness (no release exists yet — this MUST pass first)
+sudo -u gsplatform ./deploy/scripts/preflight.sh --environment production --mode host
+# 2. Deploy (builds the web SPA + venv, switches /opt/gsplatform/current,
+#    then runs `preflight.sh --mode release` internally as a post-switch gate;
+#    a release-preflight failure rolls the symlink back and aborts)
 sudo -u gsplatform ./deploy/scripts/deploy_release.sh \
     --release $(date +%Y%m%d-%H%M) --environment production
+# 3. Manual release re-check (optional but recommended after the first deploy)
+sudo -u gsplatform ./deploy/scripts/preflight.sh --environment production --mode release
 ```
 
 `deploy_release.sh` builds the web SPA with `VITE_API_BASE_URL=/api/v1` so all
 browser calls are same-origin through Nginx (no CORS traffic in production).
+
+**Environment file (FIX-06.2 §24/§25):** preflight, deploy_release.sh and the
+systemd units share one source: `$GS_ENV_FILE` (default `/etc/gsplatform/env`,
+the file created in §2 step 5).  Scripts load it with a safe parser — no `source`
+of arbitrary paths, no shell expansion (`$` in passwords survives verbatim),
+secrets never printed.  systemd `EnvironmentFile=` does **not** shell-expand,
+and the celery broker/backend are consumed via the application Settings — set
+`GS_CELERY_BROKER_URL` / `GS_CELERY_RESULT_BACKEND` directly in the file; the
+`CELERY_BROKER_URL=${...}` lines in `production.env.example` are documentation
+only.
 
 ## 5. Post-deploy verification
 
@@ -106,8 +132,22 @@ curl -i  -H "Range: bytes=999999999999-" \
      https://DOMAIN/api/v1/scenes/<published-slug>/assets/current/lod-meta.json   # expect 416
 curl -o /dev/null -s -w '%{http_code}\n' \
      https://DOMAIN/_scene-origin/<published-slug>/current/lod-meta.json          # expect 404 (internal)
-./deploy/scripts/smoke_test.sh --environment production --base-url https://DOMAIN
+./deploy/scripts/smoke_test.sh --environment production --base-url https://DOMAIN \
+    --public-scene <slug>
 ```
+
+`--public-scene <slug>` (FIX-06.2 §26) makes the smoke's asset section exercise
+the REAL FastAPI GET path (Viewer GET → policy authorization → X-Accel-Redirect
+→ Nginx internal file → Range/206/416 headers).  The asset API is GET-only, so
+the smoke uses one real GET per asset (`-D` headers + `-o` body + `-w` code) and
+never HEAD.  The scene must be **PUBLIC + PUBLISHED + not-deleted** and have a
+**current** version (a published scene always has one).
+
+`deploy_release.sh` resolves and auto-passes `--public-scene` (see its header):
+explicit `SMOKE_PUBLIC_SCENE_SLUG` above the deterministic DB query
+(`visibility=PUBLIC AND status=PUBLISHED AND deleted_at IS NULL` with a current
+version); a release deploy runs the smoke automatically and a missing public
+scene fails the deploy rather than silently skipping the asset checks.
 
 ## 6. Backups & maintenance
 

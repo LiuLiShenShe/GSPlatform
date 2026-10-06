@@ -17,14 +17,19 @@
 #   2. Verifies the source repo is clean (unless --allow-dirty) and archives
 #      HEAD into an immutable release dir under DEPLOY_ROOT/releases/<id>.
 #   3. Creates a Python virtualenv, installs declared deps (fail-closed).
+#   3b. Installs the reconstruction runtime contract (torch/gsplat) + verifies.
 #   4. Builds the web frontend (pnpm build --frozen-lockfile, fail-closed).
 #   5. Runs Alembic migration (single-head check then upgrade; fail-closed).
 #   6. Atomically updates the `current` symlink.
+#   6b. Runs RELEASE-mode preflight against the new current release
+#       (preflight.sh --mode release) — fail-closed, rolls the symlink back.
 #   7. Reloads/restarts services (API, workers, Nginx) — fail-closed.
 #   8. Runs smoke_test.sh against the live site (hard gate).
 #   9. If any step fails: prints rollback instructions and exits non-zero.
 #
-# Environment variables (also read via DEPLOY_ROOT/shared/config if present):
+# Environment variables (loaded from $GS_ENV_FILE — default /etc/gsplatform/env —
+# via lib_env.sh when the operator has not exported them; also read via
+# DEPLOY_ROOT/shared/config if present):
 #   DEPLOY_ROOT       — /opt/gsplatform (default)
 #   DEPLOY_ENV        — staging | production (default from --environment)
 #   GS_DATABASE_URL   — required for the migration step
@@ -34,6 +39,15 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+# ── Deployment env file (FIX-06.2 §24) ─────────────────────────────────────
+# The systemd units load /etc/gsplatform/env via EnvironmentFile=; manual
+# runs of this script and preflight.sh must read the SAME file so the
+# release inherits GS_DATABASE_URL / GS_STORAGE_ROOT / SMOKE_PUBLIC_SCENE_SLUG
+# etc. without requiring the operator to export them by hand.  Loaded safely
+# (no shell expansion — passwords with $ are preserved), never printed.
+. "$SCRIPT_DIR/lib_env.sh"
+load_gsplatform_env
 
 # ── Defaults ────────────────────────────────────────────────────────────────
 RELEASE_ID=""
@@ -243,6 +257,30 @@ SYMLINK_NEXT="${DEPLOY_ROOT}/current.pending.$$"
 ln -sfn "$RELEASE_DIR" "$SYMLINK_NEXT"
 mv -Tf "$SYMLINK_NEXT" "$PREVIOUS_LINK"
 echo "    ✓ current → $RELEASE_DIR"
+
+# ── 6b. Release preflight (FIX-06.2 §21) ─────────────────────────────────
+# The now-current release is validated against its own contract (imports,
+# celery, systemd ExecStart, torch/gsplat/CUDA, alembic current==head,
+# nginx syntax) BEFORE scene-origin sync, service restart and smoke.  This is
+# the RELEASE-mode preflight; the HOST-mode preflight runs before this
+# script on a fresh host.
+echo ""
+echo "[6b] Release preflight (preflight.sh --mode release)"
+if ! DEPLOY_ROOT="$DEPLOY_ROOT" "${RELEASE_DIR}/deploy/scripts/preflight.sh" \
+        --environment "$ENVIRONMENT" --mode release; then
+    echo "ERROR: release preflight FAILED on the new current release" >&2
+    echo "       Rolling back the symlink and aborting deploy." >&2
+    # Roll the symlink back to the previous release so the host is not left
+    # pointing at an unvalidated release.
+    if [[ -n "$PREV_RELEASE" && -d "$PREV_RELEASE" ]]; then
+        ROLLBACK_NEXT="${DEPLOY_ROOT}/current.rollback.$$"
+        ln -sfn "$PREV_RELEASE" "$ROLLBACK_NEXT"
+        mv -Tf "$ROLLBACK_NEXT" "$PREVIOUS_LINK"
+        echo "       current rolled back to $PREV_RELEASE" >&2
+    fi
+    exit 1
+fi
+echo "    ✓ release preflight passed"
 
 # ── 7. Sync scene-origin tree (fail-closed) ─────────────────────────────────
 echo ""
