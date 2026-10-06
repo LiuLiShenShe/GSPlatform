@@ -1,8 +1,9 @@
 # PRODUCTION_RUNTIME_ACCEPTANCE：GSPlatform Production XR Acceptance
 
-- 日期：2026-10-06（FIX-06.1 最终软件收口；FIX-06 复核 2026-10-06；FIX-05C 最终复核 2026-10-01）
-- 阶段：FIX-06.1 — 最终软件收口（GPU 重建运行时闭包、生产 Redis 限流激活、
-  生产 smoke 真实缓存/Range、并发/CSRF 回归补齐；**非新 Phase、无业务功能**）
+- 日期：2026-10-06（FIX-06.2 生产验收脚本收口；FIX-06.1 最终软件收口；FIX-06 复核 2026-10-06；FIX-05C 最终复核 2026-10-01）
+- 阶段：FIX-06.2 — 生产验收脚本最终收口（smoke 改真实 GET 资产面、preflight
+  拆 host/release 双模式、systemd/部署 env 安全共享、runbook 同步；**非新 Phase、
+  无业务功能**）
 - 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS ·
   FIX-05（独立审计整改）PASS · FIX-05B（Vite 收尾）PASS · FIX-05C（缓存策略收口）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4` + `@photo-sphere-viewer/core@5.15.1` + `three@0.185.1`
@@ -28,7 +29,7 @@
 | LOD PASS | 🟡 PARTIAL（流式 chunk 加载/157K 渲染/331 请求实测；**全量首帧在软件渲染下不可达** —— 需真实 GPU 复核） |
 | Quest/PICO real XR PASS | ❌ **NOT EXECUTED**（无硬件 → BLOCKER） |
 | Production Web typecheck | ✅ 0 errors（web 全量 tsc -b） |
-| Automated tests PASS | ✅ PASS（web 228 / backend 309（FIX-06.1 最终）/ workers 13 / e2e 17 / 安全 78） |
+| Automated tests PASS | ✅ PASS（web 228 / backend 329（FIX-06.2 最终）/ workers 13 / e2e 17 / 安全 78） |
 
 **Blocker**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 需要 Quest 或 PICO 头显
 （含 6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot、碰撞不破坏 XR 等
@@ -304,6 +305,22 @@ web 228 / typecheck 0 errors / lint / build 未改动保持。
 ruff All checks passed；mypy Success（84 files）；web **228 passed / 26 files** / typecheck 0 errors /
 lint exit 0 / build exit 0；`nginx -t` ok；Alembic 单 head `c1d2e3f4a5b6` + current==head；
 clean-checkout 门禁（提交后执行并记录，见 FIX_06_1 报告 GIT 节）。
+
+## FIX-06.2：生产验收脚本最终收口（2026-10-06）
+
+- **Acceptance Stage**：**FIX-06.2**（Production Acceptance Script Final Closure —— 非新 Phase，
+  无业务功能，不重构 SuperSplat/Viewer/XR/Quest-PICO/LOD/Gaussian 渲染器/streamed-SOG/business
+  schema，无新增 Alembic 迁移）。详见 `FIX_06_2_PRODUCTION_ACCEPTANCE_SCRIPT_CLOSURE.md`。
+- **Software blockers**：**NONE**（两个已确认 blocker 关闭）。
+- **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED`（唯一剩余 blocker，与软件无关）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| Smoke 真实 GET 资产面（A） | ✅ PASS | 资产接口 GET-only（`scene_runtime.py` 无 HEAD 路由）；smoke 资产段改 `g()`/`hdr()` 一次真实 GET 取状态+头+body，覆盖 X-Accel→Nginx body 链路；全脚本仅剩 2 处 SPA `curl -sI`（合法静态文件）；`smoke_manifest.py` CLI 双行输出（versions/<ver> + 真实 entry 文件名），smoke 不再硬编码 lod-meta.json |
+| Preflight host/release 拆模（B） | ✅ PASS | `--mode host`（默认）＝部署前主机就绪（命令/文件系统/磁盘/env 文件/pg_isready/redis-cli/生产限流门禁/NVIDIA nvidia-smi），全新主机可先行预检；`--mode release`＝已装 release 完整性（current+元数据/web dist/storage 包/venv 导入/celery/systemd ExecStart/torch/gsplat/CUDA/alembic current==head/nginx -t）；`deploy_release.sh` §6b 对新 current 跑 release 预检，失败回滚符号链接并中止 |
+| 安全 env 共享（C） | ✅ PASS | `lib_env.sh` 安全加载 `$GS_ENV_FILE`（无 `source` 任意路径、无 shell 展开、`$` 原样、密文不回显）；preflight/deploy/systemd 同一来源；`production.env.example` 注明 systemd `EnvironmentFile=` 不展开，`GS_CELERY_BROKER_URL`/`GS_CELERY_RESULT_BACKEND` 才是实际消费项 |
+| Runbook 同步（D） | ✅ PASS | `DEPLOYMENT_RUNBOOK.md`：base 包补 `postgresql-client`/`redis-tools`；首次部署 `--mode host` → deploy → `--mode release` 复查；smoke 需 `--public-scene`（PUBLIC+PUBLISHED+未删除+有 current），deploy 自动传入、无合格场景中止部署；GS_ENV_FILE 语义 |
+| 全量门禁 | ✅ PASS | backend **329 passed**（309+20）；FIX-06.1+06.2 targeted **51 passed**（31+20）；workers **13 passed**；ruff clean；mypy Success（84 files）；web 228/26 + typecheck 0 errors + lint + build exit 0；`nginx -t` ok；bash -n 全绿；GPU 门禁（真 venv，无 --allow-no-gpu，2× A6000）**PASS**；first-deploy 仿真（/tmp，host 生产 19/0）与 release 仿真（/tmp，28/0）**PASS**；clean-checkout 门禁（新 HEAD）**GATE_EXIT=0** |
 
 ## DEPLOYMENT
 

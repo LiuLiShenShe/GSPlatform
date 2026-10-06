@@ -206,7 +206,9 @@ class TestSmokeManifestParser:
             timeout=30,
         )
         assert out.returncode == 0, out.stderr
-        assert out.stdout.strip() == "versions/abc123"
+        # FIX-06.2: CLI now also emits the REAL entry filename (line 2) so the
+        # smoke never re-hardcodes lod-meta.json.
+        assert out.stdout.split() == ["versions/abc123", "lod-meta.json"]
 
     def test_cli_fails_on_invalid(self, tmp_path):
         m = tmp_path / "manifest.json"
