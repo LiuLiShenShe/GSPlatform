@@ -219,6 +219,15 @@ class TestStorageTracked:
         "apps/api/app/storage/paths.py",
     ]
 
+    @pytest.fixture(autouse=True)
+    def _require_git_work_tree(self):
+        """These are repo-level gates: in the clean-checkout gate the archive
+        has no .git, so git ls-files/check-ignore are meaningless — the gate's
+        own integrity section already asserts the storage files are present in
+        the archive."""
+        if not (get_repo_root() / ".git").exists():
+            pytest.skip("not a git work tree (clean-checkout gate)")
+
     def _git(self, *args: str) -> subprocess.CompletedProcess:
         # noqa: S603, S607 — args are hardcoded literals, never user input.
         cmd = ["git", "-C", str(get_repo_root()), *args]  # noqa: S603, S607
