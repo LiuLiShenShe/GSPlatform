@@ -5,22 +5,29 @@
 #   ./deploy/scripts/deploy_release.sh --release 20260918-01 --environment staging
 #   ./deploy/scripts/deploy_release.sh --release 20260918-01 --environment production
 #
+# FIX-06 §12: the release is built from **tracked source only** via
+# `git archive HEAD` — the working tree is never copied, so a dirty checkout
+# cannot leak untracked/copied files (.env, .venv, node_modules, stray
+# storage/) into a release.  Every step is fail-closed: a failed install,
+# build, migration, scene-origin sync, restart or smoke test aborts the deploy
+# instead of printing "⚠ relying on pre-built venv" and continuing.
+#
 # The script:
 #   1. Records the previous release for rollback safety.
-#   2. Copies the release source (current working copy or specified dir) into
-#      an immutable release dir under DEPLOY_ROOT/releases/<id>.
-#   3. Creates a Python virtualenv, installs locked deps.
-#   4. Builds the web frontend (pnpm build).
-#   5. Runs Alembic upgrade (DB migration preflight via --dry-run).
+#   2. Verifies the source repo is clean (unless --allow-dirty) and archives
+#      HEAD into an immutable release dir under DEPLOY_ROOT/releases/<id>.
+#   3. Creates a Python virtualenv, installs declared deps (fail-closed).
+#   4. Builds the web frontend (pnpm build --frozen-lockfile, fail-closed).
+#   5. Runs Alembic migration (single-head check then upgrade; fail-closed).
 #   6. Atomically updates the `current` symlink.
-#   7. Reloads/restarts services (API, workers, Nginx).
-#   8. Runs smoke_test.sh against the live site.
-#   9. If smoke fails: prints rollback instructions and exits non-zero.
+#   7. Reloads/restarts services (API, workers, Nginx) — fail-closed.
+#   8. Runs smoke_test.sh against the live site (hard gate).
+#   9. If any step fails: prints rollback instructions and exits non-zero.
 #
 # Environment variables (also read via DEPLOY_ROOT/shared/config if present):
 #   DEPLOY_ROOT       — /opt/gsplatform (default)
 #   DEPLOY_ENV        — staging | production (default from --environment)
-#   GS_DATABASE_URL   — required for migration preflight check
+#   GS_DATABASE_URL   — required for the migration step
 #   SMOKE_BASE_URL    — default: https://$HOSTNAME (staging) or production domain
 
 set -euo pipefail
@@ -35,6 +42,7 @@ DEPLOY_ROOT="${DEPLOY_ROOT:-/opt/gsplatform}"
 DEPLOY_SOURCE="${DEPLOY_SOURCE:-$REPO_ROOT}"
 DRY_RUN=0
 SKIP_SMOKE=0
+ALLOW_DIRTY=0
 SMOKE_BASE_URL="${SMOKE_BASE_URL:-}"
 
 # ── Parse args ──────────────────────────────────────────────────────────────
@@ -46,12 +54,13 @@ while [[ $# -gt 0 ]]; do
         --root)           DEPLOY_ROOT="$2"; shift 2 ;;
         --dry-run)        DRY_RUN=1; shift ;;
         --skip-smoke)     SKIP_SMOKE=1; shift ;;
+        --allow-dirty)    ALLOW_DIRTY=1; shift ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
 done
 
 if [[ -z "$RELEASE_ID" || -z "$ENVIRONMENT" ]]; then
-    echo "Usage: $0 --release <id> --environment <staging|production> [--dry-run] [--skip-smoke]" >&2
+    echo "Usage: $0 --release <id> --environment <staging|production> [--dry-run] [--skip-smoke] [--allow-dirty]" >&2
     exit 1
 fi
 
@@ -64,14 +73,14 @@ echo "==========================================================================
 echo "GSPlatform deploy_release.sh — $(date -u)"
 echo "  release:    $RELEASE_ID"
 echo "  environment: $ENVIRONMENT"
-echo "  source:     $DEPLOY_SOURCE"
+echo "  source:     $DEPLOY_SOURCE (tracked HEAD only, via git archive)"
 echo "  deploy_root: $DEPLOY_ROOT"
 echo "  dry_run:    $DRY_RUN"
 echo "  prev:       $PREV_RELEASE"
 echo "================================================================================"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
-    echo "[DRY RUN] Would create release dir: $RELEASE_DIR"
+    echo "[DRY RUN] Would archive git HEAD into: $RELEASE_DIR"
     echo "[DRY RUN] Would build web, install deps, run migration check"
     echo "[DRY RUN] Would flip current symlink to $RELEASE_DIR"
     echo "[DRY RUN] Would restart services"
@@ -88,68 +97,116 @@ else
     echo "    No previous release (first deploy)"
 fi
 
-# ── 2. Create immutable release dir ─────────────────────────────────────────
+# ── 2. Source integrity + immutable release dir (FIX-06 §12) ────────────────
 echo ""
-echo "[2] Creating release $RELEASE_ID"
+echo "[2] Archiving tracked HEAD into release $RELEASE_ID"
+if [[ ! -d "$DEPLOY_SOURCE/.git" ]]; then
+    echo "ERROR: $DEPLOY_SOURCE is not a git work tree (no .git)." >&2
+    echo "       Deploy source must be the git repo — releases come from tracked HEAD only." >&2
+    exit 1
+fi
+cd "$DEPLOY_SOURCE"
+if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+    echo "ERROR: no commit at HEAD in $DEPLOY_SOURCE" >&2
+    exit 1
+fi
+if [[ "$ALLOW_DIRTY" -eq 1 ]]; then
+    echo "    ⚠ --allow-dirty: skipping the clean working-tree check"
+else
+    if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+        echo "ERROR: source working tree is dirty — refusing to deploy untracked/uncommitted state." >&2
+        echo "       Commit or stash first, or pass --allow-dirty (dangerous) to override." >&2
+        exit 1
+    fi
+    echo "    ✓ working tree clean"
+fi
+
+COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)
+
 if [[ -d "$RELEASE_DIR" ]]; then
     echo "ERROR: Release dir $RELEASE_DIR already exists.  Use a unique release ID." >&2
     exit 1
 fi
 mkdir -p "$DEPLOY_ROOT/releases"
-cp -a "$DEPLOY_SOURCE" "$RELEASE_DIR"
-echo "    Copied source to $RELEASE_DIR"
-# Preserve source commit metadata for traceability
-cd "$RELEASE_DIR"
-git rev-parse HEAD > .git-commit-hash 2>/dev/null || echo "unknown" > .git-commit-hash
-echo "$RELEASE_ID" > .release-id
-echo "$TIMESTAMP"  > .deployed-at
-echo "$ENVIRONMENT" > .deploy-environment
-git rev-parse --abbrev-ref HEAD > .release-branch 2>/dev/null || echo "main" > .release-branch
-echo "    Metadata written: commit=$(cat .git-commit-hash), branch=$(cat .release-branch)"
+# Archive the committed tree only — never the working copy (no .git, .env,
+# .venv, node_modules, or stray untracked storage/ in the release).
+STAGE_DIR="${RELEASE_DIR}.staging.$$"
+mkdir -p "$STAGE_DIR"
+git archive --format=tar HEAD > /tmp/gsplatform-release-$$.tar
+tar -xf /tmp/gsplatform-release-$$.tar -C "$STAGE_DIR"
+rm -f /tmp/gsplatform-release-$$.tar
+mv "$STAGE_DIR" "$RELEASE_DIR"
+echo "    ✓ Archived commit $COMMIT_HASH into $RELEASE_DIR"
 
-# ── 3. Install locked dependencies ──────────────────────────────────────────
+# Metadata written from the SOURCE repo (the release has no .git to query).
+echo "$COMMIT_HASH"  > "${RELEASE_DIR}/.git-commit-hash"
+echo "$RELEASE_ID"   > "${RELEASE_DIR}/.release-id"
+echo "$TIMESTAMP"    > "${RELEASE_DIR}/.deployed-at"
+echo "$ENVIRONMENT"  > "${RELEASE_DIR}/.deploy-environment"
+echo "$COMMIT_BRANCH" > "${RELEASE_DIR}/.release-branch"
+echo "    Metadata written: commit=$COMMIT_HASH, branch=$COMMIT_BRANCH"
+
+# ── 3. Install declared dependencies ────────────────────────────────────────
 echo ""
 echo "[3] Installing Python dependencies in release venv"
 API_VENV="${RELEASE_DIR}/apps/api/.venv"
 python3 -m venv "$API_VENV"
 "${API_VENV}/bin/pip" install --upgrade pip >/dev/null 2>&1
-"${API_VENV}/bin/pip" install -e "${RELEASE_DIR}/apps/api[dev]" >/dev/null 2>&1 || \
-    "${API_VENV}/bin/pip" install -r "${RELEASE_DIR}/apps/api/pyproject.toml" 2>/dev/null || \
-    echo "    ⚠ pip install failed — relying on pre-built venv in release"
-echo "    Python venv ready at $API_VENV"
+if ! "${API_VENV}/bin/pip" install -e "${RELEASE_DIR}/apps/api" >/dev/null 2>&1; then
+    echo "ERROR: pip install failed — no pre-built-venv fallback exists." >&2
+    echo "       A release must be self-contained; aborting." >&2
+    exit 1
+fi
+echo "    ✓ Python venv ready at $API_VENV"
 
-# ── 4. Build web frontend ───────────────────────────────────────────────────
+# ── 4. Build web frontend (fail-closed) ─────────────────────────────────────
 echo ""
 echo "[4] Building web frontend"
 WEB_DIR="${RELEASE_DIR}/apps/web"
 if [[ -d "$WEB_DIR" ]]; then
     cd "$WEB_DIR"
-    VITE_API_BASE_URL="/api/v1" pnpm build --frozen-lockfile 2>&1 | tail -5 || \
-        pnpm build 2>&1 | tail -5 || echo "    ⚠ web build failed — check logs"
-    if [[ -f "$WEB_DIR/dist/index.html" ]]; then
-        echo "    ✓ Web build complete: $(du -sh "$WEB_DIR/dist" | cut -f1)"
-    else
-        echo "    ✗ dist/index.html missing after build" >&2
+    if ! pnpm install --frozen-lockfile >/tmp/gsplatform-web-install.log 2>&1; then
+        echo "ERROR: pnpm install --frozen-lockfile failed — see /tmp/gsplatform-web-install.log" >&2
         exit 1
     fi
+    if ! VITE_API_BASE_URL="/api/v1" pnpm build >/tmp/gsplatform-web-build.log 2>&1; then
+        echo "ERROR: web build failed — see /tmp/gsplatform-web-build.log" >&2
+        exit 1
+    fi
+    if [[ ! -f "$WEB_DIR/dist/index.html" ]]; then
+        echo "ERROR: dist/index.html missing after build" >&2
+        exit 1
+    fi
+    echo "    ✓ Web build complete: $(du -sh "$WEB_DIR/dist" | cut -f1)"
 else
-    echo "    ⚠ No apps/web in release — assuming pre-built dist exists"
+    echo "ERROR: apps/web missing in archive (it is tracked) — cannot build the SPA." >&2
+    exit 1
 fi
 
-# ── 5. Alembic migration preflight ─────────────────────────────────────────
+# ── 5. Alembic migration (single head + upgrade, fail-closed) ───────────────
 echo ""
-echo "[5] Alembic migration preflight"
+echo "[5] Alembic migration"
 if [[ -d "${RELEASE_DIR}/apps/api/migrations" ]]; then
     cd "${RELEASE_DIR}/apps/api"
-    if [[ -n "${GS_DATABASE_URL:-}" ]]; then
-        echo "    Running: alembic upgrade head --sql | head -20 (dry-run check)"
-        "${API_VENV}/bin/python" -m alembic upgrade head 2>&1 | tail -3 || \
-            echo "    ⚠ alembic upgrade failed — review migration compatibility"
-    else
-        echo "    ⚠ GS_DATABASE_URL not set — skipping migration check"
+    if [[ -z "${GS_DATABASE_URL:-}" ]]; then
+        echo "ERROR: GS_DATABASE_URL not set — cannot run migration preflight." >&2
+        exit 1
     fi
+    HEADS=$("${API_VENV}/bin/python" -m alembic heads 2>/dev/null | grep -cE "^[0-9a-f]{12}" || true)
+    if [[ "$HEADS" -ne 1 ]]; then
+        echo "ERROR: alembic heads count is ${HEADS} (expected exactly 1) — refusing to migrate." >&2
+        exit 1
+    fi
+    echo "    ✓ single migration head"
+    if ! "${API_VENV}/bin/python" -m alembic upgrade head >/tmp/gsplatform-migrate.log 2>&1; then
+        echo "ERROR: alembic upgrade head failed — see /tmp/gsplatform-migrate.log" >&2
+        exit 1
+    fi
+    echo "    ✓ alembic upgrade head applied"
 else
-    echo "    ⚠ No migrations directory found"
+    echo "ERROR: migrations directory missing in release" >&2
+    exit 1
 fi
 
 # ── 6. Atomic symlink switch ────────────────────────────────────────────────
@@ -160,12 +217,12 @@ ln -sfn "$RELEASE_DIR" "$SYMLINK_NEXT"
 mv -Tf "$SYMLINK_NEXT" "$PREVIOUS_LINK"
 echo "    ✓ current → $RELEASE_DIR"
 
-# ── 7. Sync scene-origin tree ──────────────────────────────────────────────
+# ── 7. Sync scene-origin tree (fail-closed) ─────────────────────────────────
 echo ""
 echo "[7] Syncing scene-origin tree (production asset URL tree)"
 SCENE_ORIGIN="${GS_SCENE_ORIGIN_ROOT:-${DEPLOY_ROOT}/data/scene-origin}"
 mkdir -p "$SCENE_ORIGIN"
-"${API_VENV}/bin/python" -c "
+if ! "${API_VENV}/bin/python" -c "
 import os, sys, uuid
 from pathlib import Path
 sys.path.insert(0, '${RELEASE_DIR}/apps/api')
@@ -175,7 +232,6 @@ os.environ.setdefault('GS_SCENE_ORIGIN_ROOT', '$SCENE_ORIGIN')
 from app.core.config import settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
-from app.db.models.scene import Scene
 
 engine = create_engine(settings.database_url, connect_args={'connect_timeout': 5})
 origin_root = Path(settings.scene_origin_root or '$SCENE_ORIGIN')
@@ -199,16 +255,19 @@ for scene_id, slug, status, visibility, version_id in rows:
     slug_dir = origin_root / slug
     existing.add(slug)
     if not pub_path.is_dir():
-        print(f'    ⚠ published version missing for {slug}: {pub_path}')
-        continue
+        print(f'    ERROR: published version missing for {slug}: {pub_path}')
+        sys.exit(1)
     slug_dir.mkdir(parents=True, exist_ok=True)
     # versions/<ver> → absolute symlink to published version
     ver_link = slug_dir / 'versions' / version_id
     if ver_link.exists() or ver_link.is_symlink():
         if ver_link.is_symlink() and os.path.realpath(str(ver_link)) == str(pub_path.resolve()):
-            continue
-        ver_link.unlink()
-    ver_link.symlink_to(str(pub_path.resolve()), target_is_directory=True)
+            pass
+        else:
+            ver_link.unlink()
+            ver_link.symlink_to(str(pub_path.resolve()), target_is_directory=True)
+    else:
+        ver_link.symlink_to(str(pub_path.resolve()), target_is_directory=True)
     # current → versions/<ver> (relative)
     current = slug_dir / 'current'
     expected_rel = f'versions/{version_id}'
@@ -227,28 +286,44 @@ for entry in origin_root.iterdir():
         print(f'    🗑 removed stale origin: {entry.name}')
 
 print(f'    Done: {len(rows)} scene(s) in origin tree')
-" 2>&1 || echo "    ⚠ scene-origin sync failed — review logs above"
+"; then
+    echo "ERROR: scene-origin sync failed — aborting deploy" >&2
+    exit 1
+fi
 
-# ── 8. Reload/restart services ─────────────────────────────────────────────
+# ── 8. Reload/restart services (fail-closed) ────────────────────────────────
 echo ""
-echo "[8] Restarting services (systemctl if available, otherwise skip)"
+echo "[8] Restarting services"
 restart_svc() {
     local svc="$1"
     if command -v systemctl >/dev/null 2>&1; then
-        sudo systemctl daemon-reload 2>/dev/null || true
-        sudo systemctl restart "$svc" 2>/dev/null && echo "    ✓ restarted $svc" || echo "    ⚠ restart $svc failed"
+        sudo systemctl daemon-reload >/dev/null 2>&1 || true
+        if ! sudo systemctl restart "$svc" >/tmp/gsplatform-restart-${svc}.log 2>&1; then
+            echo "ERROR: restart $svc failed — see /tmp/gsplatform-restart-${svc}.log" >&2
+            exit 1
+        fi
+        echo "    ✓ restarted $svc"
     else
-        echo "    ℹ systemctl unavailable — restart $svc manually: sudo systemctl restart $svc"
+        echo "ERROR: systemctl unavailable — must restart $svc manually; aborting (no partial state)." >&2
+        exit 1
     fi
 }
 restart_svc gsplatform-api
 restart_svc gsplatform-celery-cpu
 restart_svc gsplatform-celery-gpu
-sudo systemctl reload nginx 2>/dev/null && echo "    ✓ reloaded nginx" || \
-    sudo nginx -s reload 2>/dev/null && echo "    ✓ reloaded nginx (via nginx -s reload)" || \
-    echo "    ⚠ nginx reload failed — check config: nginx -t"
+if ! sudo nginx -t >/tmp/gsplatform-nginx-t.log 2>&1; then
+    echo "ERROR: nginx -t failed — see /tmp/gsplatform-nginx-t.log" >&2
+    exit 1
+fi
+if ! sudo systemctl reload nginx >/dev/null 2>&1; then
+    if ! sudo nginx -s reload >/dev/null 2>&1; then
+        echo "ERROR: nginx reload failed" >&2
+        exit 1
+    fi
+fi
+echo "    ✓ reloaded nginx"
 
-# ── 9. Smoke test ──────────────────────────────────────────────────────────
+# ── 9. Smoke test (hard gate) ───────────────────────────────────────────────
 echo ""
 if [[ "$SKIP_SMOKE" -eq 1 ]]; then
     echo "[9] Smoke test: SKIPPED (--skip-smoke)"
@@ -257,20 +332,22 @@ else
     # Wait for services to stabilize
     sleep 3
     if [[ -x "${RELEASE_DIR}/deploy/scripts/smoke_test.sh" ]]; then
-        "${RELEASE_DIR}/deploy/scripts/smoke_test.sh" \
+        if ! "${RELEASE_DIR}/deploy/scripts/smoke_test.sh" \
             --environment "$ENVIRONMENT" \
-            ${SMOKE_BASE_URL:+--base-url "$SMOKE_BASE_URL"} \
-            && echo "    ✓ Smoke test PASSED" \
-            || { echo "    ✗ Smoke test FAILED — triggering rollback instructions" >&2
-                 echo "    ┌──────────────────────────────────────────────────────────┐"
-                 echo "    │ ROLLBACK:                                                │"
-                 echo "    │   ./deploy/scripts/rollback.sh --root $DEPLOY_ROOT       │"
-                 echo "    │                                                          │"
-                 echo "    │ Previous release: ${PREV_RELEASE:-none}                  │"
-                 echo "    └──────────────────────────────────────────────────────────┘"
-                 exit 1; }
+            ${SMOKE_BASE_URL:+--base-url "$SMOKE_BASE_URL"}; then
+            echo "    ✗ Smoke test FAILED — triggering rollback instructions" >&2
+            echo "    ┌──────────────────────────────────────────────────────────┐"
+            echo "    │ ROLLBACK:                                                │"
+            echo "    │   ./deploy/scripts/rollback.sh --root $DEPLOY_ROOT       │"
+            echo "    │                                                          │"
+            echo "    │ Previous release: ${PREV_RELEASE:-none}                  │"
+            echo "    └──────────────────────────────────────────────────────────┘"
+            exit 1
+        fi
+        echo "    ✓ Smoke test PASSED"
     else
-        echo "    ⚠ smoke_test.sh not found in release — skipping"
+        echo "ERROR: smoke_test.sh not found in release" >&2
+        exit 1
     fi
 fi
 

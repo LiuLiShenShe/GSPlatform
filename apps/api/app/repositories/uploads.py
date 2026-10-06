@@ -77,6 +77,26 @@ class UploadRepository:
             .first()
         )
 
+    def get_owned_for_update(
+        self, session_id: uuid.UUID, owner_id: uuid.UUID
+    ) -> UploadSession | None:
+        """Row-locked variant for state transitions (complete/cancel).
+
+        Prevents two concurrent ``complete`` calls from creating a second
+        Scene/Job for the same session (FIX-06 §9).
+        """
+        return (
+            self._session.query(UploadSession)
+            .filter(
+                UploadSession.id == session_id,
+                UploadSession.owner_id == owner_id,
+                UploadSession.status != UploadSessionStatus.EXPIRED.value,
+                UploadSession.status != UploadSessionStatus.CANCELLED.value,
+            )
+            .with_for_update()
+            .first()
+        )
+
     def count_active_for_user(self, owner_id: uuid.UUID) -> int:
         # Only *in-flight* sessions hold a concurrent-upload slot. Completed
         # sessions (UPLOADED/QUEUED/…) are referenced by later jobs and must
@@ -144,6 +164,38 @@ class UploadRepository:
         self._session.add(job)
         self._session.flush()
         return job
+
+    def get_latest_publish_job(self, scene_id: uuid.UUID) -> Job | None:
+        """Newest PUBLISH job for the scene (replay/retry decision, FIX-06 §9)."""
+        return (
+            self._session.query(Job)
+            .filter(
+                Job.scene_id == scene_id,
+                Job.kind == JobKind.PUBLISH.value,
+            )
+            .order_by(Job.created_at.desc(), Job.id.desc())
+            .first()
+        )
+
+    def mark_job_failed(
+        self,
+        job_id: uuid.UUID,
+        *,
+        error_code: str,
+        error_message_safe: str,
+    ) -> None:
+        """Mark a job FAILED with the safe (never raw broker) message."""
+        stmt = (
+            update(Job)
+            .where(Job.id == job_id)
+            .values(
+                status=JobStatus.FAILED.value,
+                error_code=error_code,
+                error_message_safe=error_message_safe,
+            )
+        )
+        self._session.execute(stmt)
+        self._session.flush()
 
     def expire_stale(self, max_age: timedelta) -> int:
         cutoff = datetime.now(UTC) - max_age

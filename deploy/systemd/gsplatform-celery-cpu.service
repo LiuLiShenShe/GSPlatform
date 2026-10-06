@@ -25,7 +25,13 @@ EnvironmentFile=/etc/gsplatform/env
 
 # --concurrency from CELERY_CPU_CONCURRENCY (env). Prefetch=1 + acks_late
 # means a crash re-queues in-flight tasks instead of silently dropping work.
-ExecStart=/opt/gsplatform/current/workers/.venv/bin/celery -A workers.celery_app worker -Q gsplatform,cpu --concurrency=${CELERY_CPU_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=100
+# Strategy (FIX-06 P0-4): single shared venv. deploy_release.sh builds
+# `apps/api/.venv` from apps/api/pyproject.toml only — it never created
+# `workers/.venv`. ExecStart therefore uses the shared venv in which both
+# `workers.celery_app` (module-level imports are celery/app only — torch/
+# gsplat live under workers/reconstruction, imported lazily) and all worker
+# deps (numpy/PyYAML declared in pyproject) resolve.
+ExecStart=/opt/gsplatform/current/apps/api/.venv/bin/celery -A workers.celery_app worker -Q gsplatform,cpu --concurrency=${CELERY_CPU_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=100
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=10

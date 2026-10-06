@@ -126,14 +126,34 @@ else
     warn "Redis unreachable or REDIS_URL not set (non-blocking for preflight)"
 fi
 
-# ── D. Build artifacts ─────────────────────────────────────────────────────
+# ── D. Build artifacts & release integrity ─────────────────────────────────
 echo ""
-echo "[D] Build artifacts"
+echo "[D] Build artifacts & release integrity"
 check_file "${DEPLOY_ROOT}/current/apps/web/dist/index.html"
 check_file "${DEPLOY_ROOT}/current/apps/api/app/main.py"
 check_file "${DEPLOY_ROOT}/current/deploy/nginx/gsplatform.conf"
 check_file "${DEPLOY_ROOT}/current/deploy/systemd/gsplatform-api.service"
 check_file "${DEPLOY_ROOT}/current/apps/api/.venv/bin/uvicorn"
+# FIX-06 §1/§13: the storage package is *tracked* — a release built from
+# git archive must contain it (the pre-FIX-06 deploy copied a working tree
+# whose storage/ was gitignored by the bare `storage/` rule).
+for f in \
+    "${DEPLOY_ROOT}/current/apps/api/app/storage/__init__.py" \
+    "${DEPLOY_ROOT}/current/apps/api/app/storage/base.py" \
+    "${DEPLOY_ROOT}/current/apps/api/app/storage/local_disk.py" \
+    "${DEPLOY_ROOT}/current/apps/api/app/storage/paths.py"; do
+    check_file "$f"
+done
+if [[ -f "${DEPLOY_ROOT}/current/.git-commit-hash" ]]; then
+    HASH=$(cat "${DEPLOY_ROOT}/current/.git-commit-hash")
+    if [[ "$HASH" =~ ^[0-9a-f]{40}$ ]]; then
+        pass "release commit hash recorded ($HASH)"
+    else
+        fail "release .git-commit-hash is not a valid commit hash: $HASH"
+    fi
+else
+    fail ".git-commit-hash missing in current release (deploy_release.sh must write it)"
+fi
 
 # ── E. Nginx configuration syntax ──────────────────────────────────────────
 echo ""
@@ -145,23 +165,77 @@ else
     fail "nginx -t failed (see log above)"
 fi
 
-# ── F. Python dependencies ─────────────────────────────────────────────────
+# ── F. Python dependencies & shared worker venv (FIX-06 §3/§4) ─────────────
 echo ""
-echo "[F] Python API venv health"
+echo "[F] Python API venv health (shared venv = apps/api/.venv)"
 API_VENV="${DEPLOY_ROOT}/current/apps/api/.venv"
 if [[ -x "${API_VENV}/bin/python" ]]; then
-    if "${API_VENV}/bin/python" -c "import fastapi, sqlalchemy, pydantic, uvicorn; print('deps OK')"; then
-        pass "FastAPI/SQLAlchemy/Pydantic/uvicorn importable"
+    # Full production import closure: API + storage + worker entry.
+    if "${API_VENV}/bin/python" -c "
+import fastapi, sqlalchemy, pydantic, pydantic_settings, uvicorn
+import celery, argon2, httpx, multipart, yaml, redis, numpy
+import app.storage, app.main
+print('deps OK')
+"; then
+        pass "API imports: fastapi/sqlalchemy/pydantic/uvicorn/celery/argon2/httpx/multipart/yaml/redis/numpy + app.storage + app.main"
     else
         fail "API venv missing required packages"
     fi
-    if "${API_VENV}/bin/python" -c "import celery; print('celery', celery.__version__)"; then
-        pass "Celery importable in API venv"
+    # Worker entry: module-level imports are celery/app only — must import
+    # without torch/gsplat in this shared venv.
+    if "${API_VENV}/bin/python" -c "import workers.celery_app; print('workers OK')"; then
+        pass "workers.celery_app importable in shared venv"
     else
-        warn "Celery not importable in API venv (may be in separate worker venv)"
+        fail "workers.celery_app import failed in shared venv"
+    fi
+    CELERY_BIN="${API_VENV}/bin/celery"
+    if [[ -x "$CELERY_BIN" ]]; then
+        pass "celery executable present: $CELERY_BIN"
+    else
+        fail "celery executable missing: $CELERY_BIN"
     fi
 else
-    warn "API venv not found at ${API_VENV} (skip)"
+    fail "API venv not found at ${API_VENV} — deploy never completes without it"
+fi
+
+# ── G. systemd ExecStart paths (FIX-06 §4) ──────────────────────────────────
+echo ""
+echo "[G] systemd unit ExecStart path existence"
+for unit in gsplatform-api gsplatform-celery-cpu gsplatform-celery-gpu gsplatform-cleanup; do
+    UNIT_FILE="${DEPLOY_ROOT}/current/deploy/systemd/${unit}.service"
+    if [[ -f "$UNIT_FILE" ]]; then
+        EXEC=$(grep -E "^ExecStart=" "$UNIT_FILE" | cut -d= -f2- | awk '{print $1}')
+        if [[ -n "$EXEC" && -e "$EXEC" ]]; then
+            pass "$unit ExecStart exists ($EXEC)"
+        elif [[ -n "$EXEC" ]]; then
+            EXEC_PATH="${DEPLOY_ROOT}/current/${EXEC#*/current/}"
+            if [[ -e "$EXEC_PATH" ]]; then
+                pass "$unit ExecStart resolves under current ($EXEC)"
+            else
+                fail "$unit ExecStart missing: $EXEC"
+            fi
+        else
+            fail "$unit has no ExecStart="
+        fi
+    else
+        fail "unit file missing in release: $UNIT_FILE"
+    fi
+done
+
+# ── H. Alembic migration state (current == head) ───────────────────────────
+echo ""
+echo "[H] Alembic migration state"
+if [[ -n "${GS_DATABASE_URL:-}" && -d "${DEPLOY_ROOT}/current/apps/api/migrations" ]]; then
+    cd "${DEPLOY_ROOT}/current/apps/api"
+    HEAD_HASH=$("${API_VENV}/bin/python" -m alembic heads 2>/dev/null | grep -oE "^[0-9a-f]{12}" | head -1 || true)
+    CUR_HASH=$("${API_VENV}/bin/python" -m alembic current 2>/dev/null | grep -oE "^[0-9a-f]{12}" | head -1 || true)
+    if [[ -n "$HEAD_HASH" && "$CUR_HASH" == "$HEAD_HASH" ]]; then
+        pass "alembic current == head ($CUR_HASH)"
+    else
+        fail "alembic current ($CUR_HASH) != head ($HEAD_HASH) — DB needs upgrade"
+    fi
+else
+    warn "GS_DATABASE_URL unset or migrations missing — skipping alembic check"
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────────────

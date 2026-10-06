@@ -82,10 +82,15 @@ for route in "/" "/works" "/upload"; do
     [[ "$CT" == *"text/html"* ]] && pass "SPA $route → text/html" || fail "SPA $route → content-type=$CT"
 done
 
-# ── 4. Public scene manifest (short cache) ─────────────────────────────────
+# ── 4. Public scene manifest (cache semantics per FIX-05C/FIX-05C.1) ────────
 # FIX-01: scene bytes are NO LONGER served from a public /local-scenes/ alias.
 # The smoke test now goes through the authorized API asset endpoint exactly
 # like the viewer does (FastAPI policy + Nginx X-Accel internal redirect).
+#
+# Cache contract (FIX-05C.1): current/* → no-cache (mutable re-pointable);
+# versions/<ver>/* → immutable (content-addressed).  `current/manifest.json`
+# MUST NOT carry max-age=60 — that was the historical bug the regression
+# suite locks.
 echo ""
 if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
     MANIFEST="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/current/manifest.json"
@@ -94,8 +99,28 @@ if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
     if [[ "$CODE" == "200" ]]; then
         pass "manifest.json → 200"
         CACHE=$(C -sI --max-time 15 "$MANIFEST" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
-        [[ "$CACHE" == *"max-age=60"* ]] && pass "Cache-Control short: $CACHE" || fail "Cache-Control: $CACHE"
+        if [[ "$CACHE" == "public, no-cache" ]]; then
+            pass "current/manifest Cache-Control → public, no-cache ($CACHE)"
+        else
+            fail "current/manifest Cache-Control should be 'public, no-cache', got: $CACHE"
+        fi
         python3 -c "import json; json.load(open('/tmp/gsplatform-manifest.json'))" 2>/dev/null && pass "manifest is valid JSON" || fail "manifest not JSON"
+        # Versioned manifest → immutable (FIX-05C.1): parse entryUrl, e.g.
+        # versions/<ver>/lod-meta.json, and probe the same version's manifest.
+        ENTRY=$(python3 -c "import json;print(json.load(open('/tmp/gsplatform-manifest.json')).get('entryUrl',''))" 2>/dev/null || echo "")
+        if [[ "$ENTRY" == versions/*/* ]]; then
+            VER_PATH="${ENTRY%/lod-meta.json}"
+            VMAN="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/$VER_PATH/manifest.json"
+            VCODE=$(C -o /dev/null -w '%{http_code}' --max-time 15 "$VMAN" 2>/dev/null || echo 000)
+            VCACHE=$(C -sI --max-time 15 "$VMAN" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
+            if [[ "$VCODE" == "200" && "$VCACHE" == *"immutable"* ]]; then
+                pass "versions/<ver>/manifest.json → 200 + immutable ($VCACHE)"
+            else
+                fail "versions manifest → $VCODE cache=$VCACHE (want 200 + immutable)"
+            fi
+        else
+            echo "  ℹ entryUrl not parseable ($ENTRY) — skipping versioned manifest check"
+        fi
     else
         fail "manifest.json → $CODE"
     fi

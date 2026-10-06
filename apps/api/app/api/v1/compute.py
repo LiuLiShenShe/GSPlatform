@@ -13,7 +13,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.core.identity import RequestIdentity, get_current_user
+from app.core.identity import RequestIdentity, require_csrf
 from app.db.session import get_db_session
 from app.schemas.compute import (
     ComputeCapabilitiesOut,
@@ -63,7 +63,7 @@ def list_profiles() -> list[ComputeProfileOut]:
 )
 def submit_reconstruction(
     body: CreateReconstructionRequest,
-    identity: RequestIdentity = Depends(get_current_user),
+    identity: RequestIdentity = Depends(require_csrf),
     svc: ReconstructionService = Depends(_service),
 ) -> ReconstructionJobOut:
     """Submit a 3DGS reconstruction from previously-uploaded media."""
@@ -79,7 +79,7 @@ def submit_reconstruction(
 )
 def cancel_reconstruction_job(
     job_id: str,
-    identity: RequestIdentity = Depends(get_current_user),
+    identity: RequestIdentity = Depends(require_csrf),
     svc: ReconstructionService = Depends(_service),
 ) -> ReconstructionJobOut:
     """Request cancellation of a reconstruction job (owner-gated)."""

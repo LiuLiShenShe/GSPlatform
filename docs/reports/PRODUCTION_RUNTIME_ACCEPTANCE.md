@@ -1,8 +1,10 @@
 # PRODUCTION_RUNTIME_ACCEPTANCE：GSPlatform Production XR Acceptance
 
-- 日期：2026-10-01（FIX-05C 最终复核；原始验收 2026-09-29，FIX-05B 复核 2026-09-30）
-- 阶段：FIX-05C — 最终 Production Acceptance 复核（本轮无新业务功能，仅缓存策略收口/验收/纠错）
-- 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS · FIX-05（独立审计整改）PASS
+- 日期：2026-10-06（FIX-06 软件可复现性与生产完整性复核；FIX-05C 最终复核 2026-10-01）
+- 阶段：FIX-06 — 软件可复现性 / 生产完整性整改（部署仅含 tracked 源码、依赖闭包、
+  共享 worker venv、媒体鉴权、上传状态机与幂等、派发失败恢复、Redis 限流、clean-checkout 门禁）
+- 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS ·
+  FIX-05（独立审计整改）PASS · FIX-05B（Vite 收尾）PASS · FIX-05C（缓存策略收口）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4` + `@photo-sphere-viewer/core@5.15.1` + `three@0.185.1`
 - 说明：SSV_FINAL_ACCEPTANCE.md 的 PASS 为软件迁移范围结论，**已被本报告纠正/接续**
   （该历史报告顶部已加 FIX-04 纠正声明）。
@@ -26,7 +28,7 @@
 | LOD PASS | 🟡 PARTIAL（流式 chunk 加载/157K 渲染/331 请求实测；**全量首帧在软件渲染下不可达** —— 需真实 GPU 复核） |
 | Quest/PICO real XR PASS | ❌ **NOT EXECUTED**（无硬件 → BLOCKER） |
 | Production Web typecheck | ✅ 0 errors（web 全量 tsc -b） |
-| Automated tests PASS | ✅ PASS（web 228 / backend 248 / workers 13 / e2e 17 / 安全 78） |
+| Automated tests PASS | ✅ PASS（web 228 / backend 278 / workers 13 / e2e 17 / 安全 78） |
 
 **Blocker**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 需要 Quest 或 PICO 头显
 （含 6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot、碰撞不破坏 XR 等
@@ -156,7 +158,7 @@ chunk 请求），真实 GPU 复核见 KNOWN LIMITATIONS。
 | web `pnpm lint` | exit 0（oxlint） |
 | web `pnpm build` | exit 0（tsc -b + vite build） |
 | e2e（Playwright headless SwiftShader WebGPU） | **17 passed / 8 specs**（47.8s；含 FIX-03 音频/PANORAMA、FIX-02 语义、安全无关回归全绿） |
-| backend `pytest` | **248 passed**（FIX-05C.1 最终，含 cache 矩阵 53） |
+| backend `pytest` | **278 passed**（FIX-06 最终，含 cache 矩阵 53 + FIX-06 生产完整性 30） |
 | backend `ruff` / `mypy` | clean（All checks passed / Success，84 files） |
 | workers pytest | **13 passed**（FIX-05C 最终） |
 | FIX-01 安全回归 | **78 passed**（scene_access / scene_assets / shares / scenes_owner） |
@@ -248,6 +250,40 @@ Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全�
   backend 全量 **248 passed**；web **228 passed / 26 files**；workers **13 passed**；
   ruff All checks passed；mypy Success（84 files）；`nginx -t` syntax ok。
   mypy Success（84 files）；`nginx -t` syntax ok。test counts 已全文档统一（见顶部）。
+
+## FIX-06：软件可复现性与生产完整性（2026-10-06）
+
+- **Acceptance Stage**：**FIX-06**（Software Reproducibility & Production Integrity）。
+  详见 `FIX_06_REPRODUCIBILITY_REMEDIATION.md`。软件侧最后一个"部署可复现性/生产完整性"
+  整改完成；**无新业务功能、无 XR/渲染/LOD/流式协议改动**。
+- **Software blockers**：**NONE**（P0/P1 全项已关闭，见下方矩阵）。
+- **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED`（唯一剩余 blocker，与软件无关）。
+
+**整改矩阵（全部 PASS，除标注"NOT EXECUTED"的生产主机项）：**
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| storage 包 tracked（P0-1） | ✅ PASS | `.gitignore` 裸 `storage/` → `/storage/`；`git ls-files` 含 4 个文件（测试锁定） |
+| Python 生产依赖闭包（P0） | ✅ PASS | pyproject 声明 celery/argon2/httpx/multipart/PyYAML/redis/numpy；**clean venv `pip install -e apps/api` → import 闭包 CLEAN_IMPORT_OK** |
+| worker venv 统一（P0） | ✅ PASS | 3 个 systemd 单元 ExecStart 改指共享 `apps/api/.venv/bin/celery`；`workers.celery_app` clean-venv 可导入（模块级无 torch/gsplat） |
+| 私有媒体鉴权（P0/P1） | ✅ PASS | cover/background/background-audio/annotation-media 4 条 serve 路由接入 `SceneAccessPolicy`（匿名 401 / 非属主 403 / 删除 404 / share token 可读）；Cache-Control scope-aware |
+| coverUrl UUID→slug（P0/P1） | ✅ PASS | `_presentation_out` 用 `scene.slug` 锚定；上传封面 → GET presentation → GET coverUrl → 200 字节一致（e2e 测试） |
+| uploads/compute CSRF（P1） | ✅ PASS | uploads POST/PATCH/DELETE + compute POST /reconstruct、/cancel 全加 `require_csrf`；session 模式无 CSRF 403 / 错 token 403 / 正确 201（测试） |
+| 上传状态机（P1） | ✅ PASS | append 仅 {CREATED,UPLOADING}；cancel 仅 {CREATED,UPLOADING,UPLOADED} 否则 409；complete 需 UPLOADED（测试） |
+| complete 幂等（P1） | ✅ PASS | 行锁 `with_for_update`；重放返回既有 Job、FAILED 重试新 Job；**1 Scene / 1 Job 不重复**（测试） |
+| 派发失败恢复（P1） | ✅ PASS | send_task 抛错 → Job FAILED `TASK_DISPATCH_FAILED`（安全文案，不泄 broker 异常原文）+ 503，upload 回 UPLOADED 可重试；重建 submit 同款 + 场景复用（测试） |
+| publish worker 幂等（P1） | ✅ PASS | SUCCEEDED 重复投递早退不篡改；`promote_staging_to_version` 校验复用、**删除旧版本改为冲突**；`commit_version` 复用 SceneVersion、Asset 去重（测试） |
+| deploy 仅 tracked 源码（P0） | ✅ PASS | `git archive HEAD`（不再 `cp -a` 工作区）+ 工作区 clean 检查；元数据取自源仓库；pip/build/迁移/场景同步/重启/smoke 全 fail-closed |
+| preflight 扩展（P1） | ✅ PASS | 发布完整性（.git-commit-hash + storage 文件）、全依赖 import 闭包、worker celery 可执行 + `workers.celery_app`、systemd ExecStart 路径、alembic current==head |
+| smoke Cache-Control 修正（P2） | ✅ PASS | `current/manifest.json` → `public, no-cache`（不再 max-age=60）；versions/<ver>/manifest → immutable（解析 entryUrl）；Range 206/416 保留 |
+| 限流 XFF 信任 + Redis（P1） | ✅ PASS | `_client_ip` 改用 `request.client.host`（uvicorn trusted proxy）；Nginx XFF 改 `$remote_addr`；Redis 限流器 + 内存回退（计数/TTL/超限/宕机回退测试） |
+| clean checkout 门禁（§17） | ✅ PASS | `verify_release_source.sh`：git archive → 无 .git/.env/.venv/node_modules → fresh venv → import → ruff/mypy/pytest/workers 全绿（提交后执行） |
+| Alembic 迁移 | ✅ PASS | 单 head（`c1d2e3f4a5b6`）；PostgreSQL `current == head`（本地 dev DB 实测，无需新迁移） |
+| 生产主机部署 | **NOT EXECUTED** | 本环境无生产主机/域名；`deploy_release.sh`/`preflight.sh` 未在真机执行（如实标注，不伪造） |
+
+**FIX-06 最终门禁**：backend **278 passed**（含 FIX-06 新增 30）；workers **13 passed**；
+ruff All checks passed；mypy Success（84 files）；`nginx -t` ok（proxy-params XFF `$remote_addr`）；
+web 228 / typecheck 0 errors / lint / build 未改动保持。
 
 ## DEPLOYMENT
 

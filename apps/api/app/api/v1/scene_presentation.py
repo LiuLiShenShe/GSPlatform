@@ -4,10 +4,10 @@ Routes:
   GET    /{slug}/presentation                — read presentation settings
   PATCH  /{slug}/presentation                — update presentation settings (partial)
   POST   /{slug}/presentation/cover          — upload cover image (multipart)
-  GET    /{slug}/presentation/cover          — serve cover image
+  GET    /{slug}/presentation/cover          — serve cover image (unified access policy)
   POST   /{slug}/presentation/background     — upload background image (multipart)
-  GET    /{slug}/presentation/background     — serve background image
-  GET    /{slug}/presentation/background-audio — serve background audio
+  GET    /{slug}/presentation/background     — serve background image (unified access policy)
+  GET    /{slug}/presentation/background-audio — serve background audio (unified access policy)
   PATCH  /{slug}/presentation/background-audio — update background audio settings
   GET    /{slug}/viewpoints                  — list viewpoints
   POST   /{slug}/viewpoints                  — create viewpoint
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -51,6 +51,7 @@ from app.schemas.scene_presentation import (
     SceneViewpointUpdateRequest,
 )
 from app.services.authoring import AuthoringService
+from app.services.scene_asset import SceneAssetAccessScope
 from app.storage import LocalDiskStorage
 
 router = APIRouter()
@@ -62,6 +63,26 @@ _COVER_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 # Annotation media size cap (per-contentType MIME allowlist lives in the
 # authoring service, since allowed types depend on the annotation type).
 _ANNOTATION_MEDIA_MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+
+
+def _share_grant(request: Request, share: str | None) -> str | None:
+    """Share grant from the ``?share=`` query or the ``gs_share`` cookie —
+    same rule as the scene runtime routes, so a shared scene's media loads
+    without the token leaking into media URLs (FIX-06 §5)."""
+    if share:
+        return share
+    return request.cookies.get(get_settings().share_cookie_name) or None
+
+
+def _media_cache_header(scope: SceneAssetAccessScope) -> str:
+    """Scope-aware Cache-Control for mutable media URLs (cover/background/
+    audio/annotation — all re-uploadable, so never immutable).
+
+    Only PUBLIC+PUBLISHED scenes are public-cached; owner and share-token
+    reads stay ``private`` (FIX-01 P1 / FIX-06 §5)."""
+    if scope is SceneAssetAccessScope.PUBLIC:
+        return "public, no-cache"
+    return "private, no-cache"
 
 
 def _storage(settings: Settings = Depends(get_settings)) -> LocalDiskStorage:
@@ -133,15 +154,21 @@ async def upload_cover(
 @router.get("/{slug}/presentation/cover")
 def serve_cover(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
     svc: AuthoringService = Depends(_service),
 ) -> Response:
-    """Serve cover image. No auth required (public)."""
-    data, mime = svc.serve_cover(slug)
+    """Serve cover image, authorized by the unified scene access policy
+    (owner / PUBLIC+PUBLISHED / live share token)."""
+    data, mime, scope = svc.serve_cover(
+        slug, identity, share_token=_share_grant(request, share)
+    )
     return Response(
         content=data,
         media_type=mime,
-        # mutable single URL (re-uploadable) — never immutable
-        headers={"Cache-Control": "public, no-cache"},
+        # mutable single URL (re-uploadable) — never immutable; scope-aware
+        headers={"Cache-Control": _media_cache_header(scope)},
     )
 
 
@@ -189,15 +216,20 @@ async def upload_background(
 @router.get("/{slug}/presentation/background")
 def serve_background(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
     svc: AuthoringService = Depends(_service),
 ) -> Response:
-    """Serve background image. No auth required (public)."""
-    data, mime = svc.serve_background(slug)
+    """Serve background image, authorized by the unified scene access policy."""
+    data, mime, scope = svc.serve_background(
+        slug, identity, share_token=_share_grant(request, share)
+    )
     return Response(
         content=data,
         media_type=mime,
-        # mutable single URL (re-uploadable) — never immutable
-        headers={"Cache-Control": "public, no-cache"},
+        # mutable single URL (re-uploadable) — never immutable; scope-aware
+        headers={"Cache-Control": _media_cache_header(scope)},
     )
 
 
@@ -298,15 +330,20 @@ def update_background_audio(
 @router.get("/{slug}/presentation/background-audio")
 def serve_background_audio(
     slug: str,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
     svc: AuthoringService = Depends(_service),
 ) -> Response:
-    """Serve background audio. No auth required (public)."""
-    data, mime = svc.serve_background_audio(slug)
+    """Serve background audio, authorized by the unified scene access policy."""
+    data, mime, scope = svc.serve_background_audio(
+        slug, identity, share_token=_share_grant(request, share)
+    )
     return Response(
         content=data,
         media_type=mime,
-        # mutable single URL (re-uploadable) — never immutable
-        headers={"Cache-Control": "public, no-cache"},
+        # mutable single URL (re-uploadable) — never immutable; scope-aware
+        headers={"Cache-Control": _media_cache_header(scope)},
     )
 
 
@@ -410,13 +447,21 @@ async def upload_annotation_media(
 def serve_annotation_media(
     slug: str,
     annotation_id: uuid.UUID,
+    request: Request,
+    identity: RequestIdentity | None = Depends(get_optional_current_user),
+    share: str | None = Query(default=None),
     svc: AuthoringService = Depends(_service),
 ) -> Response:
-    """Serve annotation media. No auth required (public)."""
-    data, mime = svc.serve_annotation_media(slug, str(annotation_id))
+    """Serve annotation media, authorized by the unified scene access policy."""
+    data, mime, scope = svc.serve_annotation_media(
+        slug,
+        str(annotation_id),
+        identity,
+        share_token=_share_grant(request, share),
+    )
     return Response(
         content=data,
         media_type=mime,
-        # mutable single URL (re-uploadable) — never immutable
-        headers={"Cache-Control": "public, no-cache"},
+        # mutable single URL (re-uploadable) — never immutable; scope-aware
+        headers={"Cache-Control": _media_cache_header(scope)},
     )

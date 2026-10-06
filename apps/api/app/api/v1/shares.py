@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.core.config import get_settings
 from app.core.errors import RateLimitError
 from app.core.identity import CurrentUser, get_current_user, require_csrf
-from app.core.rate_limit import check_rate_limit
+from app.core.rate_limit import check_rate_limit_shared
 from app.db.session import get_db_session
 from app.schemas.share import (
     CreateShareOut,
@@ -52,7 +52,7 @@ def create_share(
     db: DBSession = Depends(get_db_session),
 ) -> CreateShareOut:
     settings = get_settings()
-    rl = check_rate_limit(
+    rl = check_rate_limit_shared(
         "share",
         str(identity.user_id),
         limit=settings.rate_limit_share_per_hour,

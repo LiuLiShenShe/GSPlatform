@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.core.config import get_settings
 from app.core.errors import RateLimitError
 from app.core.identity import CurrentUser, require_csrf
-from app.core.rate_limit import check_rate_limit
+from app.core.rate_limit import check_rate_limit_shared
 from app.db.session import get_db_session
 from app.services.scene_assistant import SceneAssistantService
 
@@ -63,7 +63,7 @@ def ask_ai(
 ) -> AskResponse:
     settings = get_settings()
 
-    rl = check_rate_limit(
+    rl = check_rate_limit_shared(
         "assistant",
         str(identity.user_id),
         limit=settings.rate_limit_assistant_per_minute,

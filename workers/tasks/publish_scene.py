@@ -14,7 +14,7 @@ from pathlib import Path
 from workers.celery_app import celery_app
 
 from app.core.config import settings
-from app.db.models.enums import UploadSessionStatus
+from app.db.models.enums import JobStatus, UploadSessionStatus
 from app.db.models.job import Job
 from app.db.session import SessionLocal
 from app.repositories.uploads import UploadRepository
@@ -58,6 +58,13 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
     if job is None:
         logger.error("Job %s not found", job_id)
         return {"ok": False, "error": "job_not_found"}
+
+    # Duplicate-delivery guard (FIX-06 §11): with acks_late a completed task
+    # can be redelivered after a worker crash. A SUCCEEDED job must not be
+    # mutated again (no second promote/commit/status flip).
+    if job.status == JobStatus.SUCCEEDED.value:
+        logger.info("Job %s already SUCCEEDED; ignoring duplicate delivery", job_id)
+        return {"ok": True, "duplicate": True, "version": "existing"}
 
     job.attempt += 1
     job.status = "RUNNING"

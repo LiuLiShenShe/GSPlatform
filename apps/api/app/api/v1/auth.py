@@ -22,7 +22,7 @@ from app.core.identity import (
     get_current_user,
     require_csrf,
 )
-from app.core.rate_limit import check_rate_limit
+from app.core.rate_limit import check_rate_limit_shared
 from app.db.session import get_db_session
 from app.schemas.auth import LoginRequest, MessageOut, RegisterRequest, SessionOut
 from app.services.auth_service import AuthService
@@ -31,9 +31,14 @@ router = APIRouter()
 
 
 def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    """Real client IP for rate limiting.
+
+    uvicorn runs with ``--proxy-headers --forwarded-allow-ips=127.0.0.1``, so
+    ``request.client.host`` is the trusted first-hop address (Nginx overwrites
+    X-Forwarded-For with ``$remote_addr``).  The raw ``X-Forwarded-For``
+    header is never read here — a client-supplied value is trivially
+    spoofable (FIX-06 §15).
+    """
     return request.client.host if request.client else ""
 
 
@@ -74,7 +79,7 @@ def register(
     db: DBSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> SessionOut:
-    rl = check_rate_limit(
+    rl = check_rate_limit_shared(
         "register",
         _client_ip(request),
         limit=settings.rate_limit_register_per_hour,
@@ -111,7 +116,7 @@ def login(
     db: DBSession = Depends(get_db_session),
     settings: Settings = Depends(get_settings),
 ) -> SessionOut:
-    rl = check_rate_limit(
+    rl = check_rate_limit_shared(
         "login",
         _client_ip(request),
         limit=settings.rate_limit_login_per_minute,

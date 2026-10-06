@@ -121,6 +121,11 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/1"
 
+    # Rate-limiter backend (FIX-06 §15): "redis" shares counters across
+    # uvicorn workers (with in-memory fallback on outage); "memory" is the
+    # single-process sliding-window limiter used in dev/test.
+    rate_limit_backend: str = "memory"
+
     # Allowed CORS origins for browser callers (Vite dev server).
     cors_origins: list[str] = [
         "http://localhost:5173",

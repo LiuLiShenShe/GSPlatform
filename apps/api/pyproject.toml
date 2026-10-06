@@ -15,6 +15,16 @@ dependencies = [
     "sqlalchemy>=2.0.30,<3.0",
     "alembic>=1.13,<2.0",
     "psycopg2-binary>=2.9.9,<3.0",
+    # FIX-06 P0: production dependency closure — the deploy venv is built
+    # solely from this file, so anything imported by the API, the workers
+    # (shared venv) or the deploy scripts must be declared here.
+    "celery>=5.3,<6.0",
+    "argon2-cffi>=23.1,<26.0",
+    "httpx>=0.27,<1.0",
+    "python-multipart>=0.0.9,<1.0",
+    "PyYAML>=6.0,<7.0",
+    "redis>=5.0,<6.0",
+    "numpy>=1.26,<3.0",
 ]
 
 [project.optional-dependencies]
@@ -22,7 +32,6 @@ dev = [
     "ruff>=0.5,<1.0",
     "mypy>=1.10,<2.0",
     "pytest>=8.2,<9.0",
-    "httpx>=0.27,<1.0",
 ]
 
 [tool.hatch.build.targets.wheel]

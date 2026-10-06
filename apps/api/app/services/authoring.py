@@ -16,6 +16,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.errors import ConflictError, ForbiddenError, NotFoundError
+from app.core.identity import RequestIdentity
 from app.db.models.asset import Asset
 from app.db.models.enums import AssetKind  # noqa: F401  (referenced via .value below)
 from app.db.models.scene import Scene
@@ -44,6 +45,7 @@ from app.schemas.scene_presentation import (
     SceneViewpointUpdateRequest,
     Vec3,
 )
+from app.services.scene_asset import SceneAssetAccessScope
 from app.storage.base import Storage
 
 logger = logging.getLogger("gsplatform.authoring")
@@ -88,14 +90,19 @@ def _vec3_to_json(v: Vec3) -> dict[str, float]:
 def _presentation_out(
     pres: ScenePresentation,
     storage: Storage,
+    scene_slug: str,
 ) -> ScenePresentationOut:
-    """Assemble the DTO, resolving cover/background asset URLs."""
+    """Assemble the DTO, resolving cover/background asset URLs.
+
+    The cover URL is anchored to ``scene_slug`` (not the internal UUID) so it
+    round-trips through the serve routes, which resolve by slug (FIX-06 §6).
+    """
     cover_url: str | None = None
 
     if pres.cover_asset_id is not None:
         cover = storage.read(f"presentation/{pres.scene_id}/cover")
         if cover:
-            cover_url = f"/api/v1/scenes/{pres.scene_id}/presentation/cover"
+            cover_url = f"/api/v1/scenes/{scene_slug}/presentation/cover"
 
     return ScenePresentationOut(
         worldPosition=_json_to_vec3(pres.world_position),
@@ -220,7 +227,7 @@ class AuthoringService:
         pres = self._presentations.get_by_scene(scene.id)
         if pres is None:
             pres = self._presentations.get_by_scene_or_create(scene.id)
-        return _presentation_out(pres, self._storage)
+        return _presentation_out(pres, self._storage, scene.slug)
 
     def _get_owned_scene_for_read(
         self, slug_or_id: str, identity_user_id: uuid.UUID | None
@@ -233,6 +240,29 @@ class AuthoringService:
         return SceneAccessPolicy(self._session).resolve_readable_for_user(
             slug_or_id, identity_user_id
         )
+
+    def _resolve_media_read(
+        self,
+        slug_or_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None,
+    ) -> tuple[Scene, SceneAssetAccessScope]:
+        """Resolve a media serve (cover/background/audio/annotation) through
+        the unified access policy and derive its cache scope.
+
+        Before FIX-06 these serve methods performed no access check at all —
+        private media were publicly reachable.  Now the owner / PUBLIC+
+        PUBLISHED / live share-token rules (and 401/403/404 semantics) apply
+        exactly as they do for scene runtime assets.
+        """
+        from app.services.scene_access import SceneAccessPolicy
+
+        policy = SceneAccessPolicy(self._session)
+        scene = policy.resolve_readable_scene(
+            slug_or_id, identity, share_token=share_token
+        )
+        return scene, policy.cache_scope(scene, share_token)
 
     def update_presentation(
         self,
@@ -336,7 +366,7 @@ class AuthoringService:
             pres.post_effects = None
 
         self._session.flush()
-        return _presentation_out(pres, self._storage)
+        return _presentation_out(pres, self._storage, scene.slug)
 
     # ------------------------------------------------------------------ #
     # cover / background asset uploads
@@ -392,7 +422,7 @@ class AuthoringService:
         asset = self._store_image(scene.id, "cover", data, mime)
         pres.cover_asset_id = asset.id
         self._session.flush()
-        return _presentation_out(pres, self._storage)
+        return _presentation_out(pres, self._storage, scene.slug)
 
     def set_background_upload(
         self,
@@ -415,15 +445,23 @@ class AuthoringService:
         pres.background_type = "equirectangular"
         pres.background_asset_id = asset.id
         self._session.flush()
-        return _presentation_out(pres, self._storage)
+        return _presentation_out(pres, self._storage, scene.slug)
 
-    def serve_cover(self, slug_or_id: str) -> tuple[bytes, str]:
-        """Return cover image bytes + mime (or raise NotFound)."""
-        from app.repositories.scenes import SceneRepository
+    def serve_cover(
+        self,
+        slug_or_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None = None,
+    ) -> tuple[bytes, str, SceneAssetAccessScope]:
+        """Return cover image bytes + mime + cache scope (or raise).
 
-        scene = SceneRepository(self._session).get_by_slug(slug_or_id)
-        if scene is None:
-            raise NotFoundError(f"场景 {slug_or_id} 不存在")
+        Authorized by the unified scene access policy (FIX-06 §5): private
+        media are no longer reachable anonymously.
+        """
+        scene, scope = self._resolve_media_read(
+            slug_or_id, identity, share_token=share_token
+        )
         pres = self._presentations.get_by_scene(scene.id)
         if pres is None or pres.cover_asset_id is None:
             raise NotFoundError("该场景尚未设置封面")
@@ -431,14 +469,19 @@ class AuthoringService:
         if asset is None:
             raise NotFoundError("封面资源不存在")
         data = self._storage.read(asset.storage_key)
-        return data, asset.mime_type
+        return data, asset.mime_type, scope
 
-    def serve_background(self, slug_or_id: str) -> tuple[bytes, str]:
-        from app.repositories.scenes import SceneRepository
-
-        scene = SceneRepository(self._session).get_by_slug(slug_or_id)
-        if scene is None:
-            raise NotFoundError(f"场景 {slug_or_id} 不存在")
+    def serve_background(
+        self,
+        slug_or_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None = None,
+    ) -> tuple[bytes, str, SceneAssetAccessScope]:
+        """Return background image bytes + mime + cache scope (or raise)."""
+        scene, scope = self._resolve_media_read(
+            slug_or_id, identity, share_token=share_token
+        )
         pres = self._presentations.get_by_scene(scene.id)
         if pres is None or pres.background_asset_id is None:
             raise NotFoundError("该场景尚未设置背景")
@@ -446,7 +489,7 @@ class AuthoringService:
         if asset is None:
             raise NotFoundError("背景资源不存在")
         data = self._storage.read(asset.storage_key)
-        return data, asset.mime_type
+        return data, asset.mime_type, scope
 
     # ------------------------------------------------------------------ #
     # viewpoints
@@ -601,15 +644,19 @@ class AuthoringService:
             pres.background_audio_enabled = enabled
 
         self._session.flush()
-        return _presentation_out(pres, self._storage)
+        return _presentation_out(pres, self._storage, scene.slug)
 
-    def serve_background_audio(self, slug_or_id: str) -> tuple[bytes, str]:
-        """Return background audio bytes + mime (or raise NotFound)."""
-        from app.repositories.scenes import SceneRepository
-
-        scene = SceneRepository(self._session).get_by_slug(slug_or_id)
-        if scene is None:
-            raise NotFoundError(f"场景 {slug_or_id} 不存在")
+    def serve_background_audio(
+        self,
+        slug_or_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None = None,
+    ) -> tuple[bytes, str, SceneAssetAccessScope]:
+        """Return background audio bytes + mime + cache scope (or raise)."""
+        scene, scope = self._resolve_media_read(
+            slug_or_id, identity, share_token=share_token
+        )
         pres = self._presentations.get_by_scene(scene.id)
         if pres is None or pres.background_audio_asset_id is None:
             raise NotFoundError("该场景尚未设置背景音频")
@@ -617,7 +664,7 @@ class AuthoringService:
         if asset is None:
             raise NotFoundError("音频资源不存在")
         data = self._storage.read(asset.storage_key)
-        return data, asset.mime_type
+        return data, asset.mime_type, scope
 
     # ------------------------------------------------------------------ #
     # annotations
@@ -836,13 +883,18 @@ class AuthoringService:
 
         return _annotation_out(ann)
 
-    def serve_annotation_media(self, slug_or_id: str, annotation_id: str) -> tuple[bytes, str]:
-        """Return annotation media bytes + mime (or raise NotFound)."""
-        from app.repositories.scenes import SceneRepository
-
-        scene = SceneRepository(self._session).get_by_slug(slug_or_id)
-        if scene is None:
-            raise NotFoundError(f"场景 {slug_or_id} 不存在")
+    def serve_annotation_media(
+        self,
+        slug_or_id: str,
+        annotation_id: str,
+        identity: RequestIdentity | None,
+        *,
+        share_token: str | None = None,
+    ) -> tuple[bytes, str, SceneAssetAccessScope]:
+        """Return annotation media bytes + mime + cache scope (or raise)."""
+        scene, scope = self._resolve_media_read(
+            slug_or_id, identity, share_token=share_token
+        )
         try:
             ann_uuid = uuid.UUID(annotation_id)
         except ValueError:
@@ -856,4 +908,4 @@ class AuthoringService:
         if asset is None:
             raise NotFoundError("媒体资源不存在")
         data = self._storage.read(asset.storage_key)
-        return data, asset.mime_type
+        return data, asset.mime_type, scope

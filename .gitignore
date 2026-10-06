@@ -67,7 +67,7 @@ scenes/**/.staging-*
 
 # --- Uploads / user data ---
 uploads/
-storage/
+/storage/
 backups/
 *.db
 *.sqlite

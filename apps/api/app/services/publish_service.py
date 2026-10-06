@@ -33,7 +33,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.errors import NotFoundError
+from app.core.errors import ConflictError, NotFoundError
 from app.core.paths import get_repo_root
 from app.db.models.asset import Asset
 from app.db.models.enums import (
@@ -85,12 +85,28 @@ class PublishService:
     def promote_staging_to_version(
         self, scene_id: uuid.UUID, version_id: str, staging_key: str
     ) -> str:
-        """Atomically rename the verified staging dir into the version dir."""
+        """Atomically rename the verified staging dir into the version dir.
+
+        Version dirs are immutable (content-addressed by ``version_id``), so a
+        duplicate delivery never deletes/overwrites an existing version
+        (FIX-06 §11): if ``versions/<version_id>`` already exists its
+        ``manifest.json`` is verified against the staging copy and the existing
+        dir is reused; a same-id/different-content dir is a conflict, raised
+        before any mutation.
+        """
         published_root = self._published_root(scene_id)
         version_key = f"{published_root}/{self._version_rel(version_id)}"
         if self._storage.exists(version_key):
-            # idempotent re-publish: drop the old same-content dir and re-rename
-            self._storage.delete(version_key)
+            staging_manifest = self._storage.read(f"{staging_key}/manifest.json")
+            existing_manifest = self._storage.read(f"{version_key}/manifest.json")
+            if staging_manifest == existing_manifest:
+                logger.info(
+                    "version %s already published; reusing immutable dir", version_key
+                )
+                return version_key
+            raise ConflictError(
+                f"版本目录已存在且内容不一致: {version_key}"
+            )
         self._storage.atomic_rename_dir(staging_key, version_key)
         return version_key
 
@@ -109,10 +125,39 @@ class PublishService:
 
         Runs in one DB transaction; raises on conflict so the caller can
         roll back (never a partial commit).
+
+        Idempotent (FIX-06 §11): a retried publish for the same (scene,
+        ``asset_version``) reuses the existing SceneVersion row (unique
+        ``uq_scene_versions_scene_asset``) and only fills in missing Assets —
+        it never inserts a duplicate SceneVersion/Assets, which previously
+        blew up as an IntegrityError on the second commit.
         """
         scene = self._session.query(Scene).filter(Scene.id == scene_id).first()
         if scene is None:
             raise NotFoundError("场景不存在")
+
+        existing = (
+            self._session.query(SceneVersion)
+            .filter(
+                SceneVersion.scene_id == scene_id,
+                SceneVersion.asset_version == version_id,
+            )
+            .first()
+        )
+        if existing is not None:
+            self._ensure_version_assets(
+                scene,
+                existing.id,
+                version_dir_key=self._version_dir_key(scene_id, version_id),
+                manifest=manifest,
+                entry_url=entry_url,
+                entry_bytes=entry_bytes,
+                counts=counts,
+                source_sha256=source_sha256,
+            )
+            self._flip_scene_published(scene, existing, counts)
+            self._bridge_dev_scene_view(scene, version_id)
+            return existing
 
         version = SceneVersion(
             scene_id=scene.id,
@@ -126,54 +171,104 @@ class PublishService:
         self._session.flush()
 
         # Assets: manifest + SOG entry + poster (if any).
-        poster = manifest.get("poster") or {}
-        assets = [
-            Asset(
-                scene_id=scene.id,
-                version_id=version.id,
-                kind=AssetKind.MANIFEST.value,
-                storage_key=f"published/{scene_id}/versions/{version_id}/manifest.json",
-                mime_type="application/json",
-                byte_size=0,
-                sha256="",
-                metadata_={"entryUrl": entry_url},
-            ),
-            Asset(
-                scene_id=scene.id,
-                version_id=version.id,
-                kind=AssetKind.SOG.value,
-                storage_key=f"published/{scene_id}/versions/{version_id}/lod-meta.json",
-                mime_type="application/json",
-                byte_size=entry_bytes,
-                sha256=source_sha256,
-                metadata_={"counts": counts, "lodLevels": len(counts)},
-            ),
-        ]
-        if poster.get("url"):
+        self._ensure_version_assets(
+            scene,
+            version.id,
+            version_dir_key=self._version_dir_key(scene_id, version_id),
+            manifest=manifest,
+            entry_url=entry_url,
+            entry_bytes=entry_bytes,
+            counts=counts,
+            source_sha256=source_sha256,
+        )
+        self._flip_scene_published(scene, version, counts)
+        self._bridge_dev_scene_view(scene, version_id)
+        return version
+
+    def _version_dir_key(self, scene_id: uuid.UUID, version_id: str) -> str:
+        return f"published/{scene_id}/versions/{version_id}"
+
+    def _ensure_version_assets(
+        self,
+        scene: Scene,
+        version_pk: uuid.UUID,
+        *,
+        version_dir_key: str,
+        manifest: dict[str, Any],
+        entry_url: str,
+        entry_bytes: int,
+        counts: list[int],
+        source_sha256: str,
+    ) -> None:
+        """Insert any missing Assets for a version (idempotent).
+
+        On the fresh path all assets are new; on a retried publish the
+        SceneVersion already owns its assets, so each kind is only added when
+        absent — never duplicated.
+        """
+        existing_kinds = {
+            row[0]
+            for row in self._session.query(Asset.kind).filter(
+                Asset.version_id == version_pk
+            ).all()
+        }
+        assets: list[Asset] = []
+
+        if AssetKind.MANIFEST.value not in existing_kinds:
             assets.append(
                 Asset(
                     scene_id=scene.id,
-                    version_id=version.id,
+                    version_id=version_pk,
+                    kind=AssetKind.MANIFEST.value,
+                    storage_key=f"{version_dir_key}/manifest.json",
+                    mime_type="application/json",
+                    byte_size=0,
+                    sha256="",
+                    metadata_={"entryUrl": entry_url},
+                )
+            )
+        if AssetKind.SOG.value not in existing_kinds:
+            assets.append(
+                Asset(
+                    scene_id=scene.id,
+                    version_id=version_pk,
+                    kind=AssetKind.SOG.value,
+                    storage_key=f"{version_dir_key}/lod-meta.json",
+                    mime_type="application/json",
+                    byte_size=entry_bytes,
+                    sha256=source_sha256,
+                    metadata_={"counts": counts, "lodLevels": len(counts)},
+                )
+            )
+        poster = manifest.get("poster") or {}
+        if poster.get("url") and AssetKind.POSTER.value not in existing_kinds:
+            assets.append(
+                Asset(
+                    scene_id=scene.id,
+                    version_id=version_pk,
                     kind=AssetKind.POSTER.value,
-                    storage_key=(
-                        f"published/{scene_id}/versions/{version_id}/poster.webp"
-                    ),
+                    storage_key=f"{version_dir_key}/poster.webp",
                     mime_type="image/webp",
                     byte_size=0,
                     sha256="",
                     metadata_={},
                 )
             )
-        self._session.add_all(assets)
+        if assets:
+            self._session.add_all(assets)
 
-        # Flip current version + publish state atomically.
+    def _flip_scene_published(
+        self,
+        scene: Scene,
+        version: SceneVersion,
+        counts: list[int],
+    ) -> None:
+        """Flip current version + publish state atomically."""
         scene.current_version_id = version.id
         scene.status = SceneStatus.PUBLISHED.value
         scene.published_at = version.created_at
         scene.splat_count = sum(counts)
         self._session.flush()
-        self._bridge_dev_scene_view(scene, version_id)
-        return version
 
     # ------------------------------------------------------------------ #
     # dev-mode viewer bridge (phase 06) + production origin tree (phase 09)

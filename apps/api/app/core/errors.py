@@ -31,6 +31,7 @@ ERROR_FORBIDDEN = "FORBIDDEN"
 ERROR_RATE_LIMITED = "RATE_LIMITED"
 ERROR_INTERNAL = "INTERNAL_ERROR"
 ERROR_DATABASE_UNAVAILABLE = "DATABASE_UNAVAILABLE"
+ERROR_SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE"
 
 _CALLABLE = TypeVar("_CALLABLE", bound=Callable[..., Any])
 
@@ -99,6 +100,17 @@ class DatabaseUnavailableError(ApiError):
     """Readiness probe or DB-backed handler could not reach PostgreSQL."""
 
     code = ERROR_DATABASE_UNAVAILABLE
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+
+
+class ServiceUnavailableError(ApiError):
+    """The request cannot be completed right now (e.g. task dispatch failed).
+
+    Raised instead of leaking the raw broker/Celery exception to the client;
+    callers can retry the request later.
+    """
+
+    code = ERROR_SERVICE_UNAVAILABLE
     status_code = status.HTTP_503_SERVICE_UNAVAILABLE
 
 

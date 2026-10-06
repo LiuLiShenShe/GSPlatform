@@ -15,7 +15,7 @@ Group=gsplatform
 WorkingDirectory=/opt/gsplatform/current
 EnvironmentFile=/etc/gsplatform/env
 
-ExecStart=/opt/gsplatform/current/workers/.venv/bin/celery -A workers.celery_app call tasks.cleanup_expired_uploads --queue gsplatform
+ExecStart=/opt/gsplatform/current/apps/api/.venv/bin/celery -A workers.celery_app call tasks.cleanup_expired_uploads --queue gsplatform
 
 # Do not cascade failures into the timer's "fail" state repeatedly; a single
 # lost cleanup tick is not an incident (INCIDENT_RUNBOOK covers persistent fails).

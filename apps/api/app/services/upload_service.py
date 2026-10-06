@@ -11,9 +11,14 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, NotFoundError, ServiceUnavailableError
 from app.core.identity import RequestIdentity
-from app.db.models.enums import SceneStatus, UploadSessionStatus
+from app.db.models.enums import (
+    JobStatus,
+    SceneStatus,
+    UploadSessionStatus,
+)
+from app.db.models.job import Job
 from app.db.models.scene import Scene
 from app.db.models.upload_session import UploadSession
 from app.repositories.uploads import UploadRepository
@@ -28,6 +33,10 @@ from app.storage.base import Storage
 logger = logging.getLogger("gsplatform.api.upload")
 
 PUBLISH_TASK = "tasks.publish_scene"
+
+# Safe message shown to clients when dispatch fails — never the raw broker
+# exception (FIX-06 §10).
+_DISPATCH_FAILED_SAFE_MSG = "发布任务暂不可用，请稍后重试"
 
 
 class UploadService:
@@ -122,6 +131,18 @@ class UploadService:
         declared_offset: int,
     ) -> UploadSessionOut:
         us = self._owned_or_raise(upload_id, identity)
+        # State machine (FIX-06 §8): bytes may only be appended while the
+        # session is still CREATED or UPLOADING.  Once the bytes are complete,
+        # queued, published or failed, appending is a protocol error (409) —
+        # it used to be accepted and silently corrupt the staged file.
+        if us.status not in (
+            UploadSessionStatus.CREATED.value,
+            UploadSessionStatus.UPLOADING.value,
+        ):
+            raise ConflictError(
+                f"当前状态 ({us.status}) 不允许继续写入分块",
+                details={"status": us.status},
+            )
         st_key = us.storage_key
         real_offset = self._storage.size(st_key)
 
@@ -155,7 +176,51 @@ class UploadService:
         expected_size: int | None,
         client_sha256: str | None,
     ) -> UploadCompleteOut:
-        us = self._owned_or_raise(upload_id, identity)
+        # Row-lock the session so concurrent complete calls serialize: only the
+        # first may create the Scene/Job (FIX-06 §9 idempotency).
+        us = self._owned_or_raise_for_update(upload_id, identity)
+
+        # Phase 07: RECONSTRUCT sessions never publish here — the
+        # reconstruction submit step owns the publish side. Confirm the bytes
+        # and mark UPLOADED (idempotent).
+        if us.purpose == "RECONSTRUCT":
+            if us.status != UploadSessionStatus.UPLOADED.value:
+                raise ConflictError(
+                    f"上传未完成 (status={us.status})",
+                    details={"status": us.status},
+                )
+            self._session.refresh(us)
+            return UploadCompleteOut(uploadId=us.id, status=us.status)
+
+        # Publish replay path (FIX-06 §9): a session that already produced a
+        # scene must never produce a duplicate Scene/Job.
+        if us.scene_id is not None:
+            scene = self._session.get(Scene, us.scene_id)
+            if scene is not None:
+                job = self._repo.get_latest_publish_job(scene.id)
+                if job is not None and job.status != JobStatus.FAILED.value:
+                    # In-flight or already-succeeded — replays share the Job.
+                    self._session.refresh(us)
+                    return UploadCompleteOut(
+                        uploadId=us.id, status=us.status, jobId=job.id
+                    )
+                if job is not None and job.status == JobStatus.FAILED.value:
+                    # Failed publish is retryable on the same scene.
+                    retry_job = self._repo.create_publish_job(
+                        scene_id=scene.id, owner_id=identity.user_id
+                    )
+                    self._dispatch_publish(us, scene, retry_job)
+                    self._session.refresh(us)
+                    return UploadCompleteOut(
+                        uploadId=us.id, status=us.status, jobId=retry_job.id
+                    )
+
+        # Fresh completion path.
+        if us.status != UploadSessionStatus.UPLOADED.value:
+            raise ConflictError(
+                f"上传未完成 (status={us.status})",
+                details={"status": us.status},
+            )
         real_offset = self._storage.size(us.storage_key)
         if real_offset != us.total_size:
             raise ConflictError(
@@ -170,39 +235,70 @@ class UploadService:
         if client_sha256 and client_sha256.lower() != real_sha:
             raise ConflictError("SHA-256 校验失败", details={"sha256": real_sha})
 
-        # Phase 07: RECONSTRUCT sessions never publish here — the reconstruction
-        # submit step (POST /compute/reconstruct) owns the publish side. Just
-        # mark the bytes as uploaded so the compute flow can reference them.
-        if us.purpose == "RECONSTRUCT":
-            self._repo.update_status(upload_id, UploadSessionStatus.UPLOADED)
-            self._session.commit()
-            return UploadCompleteOut(uploadId=us.id, status=us.status)
-
         scene = self._create_draft_scene(us, identity, size=real_offset, sha256=real_sha)
         # Link session to the newly created scene.
         self._repo.update_scene_id(us.id, scene.id)
         job = self._repo.create_publish_job(
             scene_id=scene.id, owner_id=identity.user_id
         )
-        if self._send_task is None:
-            self._session.rollback()
-            raise RuntimeError("Celery queue is not configured")
-        self._repo.update_status(upload_id, UploadSessionStatus.QUEUED)
-        # Commit BEFORE dispatching: the worker must see the committed job row
-        # when it picks up the task (otherwise a fast worker hits job_not_found).
-        self._session.commit()
-        self._send_task(
-            PUBLISH_TASK,
-            args=[str(us.id), str(scene.id), str(job.id)],
-        )
+        self._dispatch_publish(us, scene, job)
+        self._session.refresh(us)
         return UploadCompleteOut(uploadId=us.id, status=us.status, jobId=job.id)
 
+    def _dispatch_publish(self, us: UploadSession, scene: Scene, job: Job) -> None:
+        """Commit the QUEUED job, then dispatch the publish task.
+
+        The commit MUST precede the dispatch so a fast worker sees the job row
+        (otherwise it hits job_not_found and fails instantly).  On dispatch
+        failure (FIX-06 §10), never leave an orphan QUEUED job behind: mark the
+        job FAILED with a safe message and reset the upload to UPLOADED so a
+        later ``complete`` retries — and surface a safe 503 instead of the raw
+        broker exception.
+        """
+        self._repo.update_status(us.id, UploadSessionStatus.QUEUED)
+        self._session.commit()
+        if self._send_task is None:
+            self._fail_dispatch(us, job, exc=None)
+            return
+        try:
+            self._send_task(
+                PUBLISH_TASK,
+                args=[str(us.id), str(scene.id), str(job.id)],
+            )
+        except Exception:
+            self._fail_dispatch(us, job, exc=None)
+
+    def _fail_dispatch(self, us: UploadSession, job: Job, *, exc: Exception | None) -> None:
+        """Dispatch-failure bookkeeping: FAIL the job (safe msg), reset the
+        upload to UPLOADED (recoverable), then raise a safe 503."""
+        self._repo.mark_job_failed(
+            job.id,
+            error_code="TASK_DISPATCH_FAILED",
+            error_message_safe=_DISPATCH_FAILED_SAFE_MSG,
+        )
+        self._repo.update_status(us.id, UploadSessionStatus.UPLOADED)
+        self._session.commit()
+        raise ServiceUnavailableError(_DISPATCH_FAILED_SAFE_MSG) from exc
+
     def cancel(self, upload_id: uuid.UUID, identity: RequestIdentity) -> UploadSessionOut:
-        us = self._owned_or_raise(upload_id, identity)
+        us = self._owned_or_raise_for_update(upload_id, identity)
+        # State machine (FIX-06 §8): only in-flight uploads are cancellable.
+        # A queued/publishing/succeeded session owns side effects (Scene / Jobs /
+        # storage) that a cancel must not silently tear down.
+        if us.status not in (
+            UploadSessionStatus.CREATED.value,
+            UploadSessionStatus.UPLOADING.value,
+            UploadSessionStatus.UPLOADED.value,
+        ):
+            raise ConflictError(
+                f"当前状态 ({us.status}) 不允许取消",
+                details={"status": us.status},
+            )
         self._repo.update_status(upload_id, UploadSessionStatus.CANCELLED)
         self._storage.delete(self._quarantine_key(upload_id))
         self._storage.delete(us.storage_key)
         self._session.commit()
+        self._session.refresh(us)
         return self._to_out(us)
 
     def expire_stale(self) -> int:
@@ -218,6 +314,14 @@ class UploadService:
     # ------------------------------------------------------------------ #
     def _owned_or_raise(self, upload_id: uuid.UUID, identity: RequestIdentity) -> UploadSession:
         us = self._repo.get_owned(upload_id, identity.user_id)
+        if us is None:
+            raise NotFoundError("上传会话不存在或不属于当前用户")
+        return us
+
+    def _owned_or_raise_for_update(
+        self, upload_id: uuid.UUID, identity: RequestIdentity
+    ) -> UploadSession:
+        us = self._repo.get_owned_for_update(upload_id, identity.user_id)
         if us is None:
             raise NotFoundError("上传会话不存在或不属于当前用户")
         return us

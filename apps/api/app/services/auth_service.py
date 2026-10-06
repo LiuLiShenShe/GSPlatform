@@ -31,13 +31,15 @@ logger = logging.getLogger("gsplatform.auth")
 
 
 def _client_ip(request: object) -> str:
-    """Best-effort extract of client IP from a Starlette Request."""
+    """Real client IP for rate limiting.
+
+    uvicorn runs with ``--proxy-headers --forwarded-allow-ips=127.0.0.1``, so
+    ``request.client.host`` is the trusted address (Nginx overwrites
+    X-Forwarded-For with ``$remote_addr``).  The raw ``X-Forwarded-For``
+    header is never read here — a client-supplied value is trivially
+    spoofable (FIX-06 §15).
+    """
     try:
-        req = getattr(request, "headers", None)
-        if req is not None:
-            forwarded = req.get("x-forwarded-for")
-            if forwarded:
-                return str(forwarded).split(",")[0].strip()
         client = getattr(request, "client", None)
         host = getattr(client, "host", None)
         return str(host) if host is not None else ""

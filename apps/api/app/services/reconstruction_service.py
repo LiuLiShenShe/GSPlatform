@@ -12,11 +12,12 @@ from __future__ import annotations
 import logging
 import uuid
 from collections.abc import Callable
+from typing import NoReturn
 
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import ConflictError, NotFoundError, ServiceUnavailableError
 from app.core.identity import RequestIdentity
 from app.db.models.enums import JobKind, JobStatus, SceneStatus
 from app.db.models.job import Job
@@ -33,6 +34,10 @@ from app.schemas.compute import (
 logger = logging.getLogger("gsplatform.api.compute")
 
 RECONSTRUCT_TASK = "tasks.reconstruct_cpu_stages"
+
+# Safe message for dispatch failures — never the raw broker/Celery exception
+# (FIX-06 §10).
+_DISPATCH_FAILED_SAFE_MSG = "重建任务暂不可用，请稍后重试"
 
 # Canonical upload status values that indicate a finished upload.
 _COMPLETE_UPLOAD_STATUSES = frozenset({"UPLOADED", "SUCCEEDED"})
@@ -64,8 +69,8 @@ class ReconstructionService:
         #    compatible purpose (RECONSTRUCT or PUBLISH — legacy compat).
         uploads = self._verify_uploads(req, identity)
 
-        # 2. Create draft Scene (status=PROCESSING).
-        scene = self._create_draft_scene(req, identity, uploads)
+        # 2. Create (or reuse, on retry) draft Scene (status=PROCESSING).
+        scene = self._find_or_create_draft_scene(req, identity, uploads)
 
         # 3. Create Job(kind=RECONSTRUCT, status=QUEUED, progress=0).
         job = Job(
@@ -81,14 +86,18 @@ class ReconstructionService:
         # 4. Commit BEFORE dispatch so the worker sees the committed rows.
         self._session.commit()
 
-        # 5. Dispatch the Celery task.
+        # 5. Dispatch the Celery task.  On failure never leave an orphan QUEUED
+        #    job: mark it FAILED with a safe message and surface a 503 (FIX-06 §10).
         if send_task is None:
-            raise ConflictError("Celery 队列未配置，无法提交重建任务")
+            self._fail_dispatch(job, exc=None)
         upload_id_strs = [str(uid) for uid in req.uploadIds]
-        send_task(
-            RECONSTRUCT_TASK,
-            args=[str(job.id), upload_id_strs, req.profile],
-        )
+        try:
+            send_task(
+                RECONSTRUCT_TASK,
+                args=[str(job.id), upload_id_strs, req.profile],
+            )
+        except Exception:
+            self._fail_dispatch(job, exc=None)
 
         logger.info(
             "Reconstruction submitted: job=%s scene=%s profile=%s uploads=%d",
@@ -99,6 +108,14 @@ class ReconstructionService:
         )
 
         return self._job_to_out(job, scene)
+
+    def _fail_dispatch(self, job: Job, *, exc: Exception | None) -> NoReturn:
+        """Dispatch-failure bookkeeping + safe 503 (FIX-06 §10)."""
+        job.status = JobStatus.FAILED.value
+        job.error_code = "TASK_DISPATCH_FAILED"
+        job.error_message_safe = _DISPATCH_FAILED_SAFE_MSG
+        self._session.commit()
+        raise ServiceUnavailableError(_DISPATCH_FAILED_SAFE_MSG) from exc
 
     # ------------------------------------------------------------------ #
     # cancel
@@ -207,16 +224,29 @@ class ReconstructionService:
             uploads.append(us)
         return uploads
 
-    def _create_draft_scene(
+    def _find_or_create_draft_scene(
         self,
         req: CreateReconstructionRequest,
         identity: RequestIdentity,
         uploads: list[UploadSession],
     ) -> Scene:
-        """Create a PROCESSING scene for the reconstruction output."""
+        """Create a PROCESSING scene for the reconstruction output.
+
+        The slug is deterministic from (owner, first upload) — a retried submit
+        after a failed dispatch reuses the existing scene instead of hitting
+        the unique-slug conflict.
+        """
         # Derive a slug from the first upload id for uniqueness.
         first_upload = uploads[0]
         slug = self._generate_slug(identity.user_id, first_upload.id)
+
+        existing = (
+            self._session.query(Scene)
+            .filter(Scene.slug == slug, Scene.owner_id == identity.user_id)
+            .first()
+        )
+        if existing is not None:
+            return existing
 
         title = req.sceneTitle
         description = req.description

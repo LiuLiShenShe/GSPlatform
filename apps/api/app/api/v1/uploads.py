@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
 from app.core.errors import ConflictError
-from app.core.identity import RequestIdentity, get_current_user
+from app.core.identity import RequestIdentity, get_current_user, require_csrf
 from app.db.session import get_db_session
 from app.schemas.uploads import (
     CancelUploadOut,
@@ -51,7 +51,7 @@ def _service(
 @router.post("", response_model=UploadSessionOut, status_code=201)
 def create_upload(
     body: CreateUploadRequest,
-    identity: RequestIdentity = Depends(get_current_user),
+    identity: RequestIdentity = Depends(require_csrf),
     svc: UploadService = Depends(_service),
 ) -> UploadSessionOut:
     return svc.create_session(body, identity)
@@ -86,7 +86,7 @@ async def patch_upload(
     request: Request,
     upload_offset: int = Header(alias="Upload-Offset"),
     upload_length: int | None = Header(default=None, alias="Upload-Length"),
-    identity: RequestIdentity = Depends(get_current_user),
+    identity: RequestIdentity = Depends(require_csrf),
     svc: UploadService = Depends(_service),
 ) -> UploadSessionOut:
     body = await request.body()
@@ -106,7 +106,7 @@ async def patch_upload(
 def complete_upload(
     upload_id: uuid.UUID,
     body: UploadCompleteRequest = UploadCompleteRequest(),
-    identity: RequestIdentity = Depends(get_current_user),
+    identity: RequestIdentity = Depends(require_csrf),
     svc: UploadService = Depends(_service),
 ) -> UploadCompleteOut:
     return svc.complete(
@@ -123,7 +123,7 @@ def complete_upload(
 @router.delete("/{upload_id}", response_model=CancelUploadOut)
 def cancel_upload(
     upload_id: uuid.UUID,
-    identity: RequestIdentity = Depends(get_current_user),
+    identity: RequestIdentity = Depends(require_csrf),
     svc: UploadService = Depends(_service),
 ) -> CancelUploadOut:
     out = svc.cancel(upload_id, identity)
