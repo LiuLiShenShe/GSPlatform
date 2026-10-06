@@ -1,0 +1,23 @@
+# deploy/requirements-reconstruction.txt — GPU reconstruction runtime contract
+# (FIX-06.1, issue A).
+#
+# These EXACT versions are the phase-07-verified combination that already runs
+# the reconstruction pipeline on this host (apps/api/.venv, verified 2026-10-06):
+#   torch  2.14.0+cu126   — CUDA 12.6 build; torch.cuda.is_available()=True on
+#                           the host's NVIDIA GPUs; alloc+sync + gsplat
+#                           default rasterization verified working.
+#   gsplat 1.5.3          — matches the version recorded in PHASE_07_REPORT.md.
+#
+# Do NOT "upgrade for the sake of newer": the runtime contract is the verified
+# combination, not the newest tag.  Installing a different torch/gsplat breaks
+# the reproducibility gate (verify_reconstruction_runtime.py enforces these
+# exact versions).
+#
+# Indexes: torch 2.14.0+cu126 only exists on the official download.pytorch.org
+# cu126 index; gsplat 1.5.3 comes from PyPI.  Both extra indexes are listed so
+# this file resolves standalone regardless of the host's pip index config.
+--extra-index-url https://download.pytorch.org/whl/cu126
+--extra-index-url https://pypi.org/simple
+
+torch==2.14.0+cu126
+gsplat==1.5.3

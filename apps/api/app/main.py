@@ -62,6 +62,19 @@ def create_app() -> FastAPI:
             "Set GS_ENV=development or disable the flag."
         )
 
+    # --- Production rate-limiter guard (FIX-06.1 §B). ---
+    # Production runs multiple uvicorn workers behind Nginx; per-process
+    # in-memory counters are bypassed by load balancing, so the shared Redis
+    # backend is mandatory.  No credentials/URLs in the message — the log must
+    # stay reusable.  The limiter itself still degrades to per-process memory
+    # on a Redis outage, so this is a configuration guard, not an availability
+    # coupling.
+    if settings.env == "production" and settings.rate_limit_backend != "redis":
+        raise RuntimeError(
+            "GS_RATE_LIMIT_BACKEND must be 'redis' in production: "
+            "'memory' counters are not shared across uvicorn workers."
+        )
+
     # --- API v1 routes ---
     app.include_router(v1_router)
 

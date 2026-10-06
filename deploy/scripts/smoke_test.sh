@@ -10,12 +10,19 @@
 #   1. HTTPS reachable + redirect from HTTP
 #   2. /health/live and /health/ready return 200
 #   3. Web SPA serves index.html for / (and SPA routes)
-#   4. Public scene manifest served with short Cache-Control
+#   4. Public scene manifest: current/* no-cache; versions/<ver>/* immutable,
+#      versioned entry bytes reachable (entryUrl parsed via smoke_manifest.py)
 #   5. Streamed SOG Range 206 + Content-Range
 #   6. Invalid Range 416
 #   7. Security headers present (HSTS, X-Content-Type-Options, CSP)
+#
+# FIX-06.1 §C: when --public-scene is provided, an invalid/missing
+# stream.entryUrl is a FAIL (not a skip) — the versioned checks must run.
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PARSE_MANIFEST="$SCRIPT_DIR/smoke_manifest.py"
 
 # ── Args ────────────────────────────────────────────────────────────────────
 ENVIRONMENT=""
@@ -105,21 +112,34 @@ if [[ -n "$PUBLIC_SCENE_SLUG" ]]; then
             fail "current/manifest Cache-Control should be 'public, no-cache', got: $CACHE"
         fi
         python3 -c "import json; json.load(open('/tmp/gsplatform-manifest.json'))" 2>/dev/null && pass "manifest is valid JSON" || fail "manifest not JSON"
-        # Versioned manifest → immutable (FIX-05C.1): parse entryUrl, e.g.
-        # versions/<ver>/lod-meta.json, and probe the same version's manifest.
-        ENTRY=$(python3 -c "import json;print(json.load(open('/tmp/gsplatform-manifest.json')).get('entryUrl',''))" 2>/dev/null || echo "")
-        if [[ "$ENTRY" == versions/*/* ]]; then
-            VER_PATH="${ENTRY%/lod-meta.json}"
+        # Versioned manifest → immutable (FIX-05C.1 / FIX-06.1 §C).  The
+        # contract is stream.entryUrl = "versions/<ver>/lod-meta.json"; the
+        # shared parser (smoke_manifest.py) enforces it.  With --public-scene
+        # given, an unparseable entryUrl is a FAIL, never a skip — the
+        # versioned checks must really run.
+        VER_PATH=$(python3 "$PARSE_MANIFEST" --manifest /tmp/gsplatform-manifest.json 2>/dev/null) || true
+        if [[ -z "$VER_PATH" ]]; then
+            fail "stream.entryUrl invalid/missing — manifest must contain stream.entryUrl=versions/<ver>/<file> (got $(python3 -c "import json;print(repr(json.load(open('/tmp/gsplatform-manifest.json')).get('stream',{}).get('entryUrl','')))" 2>/dev/null))"
+        else
             VMAN="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/$VER_PATH/manifest.json"
             VCODE=$(C -o /dev/null -w '%{http_code}' --max-time 15 "$VMAN" 2>/dev/null || echo 000)
             VCACHE=$(C -sI --max-time 15 "$VMAN" 2>/dev/null | tr -d '\r' | awk -F': ' 'tolower($1)=="cache-control"{print $2}')
-            if [[ "$VCODE" == "200" && "$VCACHE" == *"immutable"* ]]; then
+            if [[ "$VCODE" == "200" && "$VCACHE" == "public, max-age=31536000, immutable" ]]; then
                 pass "versions/<ver>/manifest.json → 200 + immutable ($VCACHE)"
+            elif [[ "$VCODE" == "200" ]]; then
+                fail "versions manifest → 200 but cache=$VCACHE (want 'public, max-age=31536000, immutable')"
             else
-                fail "versions manifest → $VCODE cache=$VCACHE (want 200 + immutable)"
+                fail "versions manifest → $VCODE (want 200 + immutable)"
             fi
-        else
-            echo "  ℹ entryUrl not parseable ($ENTRY) — skipping versioned manifest check"
+            # Versioned entry bytes must be reachable too (Range against the
+            # immutable entry the viewer actually streams).
+            VENTRY="$BASE_URL/api/v1/scenes/$PUBLIC_SCENE_SLUG/assets/$VER_PATH/lod-meta.json"
+            VENTRY_CODE=$(C -o /dev/null -w '%{http_code}' --max-time 15 "$VENTRY" 2>/dev/null || echo 000)
+            if [[ "$VENTRY_CODE" == "200" ]]; then
+                pass "$VER_PATH/lod-meta.json → 200"
+            else
+                fail "$VER_PATH/lod-meta.json → $VENTRY_CODE (want 200)"
+            fi
         fi
     else
         fail "manifest.json → $CODE"

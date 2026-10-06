@@ -12,7 +12,9 @@
 #   3. Fresh venv, `pip install -e apps/api[dev]` from the archive.
 #   4. Imports the full production closure + workers.celery_app.
 #   5. Runs ruff, mypy, the backend pytest suite, the workers pytest suite.
-#      Optional: --with-web-build to also run pnpm install + build.
+#   6. A FRESH venv installs the reconstruction contract (torch/gsplat) and
+#      passes the GPU runtime verify (CUDA + rasterization when a GPU exists).
+#   7. Optional: --with-web-build to also run pnpm install + build.
 #
 # Usage:
 #   ./deploy/scripts/verify_release_source.sh [--from-commit HEAD] [--keep] [--with-web-build]
@@ -122,9 +124,33 @@ echo ""
 echo "[7] workers pytest"
 ( cd "$WORK/workers" && "$WORK/apps/api/.venv/bin/python" -m pytest tests -q )
 
+# ── 8. reconstruction runtime reproducibility (FIX-06.1 §A) ────────────────
+# A FRESH venv installs the tracked torch/gsplat contract
+# (deploy/requirements-reconstruction.txt) and must pass the runtime verify:
+# imports + exact versions + `python -m workers.reconstruction.train_gsplat_script
+# --help` always; CUDA availability + a real gsplat rasterization when a GPU is
+# present.  --allow-no-gpu keeps the gate portable: a GPU-less machine proves
+# checks 1-3 and prints SKIPPED_NO_GPU for 4-5 — it never claims GPU PASS.
+echo ""
+echo "[8] reconstruction runtime (fresh venv)"
+python3 -m venv "$WORK/recon-venv"
+"$WORK/recon-venv/bin/pip" install -q --upgrade pip 2>/dev/null
+if ! "$WORK/recon-venv/bin/pip" install -q -e "$WORK/apps/api" >/dev/null 2>&1; then
+    echo "RESULT: FAIL — reconstruction venv pip install -e apps/api failed"
+    exit 1
+fi
+if ! "$WORK/recon-venv/bin/pip" install -q -r "$WORK/deploy/requirements-reconstruction.txt" >/dev/null 2>&1; then
+    echo "RESULT: FAIL — requirements-reconstruction.txt install failed in fresh venv"
+    exit 1
+fi
+if ! ( cd "$WORK" && "$WORK/recon-venv/bin/python" deploy/scripts/verify_reconstruction_runtime.py --allow-no-gpu ); then
+    echo "RESULT: FAIL — reconstruction runtime verification failed in fresh venv"
+    exit 1
+fi
+
 if [[ "$WITH_WEB_BUILD" -eq 1 ]]; then
     echo ""
-    echo "[8] web install + build"
+    echo "[9] web install + build"
     ( cd "$WORK/apps/web" && pnpm install --frozen-lockfile && VITE_API_BASE_URL="/api/v1" pnpm build )
 fi
 

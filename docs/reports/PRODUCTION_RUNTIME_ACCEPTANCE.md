@@ -1,8 +1,8 @@
 # PRODUCTION_RUNTIME_ACCEPTANCE：GSPlatform Production XR Acceptance
 
-- 日期：2026-10-06（FIX-06 软件可复现性与生产完整性复核；FIX-05C 最终复核 2026-10-01）
-- 阶段：FIX-06 — 软件可复现性 / 生产完整性整改（部署仅含 tracked 源码、依赖闭包、
-  共享 worker venv、媒体鉴权、上传状态机与幂等、派发失败恢复、Redis 限流、clean-checkout 门禁）
+- 日期：2026-10-06（FIX-06.1 最终软件收口；FIX-06 复核 2026-10-06；FIX-05C 最终复核 2026-10-01）
+- 阶段：FIX-06.1 — 最终软件收口（GPU 重建运行时闭包、生产 Redis 限流激活、
+  生产 smoke 真实缓存/Range、并发/CSRF 回归补齐；**非新 Phase、无业务功能**）
 - 前置：FIX-01（安全）PASS · FIX-02（场景语义）PASS · FIX-03（媒体与运行时对齐）PASS ·
   FIX-05（独立审计整改）PASS · FIX-05B（Vite 收尾）PASS · FIX-05C（缓存策略收口）PASS
 - 固定版本：`@playcanvas/supersplat-viewer@1.35.0` + `playcanvas@2.22.4` + `@photo-sphere-viewer/core@5.15.1` + `three@0.185.1`
@@ -28,7 +28,7 @@
 | LOD PASS | 🟡 PARTIAL（流式 chunk 加载/157K 渲染/331 请求实测；**全量首帧在软件渲染下不可达** —— 需真实 GPU 复核） |
 | Quest/PICO real XR PASS | ❌ **NOT EXECUTED**（无硬件 → BLOCKER） |
 | Production Web typecheck | ✅ 0 errors（web 全量 tsc -b） |
-| Automated tests PASS | ✅ PASS（web 228 / backend 278 / workers 13 / e2e 17 / 安全 78） |
+| Automated tests PASS | ✅ PASS（web 228 / backend 309（FIX-06.1 最终）/ workers 13 / e2e 17 / 安全 78） |
 
 **Blocker**：`XR HARDWARE ACCEPTANCE NOT EXECUTED` —— 需要 Quest 或 PICO 头显
 （含 6DoF、左右眼视差、Enter/Exit/Re-enter、TEXT/IMAGE hotspot、碰撞不破坏 XR 等
@@ -284,6 +284,26 @@ Enter/Exit/Re-enter、TEXT/IMAGE hotspot 真机、碰撞不破坏 XR、LOD 全�
 **FIX-06 最终门禁**：backend **278 passed**（含 FIX-06 新增 30）；workers **13 passed**；
 ruff All checks passed；mypy Success（84 files）；`nginx -t` ok（proxy-params XFF `$remote_addr`）；
 web 228 / typecheck 0 errors / lint / build 未改动保持。
+
+## FIX-06.1：最终软件收口（2026-10-06）
+
+- **Acceptance Stage**：**FIX-06.1**（Final Software Closure —— 非新 Phase，无业务功能，
+  不重构 SuperSplat/Viewer/XR/LOD）。详见 `FIX_06_1_FINAL_SOFTWARE_CLOSURE.md`。
+- **Software blockers**：**NONE**（四项正式问题 A–D 全部关闭）。
+- **Hardware blockers**：`XR HARDWARE ACCEPTANCE NOT EXECUTED`（唯一剩余 blocker，与软件无关）。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| GPU 重建运行时闭包（A） | ✅ PASS | `deploy/requirements-reconstruction.txt` 锁定 torch **2.14.0+cu126** + gsplat **1.5.3**（Phase-07 合同版本，未追新）；`deploy_release.sh` §3b 在 GPU worker 同一 `apps/api/.venv` 安装并 verify；`verify_reconstruction_runtime.py` 六项检查（imports+版本+trainer `--help`+CUDA+最小 rasterization，exit≠0 无吞错）—— 本机 2× A6000 实跑 **PASS**（现有 venv 与全新 venv 双验证；全新 venv gsplat CUDA 扩展 JIT 构建 148.6s） |
+| 生产 Redis 限流激活（B） | ✅ PASS | `production.env.example` 增 `GS_RATE_LIMIT_BACKEND=redis` + 注释；`app/main.py` 生产守卫（env==production 且非 redis → RuntimeError，无 secret）；`preflight.sh` 生产 Redis 不可达 → **FAIL**；fallback 文档（Redis 故障→进程内窗口，恢复回弹） |
+| 生产 smoke 真实缓存/Range（C） | ✅ PASS | `smoke_manifest.py` 共享解析器按 `stream.entryUrl` 契约解析；`--public-scene` 时 entryUrl 缺失/非法 → **FAIL**；版本化 manifest **200 + 精确 `public, max-age=31536000, immutable`** 真实验证；版本化 entry 200；deploy 传 `--public-scene`（`SMOKE_PUBLIC_SCENE_SLUG` 或确定性 DB 查询，无合格场景 → 中止） |
+| 并发/CSRF 回归（D） | ✅ PASS | 两会话 `threading.Barrier` 并发 complete（真实 PostgreSQL）→ **1 Scene/1 Job/1 dispatch/同一 jobId**；PATCH/complete/DELETE CSRF 矩阵（无 403/错 403/对 通过）；POST /compute/reconstruct 正确 token 到达业务校验（404 而非 403，`require_csrf` 不 mock） |
+| 全量门禁 | ✅ PASS | backend **309 passed**（278+31）；FIX-06.1 targeted **31 passed**；workers **13 passed**；ruff clean；mypy Success（84 files）；web 228 / typecheck 0 errors / lint / build exit 0；`nginx -t` ok；alembic 单 head + current==head |
+
+**FIX-06.1 最终门禁**：backend **309 passed**（含 FIX-06.1 新增 31）；workers **13 passed**；
+ruff All checks passed；mypy Success（84 files）；web **228 passed / 26 files** / typecheck 0 errors /
+lint exit 0 / build exit 0；`nginx -t` ok；Alembic 单 head `c1d2e3f4a5b6` + current==head；
+clean-checkout 门禁（提交后执行并记录，见 FIX_06_1 报告 GIT 节）。
 
 ## DEPLOYMENT
 

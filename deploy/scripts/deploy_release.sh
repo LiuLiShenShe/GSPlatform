@@ -160,6 +160,33 @@ if ! "${API_VENV}/bin/pip" install -e "${RELEASE_DIR}/apps/api" >/dev/null 2>&1;
 fi
 echo "    ✓ Python venv ready at $API_VENV"
 
+# ── 3b. Reconstruction runtime (torch/gsplat) — FIX-06.1 §A ────────────────
+# The GPU worker starts from this SAME venv (gsplatform-celery-gpu.service
+# ExecStart = .../apps/api/.venv/bin/celery ... -Q gpu) and training runs via
+# `sys.executable -m workers.reconstruction.train_gsplat_script`, which imports
+# torch + gsplat.  Install the tracked contract versions, then verify the
+# runtime is actually executable (imports + trainer --help + CUDA rasterization)
+# before the release is allowed to go live.  Fail-closed.
+echo ""
+echo "[3b] Installing reconstruction runtime (deploy/requirements-reconstruction.txt)"
+RECON_REQS="${RELEASE_DIR}/deploy/requirements-reconstruction.txt"
+RECON_VERIFY="${RELEASE_DIR}/deploy/scripts/verify_reconstruction_runtime.py"
+if [[ -f "$RECON_REQS" && -f "$RECON_VERIFY" ]]; then
+    if ! "${API_VENV}/bin/pip" install -r "$RECON_REQS" >/tmp/gsplatform-recon-install.log 2>&1; then
+        echo "ERROR: reconstruction runtime install failed (torch/gsplat) — see /tmp/gsplatform-recon-install.log" >&2
+        exit 1
+    fi
+    if ! (cd "${RELEASE_DIR}" && "${API_VENV}/bin/python" "$RECON_VERIFY") >/tmp/gsplatform-recon-verify.log 2>&1; then
+        echo "ERROR: reconstruction runtime verification FAILED (torch/gsplat/CUDA) — see /tmp/gsplatform-recon-verify.log" >&2
+        exit 1
+    fi
+    echo "    ✓ reconstruction runtime installed + verified (torch/gsplat contract)"
+else
+    echo "ERROR: deploy/requirements-reconstruction.txt or verify_reconstruction_runtime.py missing in release." >&2
+    echo "       GPU reconstruction is part of the product; refusing to deploy without the runtime." >&2
+    exit 1
+fi
+
 # ── 4. Build web frontend (fail-closed) ─────────────────────────────────────
 echo ""
 echo "[4] Building web frontend"
@@ -332,8 +359,38 @@ else
     # Wait for services to stabilize
     sleep 3
     if [[ -x "${RELEASE_DIR}/deploy/scripts/smoke_test.sh" ]]; then
+        # Public-scene slug for the smoke: explicit SMOKE_PUBLIC_SCENE_SLUG or
+        # a deterministic DB query (PUBLISHED + PUBLIC + not deleted +
+        # current_version_id).  FIX-06.1 §C: smoke must exercise a real
+        # published scene; if none is eligible this is a FAIL, not a silent skip.
+        SMOKE_SCENE="${SMOKE_PUBLIC_SCENE_SLUG:-}"
+        if [[ -z "$SMOKE_SCENE" ]]; then
+            SMOKE_SCENE=$(GS_ENV="$ENVIRONMENT" RELEASE_API_DIR="${RELEASE_DIR}/apps/api" "${API_VENV}/bin/python" - <<'PY'
+import os, sys
+sys.path.insert(0, os.environ["RELEASE_API_DIR"])
+os.environ.setdefault("GS_ENV", "production")
+from app.core.config import settings
+from sqlalchemy import create_engine, text
+
+engine = create_engine(settings.database_url, connect_args={"connect_timeout": 5})
+with engine.connect() as conn:
+    row = conn.execute(text(
+        "SELECT slug FROM scenes "
+        "WHERE status = 'PUBLISHED' AND visibility = 'PUBLIC' "
+        "AND deleted_at IS NULL AND current_version_id IS NOT NULL "
+        "ORDER BY updated_at DESC LIMIT 1"
+    )).first()
+print(row[0] if row else "")
+PY
+)
+        fi
+        if [[ -z "$SMOKE_SCENE" ]]; then
+            echo "    ✗ No eligible public published scene for smoke (set SMOKE_PUBLIC_SCENE_SLUG or publish one)." >&2
+            exit 1
+        fi
         if ! "${RELEASE_DIR}/deploy/scripts/smoke_test.sh" \
             --environment "$ENVIRONMENT" \
+            --public-scene "$SMOKE_SCENE" \
             ${SMOKE_BASE_URL:+--base-url "$SMOKE_BASE_URL"}; then
             echo "    ✗ Smoke test FAILED — triggering rollback instructions" >&2
             echo "    ┌──────────────────────────────────────────────────────────┐"

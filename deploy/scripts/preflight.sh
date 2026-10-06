@@ -113,17 +113,27 @@ fi
 # ── C. Redis ────────────────────────────────────────────────────────────────
 echo ""
 echo "[C] Redis connectivity"
-if python3 -c "
+# The app reads GS_REDIS_URL (its Settings field); fall back to REDIS_URL.
+REDIS_URL="${GS_REDIS_URL:-${REDIS_URL:-redis://127.0.0.1:6379/0}}"
+if REDIS_PROBE_URL="$REDIS_URL" python3 -c "
 import os
 import redis as _r
-url = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
-r = _r.Redis.from_url(url, socket_connect_timeout=3)
+r = _r.Redis.from_url(os.environ['REDIS_PROBE_URL'], socket_connect_timeout=3)
 r.ping()
 print('Redis PING OK')
 " 2>/dev/null; then
     pass "Redis reachable"
 else
-    warn "Redis unreachable or REDIS_URL not set (non-blocking for preflight)"
+    # FIX-06.1 §B: production runs the Redis-backed shared rate limiter
+    # (GS_RATE_LIMIT_BACKEND=redis is mandatory there) — an unreachable Redis
+    # means every limiter call falls back to per-process memory: degraded, and
+    # it silently bypasses the shared counting the config promises.  That is a
+    # blocking condition in production, a warning elsewhere.
+    if [[ "$ENVIRONMENT" == "production" ]]; then
+        fail "Redis unreachable in production (GS_RATE_LIMIT_BACKEND=redis requires it) — BLOCKING"
+    else
+        warn "Redis unreachable or GS_REDIS_URL not set (non-blocking outside production)"
+    fi
 fi
 
 # ── D. Build artifacts & release integrity ─────────────────────────────────
@@ -222,9 +232,29 @@ for unit in gsplatform-api gsplatform-celery-cpu gsplatform-celery-gpu gsplatfor
     fi
 done
 
-# ── H. Alembic migration state (current == head) ───────────────────────────
+# ── H. Reconstruction runtime (torch/gsplat/CUDA) — FIX-06.1 §A ─────────────
 echo ""
-echo "[H] Alembic migration state"
+echo "[H] Reconstruction runtime (GPU worker) — BLOCKING when GPU unit is present"
+GPU_UNIT="${DEPLOY_ROOT}/current/deploy/systemd/gsplatform-celery-gpu.service"
+if [[ -f "$GPU_UNIT" ]]; then
+    if [[ -x "${API_VENV}/bin/python" && -f "${DEPLOY_ROOT}/current/deploy/scripts/verify_reconstruction_runtime.py" ]]; then
+        if (cd "${DEPLOY_ROOT}/current" && "${API_VENV}/bin/python" deploy/scripts/verify_reconstruction_runtime.py) \
+            >/tmp/gsplatform-recon-verify.log 2>&1; then
+            pass "reconstruction runtime verified (torch/gsplat versions + trainer --help + CUDA rasterization)"
+        else
+            cat /tmp/gsplatform-recon-verify.log >&2
+            fail "reconstruction runtime verification FAILED — GPU worker must not start with broken torch/gsplat/CUDA"
+        fi
+    else
+        fail "GPU worker unit present but reconstruction runtime missing (apps/api/.venv python or verify_reconstruction_runtime.py)"
+    fi
+else
+    pass "no GPU worker unit — CPU-only deployment; reconstruction runtime check skipped"
+fi
+
+# ── I. Alembic migration state (current == head) ───────────────────────────
+echo ""
+echo "[I] Alembic migration state"
 if [[ -n "${GS_DATABASE_URL:-}" && -d "${DEPLOY_ROOT}/current/apps/api/migrations" ]]; then
     cd "${DEPLOY_ROOT}/current/apps/api"
     HEAD_HASH=$("${API_VENV}/bin/python" -m alembic heads 2>/dev/null | grep -oE "^[0-9a-f]{12}" | head -1 || true)
