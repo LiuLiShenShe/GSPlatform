@@ -280,6 +280,49 @@ class TestRollbackFailClosed:
             os.path.realpath(str(other))  # untouched
         assert "REFUSE" in res.stdout + res.stderr
 
+    def test_upgrade_refuses_when_current_no_longer_points_to_failed_release(
+            self, tmp_path):
+        """FIX-06.2.1a §10 Case B — UPGRADE context (a previous release IS given)
+        but `current` no longer points at the failed release (another operator
+        already switched it).  The compare-before-mutate ownership guard is
+        COMMON to both actions, so the stale previous must NOT be moved over
+        the real `current` — REFUSE, non-zero, `current` untouched.
+
+        RED on the FIX-06.2.1 implementation: its upgrade branch mutated before
+        validating ownership, so it silently clobbered `current` → previous."""
+        deploy_root = self._mk(tmp_path / "deploy_root")
+        prev_rel = self._mk(tmp_path / "prev_release")
+        new_rel = self._mk(tmp_path / "new_release")
+        unrelated = self._mk(tmp_path / "unrelated")
+        (deploy_root / "current").symlink_to(unrelated, target_is_directory=True)
+        res = _run_rollback(deploy_root, str(new_rel), str(prev_rel))
+        assert res.returncode != 0, res.stdout + res.stderr  # refused
+        assert "REFUSE" in res.stdout + res.stderr
+        assert os.path.realpath(str(deploy_root / "current")) == \
+            os.path.realpath(str(unrelated))  # real current NOT clobbered
+        assert prev_rel.is_dir()      # previous release retained
+        assert unrelated.is_dir()     # unrelated release untouched
+        assert new_rel.is_dir()       # failed release retained
+
+    def test_upgrade_refuses_missing_previous_release(self, tmp_path):
+        """FIX-06.2.1a §7/§11 — `previous` is provided but is NOT a valid
+        directory: REFUSE.  It must NOT silently degrade into the first-deploy
+        unlink (which would DELETE `current` and lose the failed release
+        pointer) and must NOT restore a bogus previous."""
+        deploy_root = self._mk(tmp_path / "deploy_root")
+        new_rel = self._mk(tmp_path / "new_release")
+        missing_prev = str(tmp_path / "does-not-exist")
+        assert not os.path.exists(missing_prev)
+        (deploy_root / "current").symlink_to(new_rel, target_is_directory=True)
+        res = _run_rollback(deploy_root, str(new_rel), missing_prev)
+        assert res.returncode != 0, res.stdout + res.stderr  # refused
+        assert "REFUSE" in res.stdout + res.stderr
+        # current must survive untouched (NOT unlinked by first-deploy fallback)
+        assert os.path.realpath(str(deploy_root / "current")) == \
+            os.path.realpath(str(new_rel))
+        assert (deploy_root / "current").is_symlink()
+        assert new_rel.is_dir()
+
 
 # ── C: production smoke strict TLS (§16-§22) ─────────────────────────────────
 def _run_smoke(environment: str, extra: list[str]):

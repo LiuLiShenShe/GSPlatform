@@ -205,3 +205,15 @@ Hardware acceptance:    PENDING (Quest/PICO real-device only)
 ```
 
 **READY FOR HARDWARE ACCEPTANCE**
+
+---
+
+## Post-audit（FIX-06.2.1a，2026-10-07）
+
+**Post-audit note（不修改上述历史正文，如实追加）：**
+upgrade rollback branch originally skipped the common current-target guard ——
+`rollback_current` 的 upgrade 分支在校验 `current` 仍指向失败 release 之前
+就直接恢复 previous（若 current 已被他方切走，会造成覆盖；previous 缺失时
+还会错误降级成 first-deploy unlink）。该问题已由 FIX-06.2.1a 关闭
+（common compare-before-mutate ownership guard 先于两个分支执行）。
+详见 `FIX_06_2_1A_ROLLBACK_TARGET_GUARD.md`。

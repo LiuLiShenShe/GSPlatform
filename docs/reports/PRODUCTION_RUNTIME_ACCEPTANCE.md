@@ -337,6 +337,19 @@ clean-checkout 门禁（提交后执行并记录，见 FIX_06_1 报告 GIT 节�
 | Production smoke 严格 TLS（C） | ✅ PASS | `C()` 不再默认 `-k`（`CURL_TLS_ARGS` 数组，`--resolve` 改数组）；`--insecure` 显式 staging/local opt-in，production 拒绝（exit 1）；deploy 仅 staging+`SMOKE_INSECURE=1` 才传；证书过期/主机名不匹配/未知 CA/链断裂 → curl 非零 → smoke FAIL；场景资产仍为真实 GET（无 `curl -I/-sI/--head` 回归） |
 | 全量门禁 | ✅ PASS | backend **342 passed**（329+13）；FIX-06.1+06.2+06.2.1 targeted **64 passed**（31+20+13）；workers **13 passed**；ruff clean；mypy Success（84 files）；web 228/26 + typecheck 0 errors + lint + build exit 0；`nginx -t` ok；`find deploy -name '*.sh' bash -n` 全绿；GPU 门禁（真 venv，无 --allow-no-gpu，2× A6000）**PASS**；clean-checkout 门禁（新 HEAD）**GATE_EXIT=0** |
 
+## FIX-06.2.1a：Rollback 目标所有权收口（2026-10-07）
+
+- **Acceptance Stage**：**FIX-06.2.1a**（FIX-06.2.1 的极小补丁；非新 Phase、无新功能。
+  仅收口 `rollback_current` 的 compare-before-mutate 目标所有权校验。**立即停止软件修改**）。
+- **Post-audit**：FIX-06.2.1 的 upgrade 分支在校验 current 前缀之前直接恢复 previous ——
+  若 current 已被他方切走，会造成覆盖。由本阶段修复。
+- **Software blockers**：**NONE**。
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| Rollback target ownership guard（A） | ✅ PASS | `rollback_current` 升级为 **先校验、后动作**：ownership gate（`current` 仍是 symlink 且 canonical target == failed new release）任何分支之前执行；upgrade（恢复 previous）与 first-deploy（unlink current）共用同一 gate。previous 非空但无效 → REFUSE（绝不降级成 first-deploy unlink）。RED→GREEN：新增 2 项升级场景回归 |
+| 全量门禁 | ✅ PASS | backend **344 passed**（329+15）；FIX-06.1+06.2+06.2.1a targeted **66 passed**（31+20+15）；workers **13 passed**；ruff（真 venv 0.16.6）clean；mypy Success（84 files）；web 228/26 + typecheck 0 + lint 0 + build exit 0；`nginx -t` ok；`find deploy -name '*.sh' bash -n` 全绿；GPU 门禁（真 venv，无 --allow-no-gpu，2× A6000）**PASS**；clean-checkout 门禁 **GATE_EXIT=0** |
+
 ## DEPLOYMENT
 
 - **Test Deployment（当前可用）**：Cloudflare Quick Tunnel → `https://barcelona-academic-glen-still.trycloudflare.com`
