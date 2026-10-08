@@ -1,7 +1,51 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderApp } from '../test/utils';
+import { renderApp, renderWithRouter } from '../test/utils';
+import { ProcessingStatus } from '../features/upload/ProcessingStatus';
+
+/**
+ * FIX-UPLOAD-01 §15-§17 — the upload page must show REAL segregated server
+ * statuses (UploadSession / Publish Job / Collision Job) from the read-only
+ * status surface, and navigate to the Viewer / Authoring / My Works once the
+ * scene is published. No fake progress anywhere.
+ */
+describe('ProcessingStatus（三段真实服务端状态）', () => {
+  it('publish SUCCEEDED 且 sceneId 存在时给出查看/编辑/作品导航', () => {
+    const { container } = renderWithRouter(
+      <ProcessingStatus
+        uploadStatus="SUCCEEDED"
+        publishStatus="SUCCEEDED"
+        collisionStatus="SUCCEEDED"
+        publishJobId="job-1"
+        sceneId="scene-abc"
+        sceneSlug="scene-abc"
+      />,
+    );
+    // 三段标签都渲染
+    expect(screen.getByText('上传任务（UploadSession）')).toBeInTheDocument();
+    expect(screen.getByText('发布任务（Publish Job）')).toBeInTheDocument();
+    expect(screen.getByText('碰撞构建（Collision Job）')).toBeInTheDocument();
+    // 导航链接指向真实路由（Viewer / Authoring / My Works）
+    expect(container.querySelector('a[href="/scene/scene-abc"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/model/edit/scene-abc"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/works"]')).toBeInTheDocument();
+  });
+
+  it('collision 未生成（null）时如实显示，而非编造进度', () => {
+    renderWithRouter(
+      <ProcessingStatus
+        uploadStatus="SUCCEEDED"
+        publishStatus="SUCCEEDED"
+        collisionStatus={null}
+        publishJobId="job-1"
+        sceneId="scene-abc"
+        sceneSlug="scene-abc"
+      />,
+    );
+    expect(screen.getByText(/未生成（尚未构建）/)).toBeInTheDocument();
+  });
+});
 
 describe('上传作品页（UploadPage）', () => {
   beforeEach(() => {

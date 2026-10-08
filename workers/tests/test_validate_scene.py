@@ -9,18 +9,38 @@ from workers.pipeline.validate_scene import validate_upload
 
 
 def _make_ply(path, declared_count: int = 3):
-    """Write a minimal but structurally-valid PLY header + a few vertices."""
-    header = [
-        b"ply",
-        b"format ascii 1.0",
-        f"element vertex {declared_count}".encode(),
+    """Write a minimal but valid Gaussian-splat PLY header + a few vertices.
+
+    FIX-UPLOAD-01 §5: a valid PLY upload must carry the full 3DGS attribute
+    set (x/y/z + opacity + scale_* + rot_* + f_dc_*); a bare x/y/z point cloud
+    is rejected.  Body rows are irrelevant to header validation.
+    """
+    gaussian_props = [
         b"property float x",
         b"property float y",
         b"property float z",
+        b"property float f_dc_0",
+        b"property float f_dc_1",
+        b"property float f_dc_2",
+        b"property float opacity",
+        b"property float scale_0",
+        b"property float scale_1",
+        b"property float scale_2",
+        b"property float rot_0",
+        b"property float rot_1",
+        b"property float rot_2",
+        b"property float rot_3",
+    ]
+    header = [
+        b"ply",
+        b"format binary_little_endian 1.0",
+        f"element vertex {declared_count}".encode(),
+        *gaussian_props,
         b"end_header",
     ]
-    body = b"\n".join(b"0 0 0" for _ in range(declared_count))
-    path.write_bytes(b"\n".join(header) + b"\n" + body + b"\n")
+    # One binary row per vertex (14 float32) — content not inspected by tests.
+    row = b"\x00" * (14 * 4)
+    path.write_bytes(b"\n".join(header) + b"\n" + row * declared_count)
     return path
 
 
@@ -93,6 +113,91 @@ class TestValidateUpload:
             expected_size=2, expected_sha256=None,
         )
         assert not res.ok
+
+    # ── FIX-UPLOAD-01 §5/§6 — Gaussian-only PLY validation ────────────────
+    def test_plain_point_cloud_ply_rejected(self, tmp_path):
+        """x/y/z-only PLY (no opacity/scale/rot/f_dc) is NOT a Gaussian."""
+        f = tmp_path / "cloud.ply"
+        header = [
+            b"ply", b"format ascii 1.0",
+            b"element vertex 3",
+            b"property float x", b"property float y", b"property float z",
+            b"property uchar red", b"property uchar green", b"property uchar blue",
+            b"end_header",
+        ]
+        f.write_bytes(b"\n".join(header) + b"\n0 0 0 255 0 0\n")
+        res = validate_upload(
+            f, declared_format="ply", declared_mime="model/ply",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res.ok
+        assert "opacity" in res.reason  # missing Gaussian shape attribute
+
+    def test_point_cloud_with_opacity_but_no_sh_rejected(self, tmp_path):
+        """Missing f_dc_* (color layer) → not Gaussian splat data."""
+        f = tmp_path / "nosh.ply"
+        header = [
+            b"ply", b"format ascii 1.0",
+            b"element vertex 2",
+            b"property float x", b"property float y", b"property float z",
+            b"property float opacity",
+            b"property float scale_0", b"property float scale_1", b"property float scale_2",
+            b"property float rot_0", b"property float rot_1", b"property float rot_2",
+            b"property float rot_3",
+            b"end_header",
+        ]
+        f.write_bytes(b"\n".join(header) + b"\n")
+        res = validate_upload(
+            f, declared_format="ply", declared_mime="model/ply",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res.ok
+        assert "f_dc_" in res.reason
+
+    def test_zero_vertex_ply_rejected(self, tmp_path):
+        f = _make_ply(tmp_path / "zero.ply", declared_count=0)
+        res = validate_upload(
+            f, declared_format="ply", declared_mime="model/ply",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res.ok
+        assert "vertex" in res.reason
+
+    def test_malformed_ply_missing_end_header_rejected(self, tmp_path):
+        f = tmp_path / "truncated.ply"
+        f.write_bytes(b"ply\nformat binary_little_endian 1.0\nelement vertex 3\n")
+        res = validate_upload(
+            f, declared_format="ply", declared_mime="model/ply",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res.ok
+        assert "end_header" in res.reason
+
+    def test_ply_without_vertex_element_rejected(self, tmp_path):
+        f = tmp_path / "novertex.ply"
+        f.write_bytes(b"ply\nformat ascii 1.0\ncomment x\nend_header\n")
+        res = validate_upload(
+            f, declared_format="ply", declared_mime="model/ply",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res.ok
+        assert "vertex" in res.reason
+
+    def test_mismatched_declared_format_rejected(self, tmp_path):
+        """Gaussian PLY bytes declared as a SOG container → magic mismatch."""
+        f = _make_ply(tmp_path / "declared_sog.ply", declared_count=3)
+        res = validate_upload(
+            f, declared_format="sog", declared_mime="application/octet-stream",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res.ok
+        assert "ZIP" in res.reason
+        res2 = validate_upload(
+            f, declared_format="zip", declared_mime="application/zip",
+            expected_size=f.stat().st_size, expected_sha256=None,
+        )
+        assert not res2.ok
+        assert "ZIP" in res2.reason
 
 
 class TestSafeUnpackZip:
