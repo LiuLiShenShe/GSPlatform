@@ -29,10 +29,18 @@ import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 let officialHandle: OfficialViewerHandle & { events: { fire: (...args: unknown[]) => void } };
 let createViewerCalls: Array<{ contentUrl?: string; settings?: object; renderer?: string }>;
 let destroyCalls: number;
+// FIX-XR-01: 每次 createViewer 返回的 handle 初始状态（默认 loaded:true 尽快加载，
+// 兼容既有测试；异步加载测试置 loaded:false 再手动触发加载完成）。
+let nextHandleOptions: { loaded?: boolean; canStartVR?: boolean } = {};
 
 const xrModeCallbacks = new Set<(...args: unknown[]) => void>();
 
-function makeOfficialHandle() {
+function makeOfficialHandle(options: { loaded?: boolean; canStartVR?: boolean } = {}) {
+  const listOptions = {
+    // FIX-XR-01: 可控初始加载状态（loaded=false 时模拟真实异步加载；默认尽快加载如旧）
+    loaded: options.loaded ?? true,
+    canStartVR: options.canStartVR ?? true,
+  };
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>();
   const events = {
     on(event: string, fn: (...args: unknown[]) => void) {
@@ -48,10 +56,10 @@ function makeOfficialHandle() {
   };
   const state = new Proxy<Record<string, unknown>>(
     {
-      loaded: true, // 直接 loaded（测试聚焦 XR 状态机，不测加载进度）
-      progress: 100,
+      loaded: listOptions.loaded,
+      progress: listOptions.loaded ? 100 : 0,
       cameraMode: 'orbit',
-      canStartVR: true,
+      canStartVR: listOptions.canStartVR,
       canStartAR: false,
       xrMode: null,
       performanceMode: false,
@@ -115,7 +123,7 @@ vi.mock('@playcanvas/supersplat-viewer/viewer', () => ({
       settings: options.settings,
       renderer: options.renderer,
     });
-    officialHandle = makeOfficialHandle();
+    officialHandle = makeOfficialHandle(nextHandleOptions);
     return officialHandle;
   }),
 }));
@@ -170,6 +178,7 @@ beforeEach(() => {
   createViewerCalls = [];
   destroyCalls = 0;
   xrModeCallbacks.clear();
+  nextHandleOptions = {};
   mockNavigatorXR({ exists: true, immersiveVr: true });
 });
 
@@ -177,6 +186,21 @@ afterEach(() => {
   (navigator as unknown as { xr?: unknown }).xr = realNavigatorXr;
   xrModeCallbacks.clear();
 });
+
+/** FIX-XR-01: 触发异步加载完成 —— state.loaded 翻转 + 官方 loaded:changed 事件。 */
+function completeAsyncLoad(): void {
+  act(() => {
+    setHandleState({ loaded: true, progress: 100 });
+    officialHandle.events.fire('loaded:changed', true);
+  });
+}
+
+/** FIX-XR-01: 官方 ViewerState 的 loaded/progress 只读 —— 测试经受控转写修改。 */
+function setHandleState(patch: { loaded?: boolean; progress?: number }): void {
+  const state = (officialHandle as unknown as { state: Record<string, unknown> }).state;
+  if (patch.loaded !== undefined) state.loaded = patch.loaded;
+  if (patch.progress !== undefined) state.progress = patch.progress;
+}
 
 describe('SSV-04 /xr/test — 官方 runtime 诊断', () => {
   it('Test 1: navigator.xr 不存在 → 诊断 false，页面不 crash', async () => {
@@ -401,6 +425,181 @@ describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数�
     });
     expect(screen.getByTestId('diag-has-collision')).toBeInTheDocument();
     expect(screen.getByTestId('diag-walk-allowed')).toBeInTheDocument();
+    u.unmount();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────── //
+// FIX-XR-01 —— 异步加载状态机（PICO Neo3 真实故障复现）
+// 真实设备：loaded=true / canStartVR=true 但页面停留在 LOADING，Enter/Frame 不可用。
+// 根因：Runtime.onLoaded(true) 只更新 loaded 不迁移 status loading → ready。
+// 以下全部使用可控异步 mock（createViewer 返回 loaded:false，随后
+// completeAsyncLoad() 触发官方 loaded:changed），禁止直接初始 loaded:true 绕绿。
+// ────────────────────────────────────────────────────────────────────────── //
+describe('FIX-XR-01 — 异步加载 → READY 状态机（真实异步 mock，非立即 loaded）', () => {
+  /* Test 1：异步加载完成 → READY → Enter/Frame Scene 可用 */
+  it('Test 1: onLoaded(true) 后 loading → ready，Enter VR / Frame Scene 可用', async () => {
+    nextHandleOptions = { loaded: false };
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(1);
+    });
+    // 初始 fully loaded=false → 页面必须仍在 LOADING（不得提前 ready）
+    expect(screen.getByTestId('xr-state').textContent).toContain('LOADING');
+    expect(screen.getByTestId('enter-vr-btn')).toBeDisabled();
+    expect(screen.getByTestId('frame-scene-btn')).toBeDisabled();
+
+    completeAsyncLoad(); // state.loaded=false→true + loaded:changed(true)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('READY');
+    });
+    expect(screen.getByTestId('diag-state-loaded').textContent).toBe('true');
+    expect(screen.getByTestId('diag-can-start-vr').textContent).toBe('true');
+    expect(screen.getByTestId('frame-scene-btn')).toBeEnabled();
+    expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
+    // 未进入 XR：Exit VR 仍禁用（xrMode null）
+    expect(screen.getByTestId('exit-vr-btn')).toBeDisabled();
+  });
+
+  /* Test 2：loaded=true 但官方 canStartVR=false → READY 但不能进入（不绕过官方能力） */
+  it('Test 2: canStartVR=false 时 READY 但 Enter VR 禁用（官方能力为真相）', async () => {
+    nextHandleOptions = { loaded: true, canStartVR: false };
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-can-start-vr').textContent).toBe('false');
+    });
+    // loaded=true 的单个 create() 后一次性 ready 检查 → 状态 READY
+    expect(screen.getByTestId('xr-state').textContent).toContain('READY');
+    expect(screen.getByTestId('frame-scene-btn')).toBeEnabled();
+    // 官方 canStartVR=false → Enter VR 必须禁用（绝不因页面 ready 就放行）
+    expect(screen.getByTestId('enter-vr-btn')).toBeDisabled();
+  });
+
+  /* Test 3：loaded 事件未到达（仅 state.loaded 被轮询观察到）→ refresh 兜底 READY */
+  it('Test 3: 加载事件未触发、仅轮询观察到 loaded → refresh 兜底 READY（fake timers）', async () => {
+    nextHandleOptions = { loaded: false };
+    vi.useFakeTimers();
+    try {
+      renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0); // flush boot promise chain
+      });
+      expect(screen.getByTestId('xr-state').textContent).toContain('LOADING');
+      // 加载完成但 loaded:changed 事件缺失（只翻官方 state，不 fire 事件）
+      act(() => {
+        setHandleState({ loaded: true, progress: 100 });
+      });
+      // 超过 STATS_POLL_MS=1000 的轮询周期 → refresh() 观察到 loaded
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1100);
+      });
+      expect(screen.getByTestId('xr-state').textContent).toContain('READY');
+      expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /* Test 4：进入 XR 后 refresh / onLoaded(true) 不得将 XR-ACTIVE 改回 READY */
+  it('Test 4: xr-active 后 onLoaded(true)/refresh 不得覆盖为 READY', async () => {
+    nextHandleOptions = { loaded: false };
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(1);
+    });
+    completeAsyncLoad();
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('READY');
+    });
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
+      expect(screen.getByTestId('diag-xr-mode').textContent).toBe('vr');
+    });
+    // 已 active；再触发 onLoaded(true) + 轮询 refresh —— 必须仍 XR-ACTIVE
+    completeAsyncLoad();
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
+    });
+    expect(screen.getByTestId('diag-xr-mode').textContent).toBe('vr');
+  });
+
+  /* Test 5：退出后 refresh 不得将 XR-ENDED 改回 READY，且允许再次进入 */
+  it('Test 5: xr-ended 后 refresh 不得覆盖，且可再次 Enter', async () => {
+    nextHandleOptions = { loaded: false };
+    renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(1);
+    });
+    completeAsyncLoad();
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('READY');
+    });
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ACTIVE');
+    });
+    act(() => {
+      triggerXrMode(null); // 系统退出
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('XR-ENDED');
+    });
+    // ended 后再触发 loaded(true)/refresh —— 必须仍 XR-ENDED，不得回 READY
+    completeAsyncLoad();
+    expect(screen.getByTestId('xr-state').textContent).toContain('XR-ENDED');
+    // 允许再次进入
+    expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
+  });
+
+  /* Test 6：旧 Runtime 卸载/销毁后，晚到的 onLoaded(true) 不得重建/污染 */
+  it('Test 6: 卸载后旧 runtime 的晚到 loaded 事件不重建 viewer、不污染新页面', async () => {
+    nextHandleOptions = { loaded: false };
+    const A = renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(1);
+    });
+    A.unmount(); // 销毁 A 的 runtime（cancelled + unsub + destroy）
+    const createdBefore = createViewerCalls.length;
+    // A 的 onLoaded(true) 晚到（旧 handle 仍可 fire）→ 不得重建、不得污染
+    act(() => {
+      setHandleState({ loaded: true });
+      officialHandle.events.fire('loaded:changed', true);
+    });
+    expect(createViewerCalls.length).toBe(createdBefore); // 没有重建 viewer
+    // B 页面新挂载：A 的晚到事件不得提前把 B 弄成 READY/B 正常异步
+    const B = renderWithRouter(<XRTestPage />, { route: '/xr/test' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(createdBefore + 1);
+    });
+    expect(screen.getByTestId('xr-state').textContent).toContain('LOADING');
+    completeAsyncLoad(); // B 自己真正加载完成 → READY
+    await waitFor(() => {
+      expect(screen.getByTestId('xr-state').textContent).toContain('READY');
+    });
+    B.unmount();
+  });
+
+  /* §8：正式页 /xr/:sceneId 同样异步加载 → ready → Enter VR 可点击 */
+  it('正式页 /xr/:sceneId：异步加载后 ready，Enter VR 可点击', async () => {
+    nextHandleOptions = { loaded: false };
+    const u = renderApp({ route: '/xr/r-8c4e2264e86a' });
+    await waitFor(() => {
+      expect(createViewerCalls.length).toBe(1);
+    });
+    // 正式页加载中（Loading 覆盖层可见、无 Enter）
+    expect(screen.getByTestId('xr-loading')).toBeInTheDocument();
+    expect(screen.queryByTestId('enter-vr-btn')).toBeNull();
+    completeAsyncLoad();
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-state-loaded').textContent).toBe('true');
+    });
+    const json = JSON.parse(screen.getByTestId('ov-xr-diagnostics').textContent ?? '{}');
+    expect(json.status).toBe('ready');
+    expect(json.loaded).toBe(true);
+    expect(json.canStartVR).toBe(true);
+    expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
     u.unmount();
   });
 });

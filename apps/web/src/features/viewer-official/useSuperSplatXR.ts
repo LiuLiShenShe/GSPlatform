@@ -10,8 +10,16 @@
  * progress。页面不维护重复的 navigator.xr 状态机作为真相源；navigator.xr 只作
  * 诊断展示（XRDiagnostics）。
  *
+ * 状态机（FIX-XR-01）：checking → loading → ready → xr-active → xr-ended → ready。
+ * ready 只由官方 runtime 实际加载状态驱动（runtime.state.loaded）：
+ *   - onLoaded(true) 事件 → syncReady()；
+ *   - 状态轮询（refresh）观察到 loaded=true → syncReady()（事件丢失兜底）；
+ *   - syncReady 仅从 loading 单向迁移到 ready，绝不覆盖 xr-active / xr-ended /
+ *     error；loaded=false 不提前 ready。浏览器 WebXR 能力不直接置 ready。
+ *
  * 生命周期：mount/sceneId 变化 create，卸载 destroy（幂等）；事件全部经
- * SuperSplatRuntime 订阅，destroy 后无 listener 残留；retry 重走完整 boot。
+ * SuperSplatRuntime 订阅，destroy 后无 listener 残留，旧 runtime 的晚到事件
+ * 经 cancelled 守卫丢弃；retry 重走完整 boot。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveSceneRuntimeDescriptor } from '../../scene-runtime/descriptorResolver';
@@ -226,6 +234,14 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
           return;
         }
         runtimeRef.current = runtime;
+        // FIX-XR-01: 官方 loaded=true 而页面仍 loading → 收敛 ready。
+        // 只从 loading 单向迁移；绝不覆盖 xr-active / xr-ended / error。
+        // 依据 = 官方 runtime 实际加载状态（runtime.state.loaded），不是浏览器
+        // WebXR 能力（能力仅作诊断展示，不能直接把页面置 ready）。
+        const syncReady = () => {
+          if (!runtime.state.loaded) return;
+          setStatus((prev) => (prev === 'loading' ? 'ready' : prev));
+        };
         const refresh = () => {
           if (cancelled) return;
           setRenderer(runtimeRenderer(runtime.app));
@@ -237,6 +253,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
           setXrMode(runtime.state.xrMode);
           setProgress(runtime.state.progress);
           setGsplats(renderedSplatCount(runtime.app));
+          // FIX-XR-01: 轮询兜底 —— 若加载完成事件未被组件接收到（真实设备上
+          // 存在事件与 state 竞态），状态轮询观察到 loaded=true 时也收敛 ready。
+          syncReady();
         };
 
         // 事件全部经 wrapper 订阅（页面不直接监听底层 events）
@@ -256,6 +275,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
                   console.error('[xr] frameScene failed', frameErr);
                 }
               }
+              // FIX-XR-01: 官方 loaded 事件为真 → loading → ready。
+              syncReady();
             }
             refresh();
           }),
@@ -284,7 +305,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
         refresh();
         pollRef.current = window.setInterval(refresh, STATS_POLL_MS);
 
-        if (runtime.state.loaded && !cancelled) setStatus('ready');
+        // FIX-XR-01: 创建时已加载完成的同步场景 → 直接收敛 ready（guard 同 refresh）。
+        if (runtime.state.loaded && !cancelled) syncReady();
       } catch (err) {
         if (cancelled) return;
         console.error('[xr] boot failed', err);
