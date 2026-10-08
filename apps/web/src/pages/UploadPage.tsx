@@ -20,8 +20,9 @@ import { App } from 'antd';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { useObjectUrlPool } from '../hooks/useObjectUrls';
 import type { UploadFile, UploadProps } from 'antd';
-import { ResumableUploader, createUploadSession, fetchUploadProcessingStatus } from '../features/upload/ResumableUploader';
+import { ResumableUploader, createUploadSession } from '../features/upload/ResumableUploader';
 import type { UploadEvent } from '../features/upload/ResumableUploader';
+import { useUploadProcessingPoll } from '../features/upload/useUploadProcessingPoll';
 import { UploadProgress } from '../features/upload/UploadProgress';
 import { ProcessingStatus } from '../features/upload/ProcessingStatus';
 
@@ -95,15 +96,20 @@ export default function UploadPage() {
   const [uploadSpeed, setUploadSpeed] = useState(0);
   const [uploadPaused, setUploadPaused] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('CREATED');
-  const [processingStatus, setProcessingStatus] = useState('QUEUED');
-  const [publishStatus, setPublishStatus] = useState<string | null>(null);
-  const [collisionStatus, setCollisionStatus] = useState<string | null>(null);
-  const [publishJobId, setPublishJobId] = useState<string | null>(null);
-  const [sceneId, setSceneId] = useState<string | null>(null);
-  const [sceneSlug, setSceneSlug] = useState<string | null>(null);
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const uploaderRef = useRef<ResumableUploader | null>(null);
+
+  // FIX-UPLOAD-01.1 §A1-§A4 — the processing poll is driven by a dedicated
+  // hook with correct terminal semantics: it keeps watching after publish
+  // SUCCEEDED until the auto collision job reaches a terminal state, cleans up
+  // on unmount/uploadId change, guards against stale responses, and surfaces an
+  // honest "状态尚未确认" entry (never a fabricated terminal) after the cap.
+  const processingPoll = useUploadProcessingPoll(currentUploadId, phase === 'processing');
+  const {
+    publishStatus, collisionStatus, publishJobId,
+    sceneId, sceneSlug, unconfirmed, reQuery,
+  } = processingPoll;
 
   // Form snapshots
   const sceneFile = Form.useWatch('sceneFile', form) ?? [];
@@ -250,10 +256,9 @@ export default function UploadPage() {
         break;
       case 'completed':
         setCurrentUploadId(e.result.uploadId);
-        setProcessingStatus(e.result.status);
-        // Scene identity may already be known (fresh complete returns it).
-        if (e.result.sceneId) setSceneId(e.result.sceneId);
-        if (e.result.sceneSlug) setSceneSlug(e.result.sceneSlug);
+        // Set uploadStatus from the complete response; the processing poll
+        // (§A2) takes over for the publish/collision phases immediately after.
+        setUploadStatus(e.result.status);
         setPhase('processing');
         break;
       case 'error':
@@ -262,44 +267,6 @@ export default function UploadPage() {
         break;
     }
   };
-
-  const startProcessingPoll = (uploadId: string): void => {
-    let stopped = false;
-    const poll = async (): Promise<void> => {
-      while (!stopped) {
-        await new Promise((r) => setTimeout(r, 3000));
-        try {
-          // FIX-UPLOAD-01 §15-§16: poll the read-only status surface (not just
-          // the upload header) so Upload / Publish / Collision stay segregated.
-          const st = await fetchUploadProcessingStatus(uploadId);
-          setProcessingStatus(st.status);
-          setPublishStatus(st.publishStatus);
-          setCollisionStatus(st.collisionStatus);
-          if (st.publishJobId) setPublishJobId(st.publishJobId);
-          if (st.sceneId) setSceneId(st.sceneId);
-          if (st.sceneSlug) setSceneSlug(st.sceneSlug);
-          // Terminal: upload done AND publish job reached a final state.
-          if (
-            (st.status === 'SUCCEEDED' || st.status === 'FAILED') &&
-            (st.publishStatus === 'SUCCEEDED' || st.publishStatus === 'FAILED' ||
-             st.publishStatus === null)
-          ) {
-            stopped = true;
-          }
-        } catch {
-          // ignore poll errors (transient); the next tick retries
-        }
-      }
-    };
-    void poll();
-  };
-
-  // Auto-start polling when phase transitions to processing.
-  useEffect(() => {
-    if (phase === 'processing' && currentUploadId) {
-      startProcessingPoll(currentUploadId);
-    }
-  }, [phase, currentUploadId]);
 
   const pause = (): void => { uploaderRef.current?.pause(); setUploadPaused(true); };
   const resume = (): void => { uploaderRef.current?.resume(); setUploadPaused(false); };
@@ -389,14 +356,16 @@ export default function UploadPage() {
         <div>
           <Typography.Paragraph>文件上传完成，服务端正在处理…</Typography.Paragraph>
           <ProcessingStatus
-            uploadStatus={processingStatus}
+            uploadStatus={processingPoll.uploadStatus}
             publishStatus={publishStatus}
             collisionStatus={collisionStatus}
             publishJobId={publishJobId}
             sceneId={sceneId}
             sceneSlug={sceneSlug}
+            unconfirmed={unconfirmed}
+            onReQuery={reQuery}
           />
-          {processingStatus === 'SUCCEEDED' && !sceneId && (
+          {processingPoll.uploadStatus === 'SUCCEEDED' && !sceneId && (
             <Button type="primary" href="/works" style={{ marginTop: 16 }}>
               前往「我的作品」
             </Button>

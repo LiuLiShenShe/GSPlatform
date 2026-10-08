@@ -42,6 +42,10 @@ export interface ProcessingStatusProps {
   /** Scene identity used for post-success navigation. */
   sceneId: string | null;
   sceneSlug: string | null;
+  /** FIX-UPLOAD-01.1 §A4 — observation cap reached; real state unconfirmed. */
+  unconfirmed?: boolean;
+  /** Manual re-query entry (re-polls the read-only status surface). */
+  onReQuery?: () => void;
 }
 
 function stageIndex(status: string | null, order: { key: string }[]): number {
@@ -51,10 +55,18 @@ function stageIndex(status: string | null, order: { key: string }[]): number {
   return order.findIndex((s) => s.key === status);
 }
 
-function collisionTag(status: string | null): { text: string; color: string } {
+function collisionTag(
+  status: string | null,
+  publishDone: boolean,
+): { text: string; color: string } {
   switch (status) {
     case null:
-      return { text: '未生成（尚未构建）', color: 'default' };
+      // Publish SUCCEEDED + collision null means the auto-collision job has not
+      // been dispatched (yet) — an honest "waiting for dispatch" state, NOT a
+      // failure and NOT "built". Before publish completes nothing is started.
+      return publishDone
+        ? { text: '等待碰撞任务调度', color: 'warning' }
+        : { text: '未开始（尚未生成）', color: 'default' };
     case 'QUEUED':
       return { text: '排队列中', color: 'processing' };
     case 'RUNNING':
@@ -68,10 +80,12 @@ function collisionTag(status: string | null): { text: string; color: string } {
   }
 }
 
-function collisionDescription(status: string | null): string {
+function collisionDescription(status: string | null, publishDone: boolean): string {
   switch (status) {
     case null:
-      return '模式 OUTDOOR（构建策略默认，非地面真值）尚未生成碰撞资产；上传发布流程会自动触发构建。';
+      return publishDone
+        ? '发布已完成，服务端正在为当前版本创建碰撞构建任务；任务出现前此状态属正常等待。'
+        : '模式 OUTDOOR（构建策略默认，非地面真值）尚未生成碰撞资产；上传发布流程会自动触发构建。';
     case 'QUEUED':
       return '碰撞构建任务已进入 CPU 队列。';
     case 'RUNNING':
@@ -92,11 +106,14 @@ export function ProcessingStatus({
   publishJobId: _publishJobId,
   sceneId,
   sceneSlug,
+  unconfirmed = false,
+  onReQuery,
 }: ProcessingStatusProps) {
   const uploadDone = uploadStatus === 'SUCCEEDED';
   const publishDone = publishStatus === 'SUCCEEDED';
   const publishFailed = publishStatus === 'FAILED';
   const publishIdx = stageIndex(publishStatus, PUBLISH_STAGE_ORDER);
+  const tag = collisionTag(collisionStatus, publishDone);
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -140,11 +157,9 @@ export function ProcessingStatus({
         碰撞构建（Collision Job）
       </Typography.Text>
       <Space direction="vertical" size={4}>
-        <Tag color={collisionTag(collisionStatus).color}>
-          {collisionTag(collisionStatus).text}
-        </Tag>
+        <Tag color={tag.color}>{tag.text}</Tag>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {collisionDescription(collisionStatus)}
+          {collisionDescription(collisionStatus, publishDone)}
         </Typography.Text>
       </Space>
 
@@ -158,6 +173,19 @@ export function ProcessingStatus({
             sceneId
               ? `场景 ${sceneSlug ?? sceneId} 已发布，流式 SOG 已就绪。`
               : '作品已发布，可在「我的作品」中查看。'
+          }
+        />
+      )}
+
+      {unconfirmed && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginTop: 16 }}
+          message="状态尚未确认"
+          description="长时间未观察到碰撞任务终态。服务端任务未被改动，可重新查询恢复观察。"
+          action={
+            <Button size="small" onClick={onReQuery}>重新查询</Button>
           }
         />
       )}

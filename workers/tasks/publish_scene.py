@@ -63,6 +63,23 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
     # can be redelivered after a worker crash. A SUCCEEDED job must not be
     # mutated again (no second promote/commit/status flip).
     if job.status == JobStatus.SUCCEEDED.value:
+        # FIX-UPLOAD-01.1 §B: a completed publish redelivered after a crash may
+        # have committed the publish WITHOUT chaining the auto-collision (the
+        # crash window between ``commit_version`` and the chaining block).  The
+        # duplicate-delivery branch therefore re-asserts the collision chain
+        # for the current version — idempotent, never re-publishes.
+        try:
+            from app.services.celery_client import send_task
+            from app.services.collision import CollisionService
+
+            coll_svc = CollisionService(session, storage, send_task=send_task)
+            coll_svc.ensure_auto_collision_for_current_version(
+                sid, us.owner_id, retry_failed=True
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            logger.exception("Duplicate-delivery collision recovery failed for scene %s", scene_id)
         logger.info("Job %s already SUCCEEDED; ignoring duplicate delivery", job_id)
         return {"ok": True, "duplicate": True, "version": "existing"}
 
@@ -162,17 +179,20 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         session.commit()
         logger.info("Published scene %s (version %s)", scene_id, ver)
 
-        # ── 5. AUTO-COLLISION (FIX-UPLOAD-01 §7-§9) ──────────────────────────
+        # ── 5. AUTO-COLLISION (FIX-UPLOAD-01 §7-§9 / §B recovery) ───────────
         # Publishing is complete and committed; now chain the collision build.
         # Publish success must NOT depend on collision success: a dispatch or
         # build failure FAILs only the collision side, the scene stays PUBLISHED.
-        # Idempotent per scene+version (no duplicate job / reuse valid build).
+        # Idempotent per scene+version (no duplicate job / reuse valid build);
+        # retry_failed=True lets a fresh publish recover a FAILED collision.
         try:
             from app.services.celery_client import send_task
             from app.services.collision import CollisionService
 
             coll_svc = CollisionService(session, storage, send_task=send_task)
-            response = coll_svc.dispatch_auto_collision(sid, us.owner_id)
+            response = coll_svc.ensure_auto_collision_for_current_version(
+                sid, us.owner_id, retry_failed=True
+            )
             if response is not None:
                 logger.info(
                     "Auto-collision for scene %s → job=%s status=%s",
@@ -226,7 +246,14 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
 # ──────────────────────────────────────────────────────────────────────────────
 @celery_app.task(name="tasks.cleanup_expired_uploads")
 def cleanup_expired_uploads() -> dict:
-    """Mark stale upload sessions as EXPIRED and remove stale staging dirs."""
+    """Mark stale upload sessions as EXPIRED, remove stale staging dirs, and
+    run the scheduled post-publish collision recovery (FIX-UPLOAD-01.1 §B).
+
+    This task is the REAL scheduled entrypoint (``deploy/systemd/
+    gsplatform-cleanup.timer``, every 6 hours) — the crash-window recovery for
+    a PUBLISHED scene whose auto-collision was never dispatched rides on it,
+    NOT on Celery redelivery.
+    """
     session = SessionLocal()
     storage = _get_storage()
     try:
@@ -234,6 +261,16 @@ def cleanup_expired_uploads() -> dict:
 
         svc = UploadService(session, storage, settings, send_task=None)
         expired = svc.expire_stale()
-        return {"ok": True, "expired": expired}
+
+        from app.services.celery_client import send_task
+        from app.services.collision import CollisionService
+
+        coll_svc = CollisionService(session, storage, send_task=send_task)
+        recovery = coll_svc.reconcile_auto_collision()
+        return {
+            "ok": True,
+            "expired": expired,
+            "collision_recovery": recovery,
+        }
     finally:
         session.close()
