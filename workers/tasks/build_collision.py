@@ -20,6 +20,8 @@ import logging
 import uuid
 from pathlib import Path
 
+from sqlalchemy import or_
+
 from app.core.config import settings
 from app.db.models.asset import Asset
 from app.db.models.enums import AssetKind
@@ -49,14 +51,32 @@ def _load_collision(session, collision_id: str):
 
 
 def _find_sog_asset(session, scene_id: uuid.UUID) -> Asset | None:
-    """Find the primary SOG asset for a scene (highest priority kind)."""
-    from sqlalchemy import or_
+    """Find the SOG asset bound to the scene's *current* version (FIX-UPLOAD-01 §C).
 
+    The collision must be generated from the content the scene currently
+    publishes. Selecting by ``created_at DESC`` could pick an OLD version's SOG
+    (e.g. after a re-publish the new version's SOG row is created later, but a
+    stale row from a concurrent build could win).  We select
+    ``Asset.version_id == Scene.current_version_id`` — the same persistent
+    association publishing records — so an old-version collision can never
+    masquerade as the current one.
+    """
+    from app.db.models.scene import Scene
+
+    if not isinstance(scene_id, uuid.UUID):
+        return None
+    scene = session.query(Scene).filter(Scene.id == scene_id).first()
+    if scene is None or scene.current_version_id is None:
+        return None
     kinds = (AssetKind.SOG.value, AssetKind.STREAM_INDEX.value)
     asset = (
         session.query(Asset)
-        .filter(Asset.scene_id == scene_id, or_(*[Asset.kind == k for k in kinds]))
-        .order_by(Asset.created_at.desc())
+        .filter(
+            Asset.scene_id == scene_id,
+            Asset.version_id == scene.current_version_id,
+            or_(*[Asset.kind == k for k in kinds]),
+        )
+        .order_by(Asset.created_at.asc())
         .first()
     )
     return asset
@@ -107,14 +127,22 @@ def build_collision(
         session.flush()
 
     try:
-        # Locate source SOG
+        # Locate source SOG — bound to the scene's CURRENT version (§C).
         sog = _find_sog_asset(session, sid)
         if sog is None:
-            raise FileNotFoundError("找不到场景的 SOG 源文件；请先发布场景资产")
+            raise FileNotFoundError("找不到场景当前版本的 SOG 源文件；请先发布场景资产")
 
         sog_path = storage._path(sog.storage_key)
         if not sog_path.exists():
             raise FileNotFoundError(f"SOG 文件不存在: {sog.storage_key}")
+        # §C: the SOG entry is lod-meta.json (the streamed index).  Anything
+        # else is not the publish-service SOG we must build collision from.
+        if sog_path.name != "lod-meta.json":
+            raise FileNotFoundError(
+                f"SOG 资产不是流式索引 (lod-meta.json): {sog.storage_key}"
+            )
+        if not (sog_path.parent / "manifest.json").exists():
+            raise FileNotFoundError(f"SOG 版本目录不完整: {sog_path.parent}")
 
         job.status = "RUNNING"
         job.stage = "LOADING"
@@ -217,6 +245,19 @@ def build_collision(
         build_params = result.to_params()
         # FIX-05 §23：保留 API 在派发时记录的世界变换哈希（STALE 判定基准）。
         build_params["worldTransformHash"] = world_transform_hash
+        # FIX-UPLOAD-01 §C：持久化版本关联 —— 本碰撞由哪个发布版本构建而来。
+        # 记录实际构建所用 SOG 所属的 SceneVersion（content-addressed
+        # ``asset_version``）；发布新版本后旧碰撞因绑定不匹配被判定 STALE。
+        from app.db.models.scene import SceneVersion
+
+        src_version = (
+            session.query(SceneVersion)
+            .filter(SceneVersion.id == sog.version_id)
+            .first()
+        )
+        build_params["sourceVersion"] = (
+            src_version.asset_version if src_version is not None else None
+        )
         collision.build_params = build_params
         mark_status("SUCCEEDED", 100)
 

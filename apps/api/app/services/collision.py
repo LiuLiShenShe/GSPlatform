@@ -24,7 +24,7 @@ from app.core.errors import ConflictError, ForbiddenError, NotFoundError
 from app.db.models.asset import Asset
 from app.db.models.enums import JobKind, JobStatus
 from app.db.models.job import Job
-from app.db.models.scene import Scene
+from app.db.models.scene import Scene, SceneVersion
 from app.db.models.scene_presentation import ScenePresentation
 from app.repositories.collision import CollisionAssetRepository
 from app.schemas.collision import (
@@ -42,6 +42,15 @@ def _validate_owner(scene: Scene, owner_id: uuid.UUID) -> None:
     if scene.owner_id != owner_id:
         raise ForbiddenError("只有场景所有者可以编辑")
 
+
+# FIX-UPLOAD-01 §11 — 自动碰撞只为每个 scene 的 *当前版本* 构建一次：
+#   - CollisionAsset 不存在 → 新建；
+#   - 存在但绑定了当前版本且状态为 QUEUED/RUNNING/SUCCEEDED（资产有效）→ 复用，无重复任务；
+#   - 状态 FAILED → 转 QUEUED 并派发新 Job（可重试）；
+#   - 绑定到旧版本（assetVersion 不同）→ 认为旧碰撞失效，新版本需要重建。
+def _version_binding_satisfied(build_params: dict[str, Any] | None, asset_version: str) -> bool:
+    """True when a SUCCEEDED collision belongs to *this* published version."""
+    return build_params is not None and build_params.get("sourceVersion") == asset_version
 
 def world_transform_hash(
     position: dict[str, float] | None,
@@ -132,9 +141,20 @@ class CollisionService:
         presentation = self._get_presentation(scene.id)
         enabled = presentation.collision_enabled if presentation else False
         # FIX-05 §23/§25：STALE = 构建时世界变换 hash 与当前不一致。
+        # FIX-UPLOAD-01 §C：构建绑定到旧版本（sourceVersion ≠ 当前发布版本）时
+        # 同样视为 STALE —— 旧版本碰撞绝不冒充当前碰撞。
         build_params = collision.build_params or {}
         current_hash = self._current_world_hash(scene.id)
         stale = build_params.get("worldTransformHash") != current_hash
+        # FIX-UPLOAD-01 §C：构建记录过 sourceVersion 且与当前发布版本不一致 →
+        # 旧版本碰撞绝不冒充当前碰撞。未记录 sourceVersion 的存量碰撞（FIX-05
+        # 时代构建）保持原有 STALE 语义（不因版本判断而 STALE）——零回归。
+        if collision.status == "SUCCEEDED" and build_params.get("sourceVersion"):
+            current_version = self._session.get(SceneVersion, scene.current_version_id)
+            if current_version is not None and not _version_binding_satisfied(
+                build_params, current_version.asset_version
+            ):
+                stale = True
         return CollisionAssetOut(
             id=str(collision.id),
             scene_id=str(collision.scene_id),
@@ -207,6 +227,139 @@ class CollisionService:
             .order_by(Asset.created_at.desc())
             .first()
         )
+
+    def dispatch_auto_collision(
+        self,
+        scene_id: uuid.UUID,
+        owner_id: uuid.UUID,
+        *,
+        mode: str = "OUTDOOR",
+    ) -> CollisionBuildResponse | None:
+        """FIX-UPLOAD-01 §7-§9 — auto-build collision after a publish commits.
+
+        Called by the ``publish_scene`` worker (NOT a user HTTP route).  It
+        creates/reuses the scene's CollisionAsset + a BUILD_COLLISION Job for
+        the *just-published* version and dispatches the worker task:
+
+          publish SUCCEEDED → CollisionAsset+Job → DB commit → send_task
+
+        Publishing is over before this runs: publish success never depends on
+        collision success.  A dispatch failure FAILs only the collision side
+        with a safe code; the scene stays PUBLISHED.
+
+        Idempotent per scene+version (§11): no duplicate Job when one is
+        already QUEUED/RUNNING or when a SUCCEEDED collision already exists for
+        the same version.  FAILED is retryable; a build whose ``sourceVersion``
+        no longer equals the scene's current version is treated as an
+        old-version collision and must not be reused as the current one.
+
+        Returns None when the scene has no published current version yet
+        (nothing to build against).
+        """
+        scene = self._session.get(Scene, scene_id)
+        if scene is None or scene.status != "PUBLISHED":
+            return None
+        # §C: build collision from the scene's CURRENT version asset only.
+        current_version = self._session.get(SceneVersion, scene.current_version_id)
+        if current_version is None:
+            return None
+
+        existing = self._repo.get_by_scene_id(scene.id)
+        if existing is not None:
+            if existing.status in ("QUEUED", "RUNNING"):
+                # In-flight build — never stack a second job for the same scene.
+                return CollisionBuildResponse(
+                    job_id=str(existing.job_id or ""),
+                    status=existing.status,
+                    message="碰撞构建任务已在进行中",
+                )
+            if existing.status == "SUCCEEDED" and _version_binding_satisfied(
+                existing.build_params, current_version.asset_version
+            ):
+                # Same-version SUCCEEDED collision already exists → reuse.
+                return CollisionBuildResponse(
+                    job_id=str(existing.job_id or ""),
+                    status="SUCCEEDED",
+                    message="当前版本碰撞已存在",
+                )
+            # FAILED / stale-old-version → rebuild for the current version.
+            collision = existing
+            collision.mode = mode
+            collision.status = "QUEUED"
+            collision.error_message = None
+            collision.attempt += 1
+        else:
+            collision = self._repo.create(
+                scene_id=scene.id,
+                mode=mode,
+                gravity=9.81,
+                slope_limit_degrees=45.0,
+                step_offset=0.3,
+                player_height=1.8,
+            )
+            collision.status = "QUEUED"
+            collision.attempt += 1
+        self._session.flush()
+
+        job = Job(
+            scene_id=scene.id,
+            owner_id=owner_id,
+            kind=JobKind.BUILD_COLLISION.value,
+            status=JobStatus.QUEUED.value,
+            progress=0,
+        )
+        self._session.add(job)
+        self._session.flush()
+        collision.job_id = job.id
+
+        # Persistent version binding: the collision belongs to the current
+        # published version (FIX-UPLOAD-01 §C — 当前版本标识的持久化关联).
+        world_hash = self._current_world_hash(scene.id)
+        params = dict(collision.build_params or {})
+        params["sourceVersion"] = current_version.asset_version
+        params["worldTransformHash"] = world_hash
+        collision.build_params = params
+        self._session.flush()
+        # DB commit FIRST (worker must see the job row), then dispatch.
+        self._session.commit()
+
+        task_name = "tasks.build_collision"
+        args = [
+            str(job.id), str(scene.id), str(collision.id),
+            collision.mode, world_hash,
+        ]
+        try:
+            if self._send_task is not None:
+                result = self._send_task(task_name, args=args)
+                job.celery_task_id = str(result.id)
+                self._session.commit()
+                logger.info(
+                    "Auto-dispatched %s for scene %s version %s",
+                    task_name, scene.id, current_version.asset_version,
+                )
+            return CollisionBuildResponse(
+                job_id=str(job.id),
+                status="QUEUED",
+                message=f"碰撞构建任务已创建 (模式: {mode})",
+            )
+        except Exception:
+            # Dispatch failure: FAIL collision side with a stable code, never
+            # leak broker internals, and never touch the scene state.
+            logger.exception("Auto-collision dispatch failed for scene %s", scene.id)
+            try:
+                job.status = "FAILED"
+                job.error_code = "COLLISION_DISPATCH_FAILED"
+                job.error_message_safe = "碰撞构建任务派发失败，可稍后重试"
+                collision.status = "FAILED"
+                collision.error_message = "碰撞构建任务派发失败，可稍后重试"
+                self._session.commit()
+            except Exception:  # pragma: no cover - best-effort bookkeeping
+                self._session.rollback()
+            return CollisionBuildResponse(
+                job_id=str(job.id),
+                status="FAILED",
+                message="碰撞构建任务派发失败",
+            )
 
     def create_and_build(
         self,

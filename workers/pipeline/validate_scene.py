@@ -117,8 +117,11 @@ def validate_upload(
         )
 
     if declared_format == "ply":
-        if not _validate_ply_header(path):
-            return ValidationResult(False, "PLY 头部无效", sha256=sha, real_magic=real_magic)
+        ply_error = _validate_ply_header(path)
+        if ply_error is not None:
+            return ValidationResult(
+                False, ply_error, sha256=sha, real_magic=real_magic
+            )
     # .splat single-file: magic is trust-based (ASCII header) — skip deep parse.
 
     return ValidationResult(
@@ -126,14 +129,75 @@ def validate_upload(
     )
 
 
-def _validate_ply_header(path: Path) -> bool:
+def _validate_ply_header(path: Path) -> str | None:
+    """Validate that *path* is a Gaussian-splat PLY (not a plain point cloud).
+
+    FIX-UPLOAD-01 §5: an uploaded PLY must be 3DGS data, not an arbitrary
+    XYZ/RGB point cloud. splat-transform requires the position layer (x/y/z),
+    the geometric layer (opacity + scale_* + rot_*) and the color DC layer
+    (f_dc_*) — its own ``hasGaussianLayers`` predicate.  Reject anything that
+    lacks those with a clear reason (returned as an error string, ``None`` when
+    the header is a valid Gaussian PLY).
+
+    Returns ``None`` on success, otherwise a human-readable rejection reason.
+    """
     with path.open("rb") as f:
-        header = f.read(4096)
+        header = f.read(65536)
     if not header.startswith(b"ply"):
-        return False
-    if b"end_header" not in header:
-        return False
-    return True
+        return "PLY 头部无效: 缺少 ply 魔数"
+    end = header.find(b"end_header")
+    if end < 0:
+        return "PLY 头部无效: 缺少 end_header"
+    text = header[:end].decode("ascii", errors="replace")
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+    vertex_count = 0
+    props: list[str] = []
+    in_vertex = False
+    for line in lines:
+        if line == "ply":
+            continue
+        if line.startswith("format"):
+            continue
+        if line.startswith("comment"):
+            continue
+        if line.startswith("element vertex"):
+            try:
+                vertex_count = int(line.split()[-1])
+            except ValueError:
+                return "PLY 头部无效: element vertex 数量非法"
+            in_vertex = True
+            continue
+        if line.startswith("element"):
+            in_vertex = False
+            continue
+        if line.startswith("property") and in_vertex:
+            parts = line.split()
+            if len(parts) >= 3:
+                props.append(parts[2])
+            continue
+        # Anything else inside the header (obj_info / element face …) is fine.
+
+    if vertex_count <= 0:
+        return "PLY 不是 Gaussian 点云: 缺少 vertex 顶点 (或数量为 0)"
+
+    def has(prefix: str) -> bool:
+        return any(p.startswith(prefix) for p in props)
+
+    # Position layer (splat-transform requires x/y/z).
+    if not (has("x") and has("y") and has("z")):
+        return "PLY 不是 Gaussian 点云: 缺少位置属性 x/y/z"
+    # Geometric layer: opacity + scale_* + rot_* (plain point clouds lack these).
+    if not has("opacity"):
+        return "PLY 不是 Gaussian 点云: 缺少 opacity 属性"
+    if not has("scale_"):
+        return "PLY 不是 Gaussian 点云: 缺少 scale_* 属性"
+    if not has("rot_"):
+        return "PLY 不是 Gaussian 点云: 缺少 rot_* 属性"
+    # Color layer: at least one SH DC coefficient.
+    if not (has("f_dc_") or has("sh")):
+        return "PLY 不是 Gaussian 点云: 缺少 f_dc_* 颜色属性"
+    return None
 
 
 def _validate_archive(path: Path, declared_format: str) -> dict | None:

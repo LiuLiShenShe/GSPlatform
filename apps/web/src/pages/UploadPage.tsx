@@ -20,7 +20,7 @@ import { App } from 'antd';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { useObjectUrlPool } from '../hooks/useObjectUrls';
 import type { UploadFile, UploadProps } from 'antd';
-import { ResumableUploader, createUploadSession } from '../features/upload/ResumableUploader';
+import { ResumableUploader, createUploadSession, fetchUploadProcessingStatus } from '../features/upload/ResumableUploader';
 import type { UploadEvent } from '../features/upload/ResumableUploader';
 import { UploadProgress } from '../features/upload/UploadProgress';
 import { ProcessingStatus } from '../features/upload/ProcessingStatus';
@@ -96,7 +96,11 @@ export default function UploadPage() {
   const [uploadPaused, setUploadPaused] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('CREATED');
   const [processingStatus, setProcessingStatus] = useState('QUEUED');
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [publishStatus, setPublishStatus] = useState<string | null>(null);
+  const [collisionStatus, setCollisionStatus] = useState<string | null>(null);
+  const [publishJobId, setPublishJobId] = useState<string | null>(null);
+  const [sceneId, setSceneId] = useState<string | null>(null);
+  const [sceneSlug, setSceneSlug] = useState<string | null>(null);
   const [currentUploadId, setCurrentUploadId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const uploaderRef = useRef<ResumableUploader | null>(null);
@@ -246,8 +250,10 @@ export default function UploadPage() {
         break;
       case 'completed':
         setCurrentUploadId(e.result.uploadId);
-        setJobId(e.result.jobId);
-        setProcessingStatus('QUEUED');
+        setProcessingStatus(e.result.status);
+        // Scene identity may already be known (fresh complete returns it).
+        if (e.result.sceneId) setSceneId(e.result.sceneId);
+        if (e.result.sceneSlug) setSceneSlug(e.result.sceneSlug);
         setPhase('processing');
         break;
       case 'error':
@@ -263,14 +269,25 @@ export default function UploadPage() {
       while (!stopped) {
         await new Promise((r) => setTimeout(r, 3000));
         try {
-          const resp = await import('../services/http').then((m) =>
-            m.httpClient.head(`/uploads/${uploadId}`),
-          );
-          const st = (resp.headers as Record<string, string>)['upload-status'] ?? '';
-          setProcessingStatus(st);
-          if (st === 'SUCCEEDED' || st === 'FAILED') { stopped = true; }
+          // FIX-UPLOAD-01 §15-§16: poll the read-only status surface (not just
+          // the upload header) so Upload / Publish / Collision stay segregated.
+          const st = await fetchUploadProcessingStatus(uploadId);
+          setProcessingStatus(st.status);
+          setPublishStatus(st.publishStatus);
+          setCollisionStatus(st.collisionStatus);
+          if (st.publishJobId) setPublishJobId(st.publishJobId);
+          if (st.sceneId) setSceneId(st.sceneId);
+          if (st.sceneSlug) setSceneSlug(st.sceneSlug);
+          // Terminal: upload done AND publish job reached a final state.
+          if (
+            (st.status === 'SUCCEEDED' || st.status === 'FAILED') &&
+            (st.publishStatus === 'SUCCEEDED' || st.publishStatus === 'FAILED' ||
+             st.publishStatus === null)
+          ) {
+            stopped = true;
+          }
         } catch {
-          // ignore poll errors
+          // ignore poll errors (transient); the next tick retries
         }
       }
     };
@@ -371,8 +388,15 @@ export default function UploadPage() {
       {phase === 'processing' && (
         <div>
           <Typography.Paragraph>文件上传完成，服务端正在处理…</Typography.Paragraph>
-          <ProcessingStatus status={processingStatus} jobId={jobId} />
-          {processingStatus === 'SUCCEEDED' && (
+          <ProcessingStatus
+            uploadStatus={processingStatus}
+            publishStatus={publishStatus}
+            collisionStatus={collisionStatus}
+            publishJobId={publishJobId}
+            sceneId={sceneId}
+            sceneSlug={sceneSlug}
+          />
+          {processingStatus === 'SUCCEEDED' && !sceneId && (
             <Button type="primary" href="/works" style={{ marginTop: 16 }}>
               前往「我的作品」
             </Button>

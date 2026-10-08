@@ -78,6 +78,24 @@ def head_upload(
 
 
 # ------------------------------------------------------------------
+# GET /uploads/{id}/status — read-only processing state surface
+# (FIX-UPLOAD-01 §15-§16).
+#
+# HEAD only carries offset + upload-phase status.  The UploadPage needs the
+# *segregated* Linked scene + Publish Job + Collision Job states to render the
+# three side-by-side statuses.  This read-only route returns them as JSON
+# (owner-auth via get_status; no storage keys / absolute paths ever exposed).
+# ------------------------------------------------------------------
+@router.get("/{upload_id}/status", response_model=UploadStatusOut)
+def get_upload_status(
+    upload_id: uuid.UUID,
+    identity: RequestIdentity = Depends(get_current_user),
+    svc: UploadService = Depends(_service),
+) -> UploadStatusOut:
+    return svc.get_status(upload_id, identity)
+
+
+# ------------------------------------------------------------------
 # PATCH /uploads/{id} — write a chunk
 # ------------------------------------------------------------------
 @router.patch("/{upload_id}", response_model=UploadSessionOut)

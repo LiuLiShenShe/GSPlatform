@@ -116,6 +116,7 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             scene_id=str(sid),
             profile="balanced",
             gpu="cpu",
+            source_format=us.upload_format,
         )
         if not cr.ok:
             raise ValueError(f"转换失败: {cr.reason}")
@@ -160,6 +161,31 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         publish_svc.mark_upload_succeeded(uid)
         session.commit()
         logger.info("Published scene %s (version %s)", scene_id, ver)
+
+        # ── 5. AUTO-COLLISION (FIX-UPLOAD-01 §7-§9) ──────────────────────────
+        # Publishing is complete and committed; now chain the collision build.
+        # Publish success must NOT depend on collision success: a dispatch or
+        # build failure FAILs only the collision side, the scene stays PUBLISHED.
+        # Idempotent per scene+version (no duplicate job / reuse valid build).
+        try:
+            from app.services.celery_client import send_task
+            from app.services.collision import CollisionService
+
+            coll_svc = CollisionService(session, storage, send_task=send_task)
+            response = coll_svc.dispatch_auto_collision(sid, us.owner_id)
+            if response is not None:
+                logger.info(
+                    "Auto-collision for scene %s → job=%s status=%s",
+                    scene_id, response.job_id, response.status,
+                )
+            else:
+                logger.info("Scene %s has no current version; collision skipped", scene_id)
+            session.commit()
+        except Exception as exc:  # noqa: BLE001 - never fail a published scene
+            logger.exception("Auto-collision dispatch failed for scene %s", scene_id)
+            session.rollback()
+            logger.warning("Scene %s stays PUBLISHED; collision can be retried later", scene_id)
+            _ = exc
         return {"ok": True, "version": ver}
 
     except Exception as exc:

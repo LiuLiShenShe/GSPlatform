@@ -14,6 +14,7 @@ from app.core.config import Settings
 from app.core.errors import ConflictError, NotFoundError, ServiceUnavailableError
 from app.core.identity import RequestIdentity
 from app.db.models.enums import (
+    JobKind,
     JobStatus,
     SceneStatus,
     UploadSessionStatus,
@@ -168,6 +169,29 @@ class UploadService:
         us = self._repo.get_by_id(upload_id) or us
         return self._to_out(us)
 
+    def _complete_out(
+        self, us: UploadSession, *, job_id: uuid.UUID | None = None
+    ) -> UploadCompleteOut:
+        """UploadCompleteOut with the produced scene identity (§16).
+
+        Reads the linked Scene (set at complete) so the UploadPage can navigate
+        to the Viewer / Authoring / My Works. Never exposes storage keys.
+        """
+        scene_id: uuid.UUID | None = None
+        scene_slug: str | None = None
+        if us.scene_id is not None:
+            scene = self._session.get(Scene, us.scene_id)
+            if scene is not None and scene.deleted_at is None:
+                scene_id = scene.id
+                scene_slug = scene.slug
+        return UploadCompleteOut(
+            uploadId=us.id,
+            status=us.status,
+            jobId=job_id,
+            sceneId=scene_id,
+            sceneSlug=scene_slug,
+        )
+
     def complete(
         self,
         upload_id: uuid.UUID,
@@ -190,7 +214,7 @@ class UploadService:
                     details={"status": us.status},
                 )
             self._session.refresh(us)
-            return UploadCompleteOut(uploadId=us.id, status=us.status)
+            return self._complete_out(us)
 
         # Publish replay path (FIX-06 §9): a session that already produced a
         # scene must never produce a duplicate Scene/Job.
@@ -201,9 +225,7 @@ class UploadService:
                 if job is not None and job.status != JobStatus.FAILED.value:
                     # In-flight or already-succeeded — replays share the Job.
                     self._session.refresh(us)
-                    return UploadCompleteOut(
-                        uploadId=us.id, status=us.status, jobId=job.id
-                    )
+                    return self._complete_out(us, job_id=job.id)
                 if job is not None and job.status == JobStatus.FAILED.value:
                     # Failed publish is retryable on the same scene.
                     retry_job = self._repo.create_publish_job(
@@ -211,9 +233,7 @@ class UploadService:
                     )
                     self._dispatch_publish(us, scene, retry_job)
                     self._session.refresh(us)
-                    return UploadCompleteOut(
-                        uploadId=us.id, status=us.status, jobId=retry_job.id
-                    )
+                    return self._complete_out(us, job_id=retry_job.id)
 
         # Fresh completion path.
         if us.status != UploadSessionStatus.UPLOADED.value:
@@ -243,7 +263,7 @@ class UploadService:
         )
         self._dispatch_publish(us, scene, job)
         self._session.refresh(us)
-        return UploadCompleteOut(uploadId=us.id, status=us.status, jobId=job.id)
+        return self._complete_out(us, job_id=job.id)
 
     def _dispatch_publish(self, us: UploadSession, scene: Scene, job: Job) -> None:
         """Commit the QUEUED job, then dispatch the publish task.
@@ -364,4 +384,31 @@ class UploadService:
 
     def _to_status(self, us: UploadSession) -> UploadStatusOut:
         out = self._to_out(us)
-        return UploadStatusOut(**out.model_dump(), ownerId=us.owner_id, sha256=us.declared_sha256)
+        data = dict(out.model_dump(), ownerId=us.owner_id, sha256=us.declared_sha256)
+
+        # FIX-UPLOAD-01 §15-§16 — minimal read-only processing surface: the
+        # scene this upload produced + its Publish / Collision job statuses.
+        # Never leaks storage keys / absolute paths.
+        scene = None
+        if us.scene_id is not None:
+            scene = self._session.get(Scene, us.scene_id)
+        if scene is not None and scene.deleted_at is None:
+            data["sceneId"] = scene.id
+            data["sceneSlug"] = scene.slug
+            publish_job = self._repo.get_latest_publish_job(scene.id)
+            if publish_job is not None:
+                data["publishJobId"] = publish_job.id
+                data["publishStatus"] = publish_job.status
+            collision_job = (
+                self._session.query(Job)
+                .filter(
+                    Job.scene_id == scene.id,
+                    Job.kind == JobKind.BUILD_COLLISION.value,
+                )
+                .order_by(Job.created_at.desc(), Job.id.desc())
+                .first()
+            )
+            if collision_job is not None:
+                data["collisionJobId"] = collision_job.id
+                data["collisionStatus"] = collision_job.status
+        return UploadStatusOut(**data)

@@ -89,6 +89,14 @@ def _version_segment(version: SceneVersion | None) -> str | None:
     return f"versions/{asset_version}"
 
 
+def _current_asset_version(session: Session, scene: Scene) -> str | None:
+    """Content-addressed ``asset_version`` of the scene's current version."""
+    if scene.current_version_id is None:
+        return None
+    version = session.get(SceneVersion, scene.current_version_id)
+    return version.asset_version if version is not None else None
+
+
 def _vec3(raw: Any) -> RuntimeVec3 | None:
     """Coerce a JSONB ``{x, y, z}`` blob (or list) to RuntimeVec3, or None."""
     if raw is None:
@@ -511,6 +519,14 @@ class SceneRuntimeService:
             else None
         )
         stale = recorded_hash != current_hash
+        # FIX-UPLOAD-01 §C：构建记录过 sourceVersion 且与当前发布版本不一致 →
+        # 该碰撞属于旧版本内容，绝不作为当前碰撞暴露（Viewer 不加载 / walk 禁用）。
+        # 未记录 sourceVersion 的存量碰撞保持原有语义（零回归）。
+        if not stale and build_params.get("sourceVersion"):
+            if build_params["sourceVersion"] != _current_asset_version(
+                self._session, scene
+            ):
+                stale = True
 
         return RuntimeCollision(
             url=url,

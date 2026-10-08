@@ -49,10 +49,24 @@ class UploadSessionOut(BaseModel):
 
 
 class UploadStatusOut(UploadSessionOut):
-    """HEAD /uploads/{id} — full status for a resumable client."""
+    """HEAD /uploads/{id} — full status for a resumable client.
+
+    FIX-UPLOAD-01 §15-§16 — minimal *read-only* processing surface for the
+    UploadPage: scene identity + the separate Publish Job / Collision Job
+    statuses, owner-authenticated. Never exposes storage keys / absolute paths.
+    """
 
     ownerId: UUID
     sha256: str | None = None
+    # Scene produced by this upload (null until the publish pipeline commits).
+    sceneId: UUID | None = None
+    sceneSlug: str | None = None
+    # Publish job (kind=PUBLISH) for the scene.
+    publishJobId: UUID | None = None
+    publishStatus: str | None = None
+    # Collision job (kind=BUILD_COLLISION) for the scene.
+    collisionJobId: UUID | None = None
+    collisionStatus: str | None = None
 
 
 class UploadCompleteRequest(BaseModel):
@@ -66,11 +80,18 @@ class UploadCompleteRequest(BaseModel):
 
 
 class UploadCompleteOut(BaseModel):
-    """Response to complete: the upload is queued for validation/publishing."""
+    """Response to complete: the upload is queued for validation/publishing.
+
+    FIX-UPLOAD-01 §16 — the scene identity (id + slug) is returned so the
+    UploadPage can navigate to the Viewer / Authoring / My Works without
+    guessing. Never exposes storage keys / absolute paths.
+    """
 
     uploadId: UUID
     status: str
     jobId: UUID | None = None
+    sceneId: UUID | None = None
+    sceneSlug: str | None = None
 
 
 class CancelUploadOut(BaseModel):

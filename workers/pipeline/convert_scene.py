@@ -49,6 +49,19 @@ _PROFILES: dict[str, tuple[int, int]] = {
     "quality": (2, 4),
 }
 
+# FIX-UPLOAD-01 §5: the *declared upload format* (validated upstream) maps to
+# the file extension splat-transform's input sniffing needs.  The upload is
+# staged server-side as ``upload.bin`` (random, server-owned name), so the
+# extension must come from this allowlist — never from a client filename /
+# ``upload.bin``'s ``.bin`` suffix.  ``zip`` uploads are streamed-SOG-ish
+# containers that splat-transform reads as ``.sog``.
+_FORMAT_TO_EXT: dict[str, str] = {
+    "ply": ".ply",
+    "splat": ".splat",
+    "sog": ".sog",
+    "zip": ".sog",
+}
+
 _TIMEOUT = 1200  # seconds — generous for large PLY files on CPU.
 
 
@@ -164,16 +177,21 @@ def convert_to_streamed_sog(
     scene_id: str,
     profile: str = "balanced",
     gpu: str = "cpu",
+    source_format: str | None = None,
 ) -> ConvertResult:
     """Convert *source_path* into a streamed-SOG tree inside *staging_dir*.
+
+    ``source_format`` is the validated declared upload format (from the
+    ``UploadSession``). When given, the internal copy splat-transform receives is
+    named from ``_FORMAT_TO_EXT`` (the real source extension), so a PLY staged
+    as ``upload.bin`` is converted as ``raw-input.ply``. When ``None``, the
+    source path's own suffix / magic sniffing is used (backwards-compatible for
+    direct-path callers such as the reconstruction pipeline).
 
     ``staging_dir`` must be a fresh, empty directory (created if missing).
     Writes manifest.json / build-info.json / checksums.sha256 and returns a
     :class:`ConvertResult`; the caller owns verifying + atomic publish.
     """
-    if not _NODE_BIN.exists():
-        return ConvertResult(False, reason=f"splat-transform CLI 不可执行: {_NODE_BIN}")
-
     source_sha256 = _sha256_of(source_path)
     ver = source_sha256[:12]
     # Re-run safety: clear any leftover staging tree from a previous failed
@@ -184,25 +202,30 @@ def convert_to_streamed_sog(
     workdir = staging_dir.parent / f".workdir-{ver}"
 
     # ── stage 0: give splat-transform a file with a supported extension ─────
-    # The staged upload is stored as ``upload.bin`` (server-side random name);
-    # splat-transform detects input format by extension. Copy + rename into the
-    # workdir using the real source extension so conversion succeeds.
-    _EXT_FROM_MAGIC = source_path.suffix.lower() or ".sog"
-    if source_path.suffix.lower() not in {
-        ".ply", ".sog", ".spz", ".splat", ".ksplat", ".lcc", ".lcc2", ".gz",
-    }:
-        # SOG container = a zip whose root contains meta.json (raw) or
-        # lod-meta.json (already streamed). Neither is a supported CLI input
-        # extension, so treat as .sog.
-        try:
-            import zipfile
+    # The staged upload is ``upload.bin`` (server-side random name); splat-transform
+    # detects input format by extension. Copy + rename into the workdir using the
+    # REAL source extension (from the validated declared format when available)
+    # so conversion succeeds. The declared format maps through a fixed allowlist
+    # so a hostile/odd string can never be interpolated into the filename.
+    if source_format is not None:
+        _EXT_FROM_MAGIC = _FORMAT_TO_EXT.get(source_format, ".bin")
+    else:
+        _EXT_FROM_MAGIC = source_path.suffix.lower() or ".sog"
+        if source_path.suffix.lower() not in {
+            ".ply", ".sog", ".spz", ".splat", ".ksplat", ".lcc", ".lcc2", ".gz",
+        }:
+            # SOG container = a zip whose root contains meta.json (raw) or
+            # lod-meta.json (already streamed). Neither is a supported CLI input
+            # extension, so treat as .sog.
+            try:
+                import zipfile
 
-            with zipfile.ZipFile(source_path) as z:
-                names = {n.split("/")[0] for n in z.namelist()}
-            if "meta.json" in names or "lod-meta.json" in names:
-                _EXT_FROM_MAGIC = ".sog"
-        except Exception:
-            _EXT_FROM_MAGIC = ".bin"
+                with zipfile.ZipFile(source_path) as z:
+                    names = {n.split("/")[0] for n in z.namelist()}
+                if "meta.json" in names or "lod-meta.json" in names:
+                    _EXT_FROM_MAGIC = ".sog"
+            except Exception:
+                _EXT_FROM_MAGIC = ".bin"
 
     workdir.mkdir(parents=True, exist_ok=True)
     raw_input = workdir / f"raw-input{_EXT_FROM_MAGIC}"
@@ -245,6 +268,15 @@ def convert_to_streamed_sog(
 
     # ── stage 1: decimate LOD tiers ──────────────────────────────────────────
     low, med, high = workdir / "low.ply", workdir / "med.ply", workdir / "high.ply"
+    # The pinned CLI lives in node_modules; a pre-built streamed-zip passthrough
+    # (returned above) never needs it, but any real conversion does. Check here,
+    # not at the top of the function, so passthrough stays CLI-free.
+    if not _NODE_BIN.exists():
+        shutil.rmtree(workdir, ignore_errors=True)
+        return ConvertResult(
+            False, source_sha256=source_sha256,
+            reason=f"splat-transform CLI 不可执行: {_NODE_BIN}",
+        )
     try:
         _run([str(_NODE_BIN), "-g", gpu, str(raw_input), "--decimate", "10%", str(low), "--overwrite", "--tty"])
         _run([str(_NODE_BIN), "-g", gpu, str(raw_input), "--decimate", "30%", str(med), "--overwrite", "--tty"])

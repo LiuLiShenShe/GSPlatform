@@ -26,6 +26,34 @@ export interface CompleteResult {
   uploadId: string;
   status: string;
   jobId: string | null;
+  /** FIX-UPLOAD-01 §16 — produced scene identity (null until publish links it). */
+  sceneId?: string | null;
+  sceneSlug?: string | null;
+}
+
+/**
+ * FIX-UPLOAD-01 §15-§16 — read-only processing state from
+ * `GET /uploads/{id}/status`: the UploadSession phase plus the *separate*
+ * Publish Job and Collision Job states (and the produced scene identity).
+ * All three are real server values; the UI never invents progress.
+ */
+export interface UploadProcessingStatus {
+  uploadId: string;
+  status: string;
+  sceneId: string | null;
+  sceneSlug: string | null;
+  publishJobId: string | null;
+  publishStatus: string | null;
+  collisionJobId: string | null;
+  collisionStatus: string | null;
+}
+
+/** Poll the read-only status surface once. */
+export async function fetchUploadProcessingStatus(
+  uploadId: string,
+): Promise<UploadProcessingStatus> {
+  const resp = await httpClient.get(`/uploads/${uploadId}/status`);
+  return resp.data as UploadProcessingStatus;
 }
 
 export type UploadEvent =
