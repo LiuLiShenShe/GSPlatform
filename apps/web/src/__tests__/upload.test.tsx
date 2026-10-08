@@ -43,7 +43,9 @@ describe('ProcessingStatus（三段真实服务端状态）', () => {
         sceneSlug="scene-abc"
       />,
     );
-    expect(screen.getByText(/未生成（尚未构建）/)).toBeInTheDocument();
+    // FIX-UPLOAD-01.1 PART A: publish 已 SUCCEEDED 而碰撞仍为 null → 如实显示
+    // “等待碰撞任务调度”（调度可能尚未发生或尚未确认），绝不编造 FAILED/已构建。
+    expect(screen.getByText(/等待碰撞任务调度/)).toBeInTheDocument();
   });
 });
 

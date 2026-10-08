@@ -161,8 +161,17 @@ class TestCollisionWorkerVersionBinding:
         )
         db.add(job)
         db.commit()
+        # §C pre-finalize ownership: the collision row must already point at
+        # THIS job, otherwise the worker correctly supersedes its own build.
+        coll.job_id = job.id
+        db.commit()
 
-        out_root = Path(settings.storage_root) / "collision" / str(scene.id)
+        # §C per-job output isolation: collision/<sid>/versions/<asset>/jobs/<jobId>/
+        out_root = (
+            Path(settings.storage_root)
+            / "collision" / str(scene.id) / "versions" / current.asset_version
+            / "jobs" / str(job.id)
+        )
         out_root.mkdir(parents=True, exist_ok=True)
         (out_root / "collision.voxel.json").write_text(
             json.dumps({"nodeCount": 1}), encoding="utf-8"
@@ -193,7 +202,8 @@ class TestCollisionWorkerVersionBinding:
             from workers.tasks.build_collision import build_collision
 
             result = build_collision(
-                str(job.id), str(scene.id), str(coll.id), "OUTDOOR", None
+                str(job.id), str(scene.id), str(coll.id), "OUTDOOR", None,
+                str(current.id),
             )
             assert result["ok"] is True
         finally:
