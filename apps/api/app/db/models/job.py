@@ -43,6 +43,24 @@ class Job(Base):
         String(1000), nullable=True
     )
     attempt: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    # FIX-UPLOAD-01.3 execution fencing.  ``attempt`` (above) is the existing
+    # *dispatch-retry* counter for PUBLISH/RECONSTRUCT — it is bumped by the API
+    # when re-dispatching and does NOT identify a worker execution.  A fencing
+    # generation must advance ONLY inside the worker's FOR UPDATE claim
+    # transaction, so it gets its own monotonic column: every time a worker
+    # wins the execution claim it gets ``execution_generation + 1`` and only
+    # that generation may commit the build (or fail it).
+    execution_generation: Mapped[int] = mapped_column(
+        BigInteger, default=0, nullable=False, server_default="0"
+    )
+    # FIX-UPLOAD-01.3 lease.  ``started_at`` keeps its "task began" meaning and
+    # is never renewed; ``lease_expires_at`` is the DB-clock deadline a live
+    # worker heartbeats forward while it builds.  A RUNNING job whose lease has
+    # passed (heartbeat stopped ⇒ the worker died) may be reclaimed by recovery,
+    # which produces a NEW execution generation.
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     celery_task_id: Mapped[str | None] = mapped_column(
         String(120), nullable=True, index=True
     )
@@ -76,6 +94,9 @@ class Job(Base):
         ),
         CheckConstraint("progress BETWEEN 0 AND 100", name="progress_range"),
         CheckConstraint("attempt >= 0", name="attempt_non_negative"),
+        CheckConstraint(
+            "execution_generation >= 0", name="execution_generation_non_negative"
+        ),
         Index("ix_jobs_owner_status", "owner_id", "status", "created_at"),
         Index("ix_jobs_scene_status", "scene_id", "status"),
     )

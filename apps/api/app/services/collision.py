@@ -63,6 +63,13 @@ _DISPATCH_WAIT_CONFIRM_S = 5.0
 # (recoverable) rather than as "fresh forever".
 _CLAIM_MAX_FUTURE_SKEW_S = 300.0
 
+# FIX-UPLOAD-01.3 PART A: an execution lease is renewed by the worker's
+# heartbeat, so an EXPIRED one provably means "the claiming worker died".  The
+# scheduled reconcile re-queues such an orphan job for a fresh execution
+# generation.  The cap stops a permanently failing build from looping forever
+# through automatic recovery — past it, the owner rebuilds manually.
+_MAX_AUTO_RECOVERY_ATTEMPTS = 3
+
 _JOB_TERMINAL_STATUSES = {
     JobStatus.SUCCEEDED.value,
     JobStatus.FAILED.value,
@@ -229,20 +236,6 @@ class CollisionService:
         return world_transform_hash(
             pres.world_position, pres.world_rotation, pres.world_scale
         )
-
-    def _record_build_transform(
-        self, collision: Any, world_hash: str | None
-    ) -> None:
-        """Persist the build-time world transform on the collision's build_params.
-
-        Merges so the worker's own artifact metadata (``to_params()``) is not
-        overwritten at dispatch; the worker re-records the same key on
-        SUCCEEDED (threaded through the task args).
-        """
-        params = dict(collision.build_params or {})
-        params["worldTransformHash"] = world_hash
-        collision.build_params = params
-        self._session.flush()
 
     def get_collision(self, slug: str, user_id: uuid.UUID | None) -> CollisionAssetOut:
         """Get collision asset status for a scene."""
@@ -571,7 +564,51 @@ class CollisionService:
                 else:
                     job = pending_job
                     tid = job.celery_task_id
-                    if tid is None:
+                    # FIX-UPLOAD-01.3 PART A: an ORPHANED execution — the job
+                    # is RUNNING but its execution lease expired (the worker
+                    # died, so nothing renews it any more) — is re-queued here
+                    # and re-dispatched by the scheduled reconcile.  We do NOT
+                    # rely on Celery redelivery (acks_late is best-effort and a
+                    # hard kill loses the message entirely).
+                    orphan_lease = (
+                        job.status == JobStatus.RUNNING.value
+                        and job.lease_expires_at is not None
+                        and job.lease_expires_at.timestamp()
+                        <= _db_now_ms(self._session) / 1000.0
+                    )
+                    if orphan_lease:
+                        if (
+                            job.execution_generation >= _MAX_AUTO_RECOVERY_ATTEMPTS
+                        ):
+                            # Recovery cap reached — leave the (fenced, orphan)
+                            # job as-is and surface the collision as FAILED so
+                            # the owner can trigger a manual rebuild instead of
+                            # the reconcile looping forever.
+                            logger.warning(
+                                "Collision job %s for scene %s hit the auto "
+                                "recovery cap (%d executions); manual rebuild "
+                                "required", job.id, scene.id,
+                                _MAX_AUTO_RECOVERY_ATTEMPTS,
+                            )
+                            existing.status = "FAILED"
+                            existing.error_message = (
+                                "碰撞构建反复中断，请手动重建"
+                            )
+                            self._session.commit()
+                            return CollisionBuildResponse(
+                                job_id=str(existing.job_id or ""),
+                                status="FAILED",
+                                message="碰撞构建反复中断，请手动重建",
+                            )
+                        job.status = JobStatus.QUEUED.value
+                        job.started_at = None
+                        job.lease_expires_at = None
+                        job.error_code = None
+                        job.error_message_safe = None
+                        job.celery_task_id = _new_claim(self._session)
+                        existing.status = "QUEUED"
+                        collision = existing
+                    elif tid is None:
                         # DISPATCH_INCOMPLETE — rows committed but the broker
                         # send was never confirmed; claim and re-send the same
                         # job (worker is duplicate-safe).  Never a second job.
@@ -688,7 +725,9 @@ class CollisionService:
         job: Job,
         collision: Any,
         scene: Scene,
-        current_version: SceneVersion,
+        current_version: SceneVersion | None,
+        *,
+        success_message: str | None = None,
     ) -> CollisionBuildResponse:
         """Record the version binding, commit the claim, THEN send (§C).
 
@@ -697,16 +736,26 @@ class CollisionService:
         commit releases the scene row lock; a concurrent crash-recovery thread
         sees the claim and waits for confirmation instead of double-sending.
         The send runs outside the lock; once the broker accepts, the real task
-        id replaces the claim.  A dispatch failure clears the claim (dispatch
-        was never confirmed → recoverable) and FAILs only the collision side —
-        the scene stays PUBLISHED.
+        id replaces the claim.
+
+        FIX-UPLOAD-01.3 PART B: this is the SINGLE dispatch contract for every
+        entry point (auto-ensure, claim takeover, manual create, manual
+        rebuild).  An uncertain send outcome moves a still-QUEUED job to the
+        *recoverable* dispatch-incomplete state (claim cleared, reconciled
+        later) — it never FAILs a job, because a network error does not prove
+        the broker never received the message.
+
+        ``current_version`` may be ``None`` for a scene that has never been
+        published: no version binding is recorded and the worker falls back to
+        the scene's current version at build time.
         """
         world_hash = self._current_world_hash(scene.id)
         params = dict(collision.build_params or {})
         # §D persistent version binding: content-addressed ``sourceVersion``
         # plus the pinned SceneVersion UUID the worker loads the SOG from.
-        params["sourceVersion"] = current_version.asset_version
-        params["sourceVersionId"] = str(current_version.id)
+        if current_version is not None:
+            params["sourceVersion"] = current_version.asset_version
+            params["sourceVersionId"] = str(current_version.id)
         params["worldTransformHash"] = world_hash
         collision.build_params = params
         # FIX-UPLOAD-01.2 PART A: remember the claim we hold so the broker
@@ -721,7 +770,8 @@ class CollisionService:
         task_name = "tasks.build_collision"
         args = [
             str(job.id), str(scene.id), str(collision.id),
-            collision.mode, world_hash, str(current_version.id),
+            collision.mode, world_hash,
+            str(current_version.id) if current_version is not None else None,
         ]
         try:
             if self._send_task is not None:
@@ -734,23 +784,27 @@ class CollisionService:
                 self._session.expire_all()  # orphan the caller's stale view
                 logger.info(
                     "Auto-dispatched %s for scene %s version %s",
-                    task_name, scene.id, current_version.asset_version,
+                    task_name, scene.id,
+                    current_version.asset_version if current_version else "-",
                 )
             return CollisionBuildResponse(
                 job_id=str(job.id),
                 status="QUEUED",
-                message=f"碰撞构建任务已创建 (模式: {collision.mode})",
+                message=success_message
+                or f"碰撞构建任务已创建 (模式: {collision.mode})",
             )
         except Exception:
-            # Dispatch failure: FAIL the job/collision ONLY while our claim is
-            # still the persisted one — a newer sender's job is never touched.
+            # Dispatch outcome is UNCERTAIN (PART B): the broker may well have
+            # accepted the message before our socket died.  We therefore only
+            # move a still-QUEUED job to the recoverable dispatch-incomplete
+            # state — never FAILED, never touching a running/finished worker.
             logger.exception("Auto-collision dispatch failed for scene %s", scene.id)
             self._record_broker_failure(job.id, expected_claim=my_claim)
             self._session.expire_all()  # orphan the caller's stale view
             return CollisionBuildResponse(
                 job_id=str(job.id),
-                status="FAILED",
-                message="碰撞构建任务派发失败",
+                status="QUEUED",
+                message="碰撞构建任务派发未确认（将自动重试）",
             )
 
     def _wait_for_dispatch_confirmation(
@@ -823,12 +877,32 @@ class CollisionService:
         *,
         expected_claim: str,
     ) -> bool:
-        """CAS-record a dispatch failure on the Job row (A-06).
+        """CAS-record an UNCERTAIN dispatch outcome on the Job row.
 
-        A late sender whose claim was already replaced must NOT mark a newer
-        sender's job FAILED.  Only when our claim is still the persisted one do
-        we FAIL the job and clear the claim so recovery treats it as
-        dispatch-incomplete (recoverable).  Returns True iff we owned the job.
+        FIX-UPLOAD-01.3 PART B — **this callback may never FAIL a job that is
+        running or finished.**  A broker send that raises is *uncertain*: a
+        network error, a timeout or a broken socket does **not** prove the
+        broker never received the message (the classic "accepted, reply lost"
+        case).  Failing the job on that evidence discards a real build: the
+        worker may already be mid-run, or may even have committed SUCCEEDED
+        while this late callback is still unwinding its socket.
+
+        The safe transition is therefore:
+
+        * claim is no longer ours (a takeover/newer dispatch replaced it)
+          → **do nothing** (``False``);
+        * the job is RUNNING (a worker claimed it) or already terminal
+          (SUCCEEDED / FAILED / CANCELLED) → **do nothing** (``False``).
+          A late callback never overwrites live or completed state;
+        * the job is still ``QUEUED`` → the outcome is genuinely uncertain, so
+          we move it to the *recoverable* dispatch-incomplete state: clear the
+          claim (letting the scheduled reconcile re-send the SAME job) and drop
+          the transient error fields.  The job is **not** FAILED — nothing
+          proves the broker refused it, and a permanently-FAILED job would be
+          indistinguishable from a real build failure.
+
+        Returns ``True`` iff this callback actually changed the state (i.e. it
+        owned the claim and moved the job to the recoverable state).
         """
         from sqlalchemy import select
 
@@ -851,7 +925,7 @@ class CollisionService:
                 .where(Scene.id == scene_id)
                 .with_for_update(of=Scene)
             ).first()
-            coll = sess.scalars(
+            sess.scalars(
                 select(CollisionAsset)
                 .where(CollisionAsset.scene_id == scene_id)
                 .with_for_update()
@@ -865,14 +939,28 @@ class CollisionService:
             if str(probe.celery_task_id or "") != expected_claim:
                 sess.rollback()
                 return False
-            probe.status = JobStatus.FAILED.value
-            probe.error_code = "COLLISION_DISPATCH_FAILED"
-            probe.error_message_safe = "碰撞构建任务派发失败，可稍后重试"
+            # A live or already-finished build is never touched by a late
+            # sender failure (PART B: RUNNING/SUCCEEDED must survive).
+            if probe.status != JobStatus.QUEUED.value:
+                logger.info(
+                    "Ignoring late dispatch failure for job %s in status %s "
+                    "(uncertain broker outcome; the worker owns it)",
+                    job_id, probe.status,
+                )
+                sess.rollback()
+                return False
+            # Still QUEUED ⇒ the send was never confirmed.  Make it recoverable:
+            # clear the claim so the scheduled reconcile re-sends the SAME job
+            # (worker execution is fenced by generation, so a duplicate send is
+            # a safe no-op).
             probe.celery_task_id = None
-            if coll is not None and coll.job_id == job_id:
-                coll.status = "FAILED"
-                coll.error_message = "碰撞构建任务派发失败，可稍后重试"
+            probe.error_code = None
+            probe.error_message_safe = None
             sess.commit()
+            logger.info(
+                "Dispatch outcome uncertain for job %s; left recoverable for "
+                "reconcile re-send", job_id,
+            )
             return True
         except Exception:
             sess.rollback()
@@ -1019,8 +1107,8 @@ class CollisionService:
                 )
                 return CollisionBuildResponse(
                     job_id=str(coll.job_id),
-                    status="FAILED",
-                    message="碰撞构建任务派发失败",
+                    status="QUEUED",
+                    message="碰撞构建任务派发未确认（将自动重试）",
                 )
         finally:
             sess.close()
@@ -1130,6 +1218,7 @@ class CollisionService:
                 step_offset=req.step_offset,
                 player_height=req.player_height,
             )
+            collision.status = "QUEUED"
         else:
             collision = existing
             collision.mode = req.mode
@@ -1143,62 +1232,35 @@ class CollisionService:
             self._session.flush()
 
         # Create job
+        # FIX-UPLOAD-01.3 PART B: manual builds use the SAME dispatch contract
+        # as the auto path — a fresh ``sending:*`` claim minted in the same
+        # transaction as the collision rows, then handed to ``_dispatch_build``
+        # (commit → send → claim-guarded confirm / recoverable failure).
         job = Job(
             scene_id=scene.id,
             owner_id=owner_id,
             kind=JobKind.BUILD_COLLISION.value,
             status=JobStatus.QUEUED.value,
             progress=0,
+            celery_task_id=_new_claim(self._session),
         )
         self._session.add(job)
         self._session.flush()
 
         collision.job_id = job.id
-        # FIX-05 §23：记录构建时的世界变换（STALE 判定的基准）。
-        world_hash = self._current_world_hash(scene.id)
-        self._record_build_transform(collision, world_hash)
         # FIX-UPLOAD-01.1 §D：持久化版本绑定 —— 若场景已发布，钉扎当前版本。
+        # (未发布场景没有版本可钉扎；worker 会在构建时回退到当前版本。)
         current_version = (
             self._session.get(SceneVersion, scene.current_version_id)
             if scene.current_version_id is not None
             else None
         )
-        if current_version is not None:
-            params = dict(collision.build_params or {})
-            params["sourceVersion"] = current_version.asset_version
-            params["sourceVersionId"] = str(current_version.id)
-            collision.build_params = params
-        self._session.flush()
-        # §C — commit (releases the scene lock) BEFORE the broker send.
-        self._session.commit()
-
-        # Dispatch task
-        task_name = "tasks.build_collision"
-        args = [
-            str(job.id), str(scene.id), str(collision.id), req.mode, world_hash,
-            str(current_version.id) if current_version is not None else None,
-        ]
-        if self._send_task is not None:
-            try:
-                result = self._send_task(task_name, args=args)
-                job.celery_task_id = str(result.id)
-                self._session.commit()
-                logger.info("Dispatched %s for scene %s", task_name, slug)
-            except Exception:
-                logger.exception("Collision dispatch failed for scene %s", slug)
-                job.status = JobStatus.FAILED.value
-                job.error_code = "COLLISION_DISPATCH_FAILED"
-                job.error_message_safe = "碰撞构建任务派发失败，可稍后重试"
-                collision.status = "FAILED"
-                collision.error_message = "碰撞构建任务派发失败，可稍后重试"
-                self._session.commit()
-        else:
-            logger.warning("send_task not available; job %s created but not dispatched", job.id)
-
-        return CollisionBuildResponse(
-            job_id=str(job.id),
-            status="QUEUED",
-            message=f"碰撞构建任务已创建 (模式: {req.mode})",
+        return self._dispatch_build(
+            job,
+            collision,
+            scene,
+            current_version,
+            success_message=f"碰撞构建任务已创建 (模式: {req.mode})",
         )
 
     def update_params(
@@ -1260,51 +1322,24 @@ class CollisionService:
             kind=JobKind.BUILD_COLLISION.value,
             status=JobStatus.QUEUED.value,
             progress=0,
+            # FIX-UPLOAD-01.3 PART B: same dispatch contract as every other
+            # entry point — claim minted with the rows, then ``_dispatch_build``.
+            celery_task_id=_new_claim(self._session),
         )
         self._session.add(job)
         self._session.flush()
 
         collision.job_id = job.id
-        # FIX-05 §23：重建同样记录当前世界变换 —— 重建后 hash 与场景一致 → 不 STALE。
-        world_hash = self._current_world_hash(scene.id)
-        self._record_build_transform(collision, world_hash)
         # FIX-UPLOAD-01.1 §D：重建钉扎当前发布版本（若有）。
         current_version = (
             self._session.get(SceneVersion, scene.current_version_id)
             if scene.current_version_id is not None
             else None
         )
-        if current_version is not None:
-            params = dict(collision.build_params or {})
-            params["sourceVersion"] = current_version.asset_version
-            params["sourceVersionId"] = str(current_version.id)
-            collision.build_params = params
-        self._session.flush()
-        # §C — commit (releases the scene lock) BEFORE the broker send.
-        self._session.commit()
-
-        task_name = "tasks.build_collision"
-        args = [
-            str(job.id), str(scene.id), str(collision.id), collision.mode, world_hash,
-            str(current_version.id) if current_version is not None else None,
-        ]
-        if self._send_task is not None:
-            try:
-                result = self._send_task(task_name, args=args)
-                job.celery_task_id = str(result.id)
-                self._session.commit()
-                logger.info("Rebuilt collision for scene %s (attempt %d)", slug, collision.attempt)
-            except Exception:
-                logger.exception("Collision rebuild dispatch failed for scene %s", slug)
-                job.status = JobStatus.FAILED.value
-                job.error_code = "COLLISION_DISPATCH_FAILED"
-                job.error_message_safe = "碰撞重建任务派发失败，可稍后重试"
-                collision.status = "FAILED"
-                collision.error_message = "碰撞重建任务派发失败，可稍后重试"
-                self._session.commit()
-
-        return CollisionBuildResponse(
-            job_id=str(job.id),
-            status="QUEUED",
-            message=f"碰撞重建任务已创建 (尝试 #{collision.attempt})",
+        return self._dispatch_build(
+            job,
+            collision,
+            scene,
+            current_version,
+            success_message=f"碰撞重建任务已创建 (尝试 #{collision.attempt})",
         )
