@@ -170,8 +170,17 @@ class TestCollisionBuildOwnerAuth:
 
         owner_id, csrf = _session_login(client)
         scene = _scene_owned_by(db, owner_id)
-        # 派发走 send_task —— 测试中打桩，不真正投递。
-        monkeypatch.setattr(CollisionService, "_dispatch_build", lambda *a, **k: None)
+        # 派发走 send_task —— 测试中打桩，不真正投递。FIX-UPLOAD-01.3: 手动创建
+        # 与自动派发共用 ``_dispatch_build``（契约唯一化），桩必须返回合法响应。
+        def _stub_dispatch(self, job, collision, scene, current_version, *, success_message=None):
+            from app.schemas.collision import CollisionBuildResponse
+
+            return CollisionBuildResponse(
+                job_id=str(job.id), status="QUEUED",
+                message=success_message or "碰撞构建任务已创建 (模式: OUTDOOR)",
+            )
+
+        monkeypatch.setattr(CollisionService, "_dispatch_build", _stub_dispatch)
         resp = client.post(
             f"/api/v1/scenes/{scene.slug}/collision/build",
             json={"mode": "OUTDOOR"},

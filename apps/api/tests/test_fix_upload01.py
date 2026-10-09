@@ -205,31 +205,40 @@ class TestAutoCollisionDispatch:
         assert coll.status == "QUEUED"  # being rebuilt for the new version
 
     def test_dispatch_failure_fails_only_collision(self, db, dev_user_id):
-        """Broker dispatch failure → collision FAILED + stable code; the scene
-        must stay PUBLISHED and no broker detail leaks."""
+        """Broker dispatch failure → the outcome is UNCERTAIN, so the job moves
+        to a recoverable QUEUED state (claim cleared, re-sent by the reconcile)
+        — never FAILED; the scene must stay PUBLISHED and no broker detail leaks.
+
+        FIX-UPLOAD-01.3 PART B: a raised send does not prove the broker refused
+        the message (accepted-then-lost-reply is real), so the job is not
+        terminalized on that evidence.  The worker is duplicate-safe, so a
+        re-send is a no-op at worst.
+        """
         scene = _published_scene(db, dev_user_id)
         recorder = _SendTaskRecorder()
         recorder.fail = True
         svc = _make_collision_service(db, recorder)
 
         response = svc.dispatch_auto_collision(scene.id, dev_user_id)
-        assert response is not None and response.status == "FAILED"
+        assert response is not None and response.status == "QUEUED"
 
         from app.db.models.collision_asset import CollisionAsset
 
         coll = db.query(CollisionAsset).filter(CollisionAsset.scene_id == scene.id).one()
-        assert coll.status == "FAILED"
+        assert coll.status == "QUEUED", "the uncertain dispatch FAILED the collision"
         job = (
             db.query(Job)
             .filter(Job.id == coll.job_id)
             .one()
         )
-        assert job.status == JobStatus.FAILED.value
-        assert job.error_code == "COLLISION_DISPATCH_FAILED"
+        assert job.status == JobStatus.QUEUED.value, (
+            "the uncertain dispatch terminalized the job"
+        )
+        assert job.error_code is None, job.error_code
+        assert job.celery_task_id is None, "claim must be cleared for the reconcile"
         # Scene untouched.
         assert scene.status == "PUBLISHED"
-        assert "broker" not in (job.error_message_safe or "").lower()
-        assert "RuntimeError" not in (job.error_message_safe or "")
+        assert (job.error_message_safe or "") == ""
 
     def test_unpublished_scene_returns_none(self, db, dev_user_id):
         from tests.conftest_scenes import create_scene
@@ -271,12 +280,14 @@ class TestPublishChainsCollision:
         recorder.fail = True
         svc = _make_collision_service(db, recorder)
         response = svc.dispatch_auto_collision(scene.id, dev_user_id)
-        assert response is not None and response.status == "FAILED"
+        # PART B: uncertain outcome — the collision/job stay recoverable
+        # (QUEUED), never FAILED; publish state is untouched either way.
+        assert response is not None and response.status == "QUEUED"
         assert scene.status == "PUBLISHED"
         from app.db.models.collision_asset import CollisionAsset
 
         coll = db.query(CollisionAsset).filter(CollisionAsset.scene_id == scene.id).one()
-        assert coll.status == "FAILED"
+        assert coll.status == "QUEUED"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

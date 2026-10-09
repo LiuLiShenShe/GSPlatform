@@ -20,12 +20,10 @@ test database:
 from __future__ import annotations
 
 import json
-import threading
 import uuid
 from pathlib import Path
 
 import pytest
-
 from app.core.config import settings
 from app.db.models.enums import JobKind, JobStatus
 from app.db.models.job import Job
@@ -103,31 +101,44 @@ def _new_job_and_collision(session, scene, *, status="RUNNING", job_id=None, col
     return job, coll
 
 
-def _fake_splat(monkeypatch, out_dir: Path):
-    """Patch the generator with a fake that writes artifacts into ``out_dir``."""
+def _fake_splat(monkeypatch, out_dir: Path | None = None):
+    """Patch the generator with a fake that writes artifacts into the worker's
+    own ``out_dir`` (per-attempt directory under FIX-UPLOAD-01.3).  When
+    ``out_dir`` is given it is used as the write target for compatibility with
+    tests that predrive the directory; otherwise the worker-provided one.
+    Returns the (single-element) list of directories actually written."""
     import workers.collision.splat as splat_mod
     from workers.collision.splat import SplatBuildResult
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "collision.voxel.json").write_text(
-        json.dumps({"nodeCount": 1, "gridBounds": {"min": [-1, -1, -1], "max": [1, 1, 1]}}),
-        encoding="utf-8",
-    )
-    (out_dir / "collision.voxel.bin").write_bytes(b"\x00" * 4)
-    (out_dir / "collision.glb").write_bytes(b"\x00" * 4)
+    written: list[Path] = []
 
-    def _fake(*_a, **_k):
+    def _write(target: Path) -> Path:
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "collision.voxel.json").write_text(
+            json.dumps({"nodeCount": 1, "gridBounds": {"min": [-1, -1, -1], "max": [1, 1, 1]}}),
+            encoding="utf-8",
+        )
+        (target / "collision.voxel.bin").write_bytes(b"\x00" * 4)
+        (target / "collision.glb").write_bytes(b"\x00" * 4)
+        return target
+
+    if out_dir is not None:
+        _write(out_dir)
+
+    def _fake(_sog_path, worker_out_dir, **_k):
+        target = out_dir if out_dir is not None else _write(Path(worker_out_dir))
+        written.append(target)
         return SplatBuildResult(
-            ok=True, out_dir=out_dir,
-            voxel_json=out_dir / "collision.voxel.json",
-            voxel_bin=out_dir / "collision.voxel.bin",
-            collision_glb=out_dir / "collision.glb",
+            ok=True, out_dir=target,
+            voxel_json=target / "collision.voxel.json",
+            voxel_bin=target / "collision.voxel.bin",
+            collision_glb=target / "collision.glb",
             voxel_meta={"nodeCount": 1, "mode": "OUTDOOR"},
             mode="OUTDOOR", gpu="cpu", warnings=[],
         )
 
     monkeypatch.setattr(splat_mod, "build_collision_artifacts", _fake)
-    return out_dir
+    return written
 
 
 @pytest.fixture()
@@ -163,10 +174,7 @@ class TestVersionContract:
         scene = _new_published_scene(db)
         _add_sog(db, scene, scene.current_version)
         job, coll = _new_job_and_collision(db, scene)
-        out_dir = _fake_splat(
-            monkeypatch,
-            STORAGE / "collision" / str(scene.id) / "versions" / "v-content-key" / "jobs" / str(job.id),
-        )
+        _fake_splat(monkeypatch)
 
         from workers.tasks.build_collision import build_collision
 
@@ -178,8 +186,8 @@ class TestVersionContract:
         assert result["format"] in ("COLLISION_VOXEL", "COLLISION_GLB")
 
         db.expire_all()
-        from app.db.models.collision_asset import CollisionAsset
         from app.db.models.asset import Asset as AssetRow
+        from app.db.models.collision_asset import CollisionAsset
 
         coll = db.query(CollisionAsset).filter(CollisionAsset.id == coll.id).one()
         assert coll.status == "SUCCEEDED"
@@ -238,10 +246,7 @@ class TestVersionContract:
         scene = _new_published_scene(db)
         _add_sog(db, scene, scene.current_version)
         job, coll = _new_job_and_collision(db, scene)
-        out_dir = _fake_splat(
-            monkeypatch,
-            STORAGE / "collision" / str(scene.id) / "versions" / "v-content-key" / "jobs" / str(job.id),
-        )
+        _fake_splat(monkeypatch)
 
         from workers.tasks.build_collision import build_collision
 
@@ -283,10 +288,7 @@ class TestStaleWorkerProtection:
         db.commit()
 
         # A's worker now finishes — build against A's version.
-        out_dir = _fake_splat(
-            monkeypatch,
-            STORAGE / "collision" / str(scene.id) / "versions" / "a-content-key" / "jobs" / str(job_a.id),
-        )
+        _fake_splat(monkeypatch)
         from workers.tasks.build_collision import build_collision
 
         result = build_collision(
@@ -326,11 +328,12 @@ class TestStaleWorkerProtection:
 
         import workers.collision.splat as splat_mod
 
-        def _boom_after_takeover(*_a, **_k):  # noqa: ANN002
+        def _boom_after_takeover(*_a, **_k):
             # Mid-build: version B gets published and B's job takes over the
             # collision row, then A's generator crashes.
-            from app.db.models.scene import Scene as _S, SceneVersion as _SV
             from app.db.models.collision_asset import CollisionAsset as _CA
+            from app.db.models.scene import Scene as _S
+            from app.db.models.scene import SceneVersion as _SV
             from app.db.session import SessionLocal
 
             s = SessionLocal()
@@ -379,7 +382,7 @@ class TestStaleWorkerProtection:
 
         import workers.collision.splat as splat_mod
 
-        def _boom(*_a, **_k):  # noqa: ANN002
+        def _boom(*_a, **_k):
             raise RuntimeError("gpu exploded")
 
         monkeypatch.setattr(splat_mod, "build_collision_artifacts", _boom)
@@ -409,14 +412,12 @@ class TestStaleWorkerProtection:
         from workers.tasks.build_collision import build_collision
 
         # A builds version A and owns the collision row.
-        out_a = _fake_splat(
-            monkeypatch,
-            STORAGE / "collision" / str(scene.id) / "versions" / "a-content-key" / "jobs" / str(job_a.id),
-        )
+        written_a = _fake_splat(monkeypatch)
         res_a = build_collision(
             str(job_a.id), str(scene.id), str(coll.id), "OUTDOOR", None, str(version_a.id)
         )
         assert res_a["ok"] is True
+        out_a = written_a[0]
 
         # Version B published; B's job takes over the collision row.
         version_b = _publish_new_version(db, scene, "b-content-key")
@@ -435,14 +436,12 @@ class TestStaleWorkerProtection:
         db.commit()
         monkeypatch.undo()
 
-        out_b = _fake_splat(
-            monkeypatch,
-            STORAGE / "collision" / str(scene.id) / "versions" / "b-content-key" / "jobs" / str(job_b.id),
-        )
+        written_b = _fake_splat(monkeypatch)
         res_b = build_collision(
             str(job_b.id), str(scene.id), str(coll.id), "OUTDOOR", None, str(version_b.id)
         )
         assert res_b["ok"] is True
+        out_b = written_b[0]
 
         db.expire_all()
         from app.db.models.asset import Asset as AssetRow

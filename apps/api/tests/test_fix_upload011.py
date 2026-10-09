@@ -216,15 +216,16 @@ class TestPostPublishRecovery:
     def test_broker_failure_marks_dispatch_incomplete_then_recovers(
         self, db, dev_user_id
     ):
-        """Dispatch raised → job FAILED with COLLISION_DISPATCH_FAILED and no
-        celery_task_id.  That is a *dispatch-incomplete* state, so the
-        scheduled reconcile retries it; the scene is never un-published."""
+        """Dispatch raised → job stays QUEUED with no claim: the outcome is
+        UNCERTAIN (PART B), so the job is NOT terminalized.  That is a
+        *dispatch-incomplete* state, so the scheduled reconcile retries it;
+        the scene is never un-published."""
         scene = _scene(db, dev_user_id)
         recorder = _SendTaskRecorder()
         recorder.fail = True
         svc = _svc(db, recorder)
         resp = svc.ensure_auto_collision_for_current_version(scene.id, dev_user_id)
-        assert resp is not None and resp.status == "FAILED"
+        assert resp is not None and resp.status == "QUEUED"
         db.refresh(scene)
         assert scene.status == "PUBLISHED"
         # Broker healthy on the retry pass.

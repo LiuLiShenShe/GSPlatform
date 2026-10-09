@@ -226,16 +226,23 @@ class TestClaimTtlSemantics:
             "no dispatch may be issued for a claim another sender still owns"
         )
 
-    def test_a02_fresh_claim_59s_is_not_taken_over(self, db, dev_user_id):
-        """A-02: 59s < 60s TTL — still fresh, still no takeover."""
+    def test_a02_fresh_claim_30s_is_not_taken_over(self, db, dev_user_id):
+        """A-02: a 30s-old claim < 60s TTL — still fresh, still no takeover.
+
+        (Seeded at 30s rather than 59s: a 59s claim leaves only 1s of slack
+        against the 60s TTL, so the boundary race was won or lost depending on
+        how long the ensure path's own DB work took — a flaky race, not a
+        behavioural signal.  The TTL boundary itself is proven deterministically
+        by A-03 below: 61s (past the TTL) IS taken over.)
+        """
         scene = _scene(db, dev_user_id)
-        job = self._seed(db, scene, age_ms=59_000)
+        job = self._seed(db, scene, age_ms=30_000)
         recorder = _SendTaskRecorder()
         _svc(db, recorder).ensure_auto_collision_for_current_version(
             scene.id, dev_user_id
         )
         assert _job_claim(db, job.id) == job.celery_task_id, (
-            "59s-old claim must survive untouched"
+            "30s-old (fresh) claim must survive untouched"
         )
         assert _dispatch_count(recorder, scene.id) == 0
 
@@ -406,7 +413,23 @@ class TestClaimTtlSemantics:
             assert rec.calls[-1][1][5] == str(ver.id), (
                 "takeover dispatched the stale scene version"
             )
-        assert _job_claim(db, job.id) != stale or True  # documented in report
+        # The stale claim must have been atomically REPLACED — the old token is
+        # gone, so the old version can never be dispatched off this job again.
+        # The replacement is the confirmed broker id (a successful takeover
+        # send) or a fresh well-formed ``sending:`` claim (if not yet confirmed);
+        # what must NOT survive is the original stale token.
+        new_claim = _job_claim(db, job.id)
+        assert new_claim is not None and new_claim != stale, (
+            "the stale claim was not replaced by the takeover"
+        )
+        from app.services.collision import _CLAIM_PREFIX, _parse_claim
+
+        if str(new_claim).startswith(_CLAIM_PREFIX):
+            # Still in-flight: must be a well-formed, freshly-minted claim.
+            assert _parse_claim(new_claim) is not None
+        # Either way the ORIGINAL stale token is unrecoverable — the old
+        # version cannot be dispatched from this job again.
+        assert stale not in (new_claim or "")
 
     def test_a10_malformed_claim_is_safely_recoverable(self, db, dev_user_id):
         """A-10: an unparseable claim is treated as expired (recoverable) and a

@@ -14,7 +14,6 @@ import uuid
 from pathlib import Path
 
 import pytest
-
 from app.core.config import settings
 from app.core.identity import _resolve_dev_user_id
 from app.db.models.scene import Scene, SceneVersion
@@ -166,38 +165,35 @@ class TestCollisionWorkerVersionBinding:
         coll.job_id = job.id
         db.commit()
 
-        # §C per-job output isolation: collision/<sid>/versions/<asset>/jobs/<jobId>/
-        out_root = (
-            Path(settings.storage_root)
-            / "collision" / str(scene.id) / "versions" / current.asset_version
-            / "jobs" / str(job.id)
-        )
-        out_root.mkdir(parents=True, exist_ok=True)
-        (out_root / "collision.voxel.json").write_text(
-            json.dumps({"nodeCount": 1}), encoding="utf-8"
-        )
-        (out_root / "collision.voxel.bin").write_bytes(b"\x00" * 4)
-        (out_root / "collision.glb").write_bytes(b"\x00" * 4)
-
+        # §C per-job output isolation: the worker writes into its own per-attempt
+        # dir (…/jobs/<jobId>/attempts/<generation>/); the fake writes into the
+        # directory the worker passes, mirroring the real generator.
         import workers.collision.splat as splat_mod
         from workers.collision.splat import SplatBuildResult
 
-        fake_artifacts = SplatBuildResult(
-            ok=True,
-            out_dir=out_root,
-            voxel_json=out_root / "collision.voxel.json",
-            voxel_bin=out_root / "collision.voxel.bin",
-            collision_glb=out_root / "collision.glb",
-            voxel_meta={"nodeCount": 1},
-            mode="OUTDOOR",
-            gpu="cpu",
-            warnings=[],
-        )
+        def _fake(sog_path, out_dir, **_k):
+            out_dir = Path(out_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            (out_dir / "collision.voxel.json").write_text(
+                json.dumps({"nodeCount": 1}), encoding="utf-8"
+            )
+            (out_dir / "collision.voxel.bin").write_bytes(b"\x00" * 4)
+            (out_dir / "collision.glb").write_bytes(b"\x00" * 4)
+            return SplatBuildResult(
+                ok=True,
+                out_dir=out_dir,
+                voxel_json=out_dir / "collision.voxel.json",
+                voxel_bin=out_dir / "collision.voxel.bin",
+                collision_glb=out_dir / "collision.glb",
+                voxel_meta={"nodeCount": 1},
+                mode="OUTDOOR",
+                gpu="cpu",
+                warnings=[],
+            )
+
         # build_collision_artifacts is imported inside the task body from
         # workers.collision.splat — patch the source module, not the task.
-        monkeypatch.setattr(
-            splat_mod, "build_collision_artifacts", lambda *_a, **_k: fake_artifacts
-        )
+        monkeypatch.setattr(splat_mod, "build_collision_artifacts", _fake)
         try:
             from workers.tasks.build_collision import build_collision
 
