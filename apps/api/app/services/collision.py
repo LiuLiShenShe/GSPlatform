@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import time
 import uuid
 from typing import Any
@@ -42,16 +43,25 @@ logger = logging.getLogger("gsplatform.collision")
 # FIX-UPLOAD-01.1 §C dispatch-claim protocol.
 # ``Job.celery_task_id`` encodes dispatch state:
 #   - None             → dispatch never confirmed; may be sent (re-sent);
-#   - "sending:<uuid>:<ts>" → a sender has claimed the send but the broker has
-#     not confirmed yet (crash window between commit and send);
+#   - "sending:<uuid>:<epoch_ms>" → a sender has claimed the send but the broker
+#     has not confirmed yet (crash window between commit and send);
 #   - any other value → the real broker task id (confirmed delivery).
 # A concurrent ensure/reconcile never re-sends a FRESH claim (the sender is
-# mid-flight); it waits briefly for confirmation.  A STALE claim (>TTL) means
-# the sender crashed between commit and send — a new sender takes it over by
-# FOR UPDATE compare-and-set on the Job row, re-sending the SAME job id.
+# mid-flight); it waits briefly for confirmation.  A STALE claim (older than
+# the TTL *measured on the database clock*) means the sender crashed between
+# commit and send — a new sender takes it over by FOR UPDATE compare-and-set on
+# the Job row, re-sending the SAME job id.
+#
+# FIX-UPLOAD-01.2 PART A: the embedded timestamp is a **database** epoch
+# (``clock_timestamp()``), never ``time.monotonic()``.  A monotonic reading has
+# no meaningful origin, so it is not comparable across processes, hosts, or
+# restarts — a persisted lease must be judged by a clock everyone shares.
 _CLAIM_PREFIX = "sending:"
 _DISPATCH_CLAIM_TTL_S = 60.0
 _DISPATCH_WAIT_CONFIRM_S = 5.0
+# A claim timestamp from the future beyond this skew is treated as unusable
+# (recoverable) rather than as "fresh forever".
+_CLAIM_MAX_FUTURE_SKEW_S = 300.0
 
 _JOB_TERMINAL_STATUSES = {
     JobStatus.SUCCEEDED.value,
@@ -61,16 +71,83 @@ _JOB_TERMINAL_STATUSES = {
 }
 
 
-def _new_claim() -> str:
-    return f"{_CLAIM_PREFIX}{uuid.uuid4().hex}:{time.monotonic():.3f}"
+def _db_now_ms(session: Session) -> int:
+    """Authoritative current time in epoch milliseconds, read from PostgreSQL.
+
+    The single time source for dispatch leases (FIX-UPLOAD-01.2 PART A).  Using
+    the database clock keeps TTL semantics identical across API hosts, worker
+    processes, and restarts, and immune to local clock skew.
+    """
+    from sqlalchemy import text
+
+    row = session.execute(
+        text("SELECT (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::bigint")
+    ).first()
+    if row is None:  # pragma: no cover - SELECT 1 always returns a row
+        raise RuntimeError("database clock query returned no row")
+    return int(row[0])
 
 
-def _claim_stale(claim: str, ttl_s: float = _DISPATCH_CLAIM_TTL_S) -> bool:
+def _new_claim(session: Session) -> str:
+    """Mint a fresh claim token stamped with the database clock."""
+    return f"{_CLAIM_PREFIX}{uuid.uuid4().hex}:{_db_now_ms(session)}"
+
+
+def _parse_claim(claim: str | None) -> tuple[str, int] | None:
+    """Parse ``sending:<uuid>:<epoch_ms>``.
+
+    Returns ``None`` for anything else — including the pre-01.2
+    ``time.monotonic()`` format and truncated ``celery_task_id`` values.  A
+    token we cannot parse cannot be aged, so it is treated as *unusable*
+    (recoverable by takeover) rather than as fresh-forever.
+    """
+    if not isinstance(claim, str) or not claim.startswith(_CLAIM_PREFIX):
+        return None
+    parts = claim.split(":")
+    if len(parts) != 3 or len(parts[1]) != 32:
+        return None
     try:
-        ts = float(claim.rsplit(":", 1)[1])
+        stamp = int(parts[2])
     except ValueError:
+        return None
+    if stamp <= 0:
+        return None
+    return parts[1], stamp
+
+
+def _claim_expired(
+    claim: str | None, now_ms: int, ttl_s: float = _DISPATCH_CLAIM_TTL_S
+) -> bool:
+    """True when ``claim`` may be taken over, judged on the DB clock.
+
+    * unparseable → ``True`` (recoverable; never blocks recovery forever);
+    * timestamped in the future beyond the allowed skew → ``True`` (unusable);
+    * otherwise expired only once ``now - stamp`` exceeds the TTL.
+    """
+    parsed = _parse_claim(claim)
+    if parsed is None:
         return True
-    return time.monotonic() - ts > ttl_s
+    _uuid_hex, stamp_ms = parsed
+    if stamp_ms > now_ms + (_CLAIM_MAX_FUTURE_SKEW_S * 1000):
+        return True
+    return (now_ms - stamp_ms) > (ttl_s * 1000)
+
+
+def _claim_stale(claim: str | None, session: Session | None = None) -> bool:
+    """Thin compatibility wrapper — ages ``claim`` against the DB clock.
+
+    FIX-UPLOAD-01.1 callers used this without a session; when no session is
+    supplied we open one so the clock is still the database's.
+    """
+    if session is not None:
+        return _claim_expired(claim, _db_now_ms(session))
+    from app.db.session import SessionLocal
+
+    sess = SessionLocal()
+    try:
+        return _claim_expired(claim, _db_now_ms(sess))
+    finally:
+        sess.close()
 
 
 def _validate_owner(scene: Scene, owner_id: uuid.UUID) -> None:
@@ -213,28 +290,15 @@ class CollisionService:
     def serve_collision_mesh(self, slug: str) -> tuple[bytes, str]:
         """Return collision mesh bytes + mime (or raise NotFound).
 
-        Serves the built GLB so the runtime contract's ``collision.url`` is a
-        real viewer-accessible URL.  FIX-UPLOAD-01.1 §C: resolution is
-        **job-scoped** — the artifacts belong to *the collision row's own
-        build* (``metadata_["collisionJobId"]``), never a ``created_at DESC``
-        guess that could pick a different build's files.
+        FIX-UPLOAD-01.2 PART C — serving binds the whole chain:
+        Scene → current SceneVersion → CollisionAsset → status SUCCEEDED →
+        version-aligned build_params → current jobId → same-build asset →
+        asset version matches the current version.  Any link missing (or an
+        old job's artifact still on disk) ⇒ refuse, never fall back to a
+        ``created_at DESC`` guess.
         """
         scene = self._get_scene(slug)
-        collision = self._repo.get_by_scene_id(scene.id)
-        asset = None
-        if collision is not None:
-            # Primary: the collision's own build.
-            job_assets = self._assets_of_job(scene.id, collision.job_id, "COLLISION_GLB")
-            if job_assets:
-                asset = job_assets[0]
-        if asset is None and collision is not None and collision.asset_id is not None:
-            # Legacy single-asset layout: the collision row's own asset_id.
-            candidate = self._session.get(Asset, collision.asset_id)
-            if candidate is not None and candidate.kind == "COLLISION_GLB":
-                asset = candidate
-        if asset is None:
-            # Legacy single-build layouts (pre job isolation) — last resort.
-            asset = self._latest_collision_asset(scene.id, "COLLISION_GLB")
+        asset, _bin_key = self._resolve_collision_asset(scene, "COLLISION_GLB")
         if asset is None:
             raise NotFoundError(f"场景 {slug} 没有碰撞网格")
         data = self._storage.read(asset.storage_key)
@@ -249,30 +313,145 @@ class CollisionService:
         ``.voxel.bin`` leaf octree data. The official viewer fetches the json
         first, then derives the bin url by replacing ``.voxel.json`` with
         ``.voxel.bin``, so both must be served from the *same build's*
-        directory.  FIX-UPLOAD-01.1 §C: job-scoped resolution — the json and
-        its bin necessarily come from the same Asset row.
+        directory (C-10: a json whose binStorageKey points at another job's
+        directory must be refused).
         """
         scene = self._get_scene(slug)
-        collision = self._repo.get_by_scene_id(scene.id)
-        asset = None
-        if collision is not None:
-            job_assets = self._assets_of_job(scene.id, collision.job_id, "COLLISION_VOXEL")
-            if job_assets:
-                asset = job_assets[0]
-        if asset is None and collision is not None and collision.asset_id is not None:
-            candidate = self._session.get(Asset, collision.asset_id)
-            if candidate is not None and candidate.kind == "COLLISION_VOXEL":
-                asset = candidate
-        if asset is None:
-            asset = self._latest_collision_asset(scene.id, "COLLISION_VOXEL")
+        asset, bin_key = self._resolve_collision_asset(
+            scene, "COLLISION_VOXEL", wanted_bin=binary
+        )
         if asset is None:
             raise NotFoundError(f"场景 {slug} 没有碰撞体素数据")
         if binary:
-            bin_key = (asset.metadata_ or {}).get("binStorageKey")
             if not bin_key:
                 raise NotFoundError(f"场景 {slug} 缺少 voxel.bin 资源")
+            self._assert_bin_key_safe(scene.id, bin_key)
             return self._storage.read(bin_key), "application/octet-stream"
         return self._storage.read(asset.storage_key), "application/json"
+
+    def _resolve_collision_asset(
+        self,
+        scene: Scene,
+        kind: str,
+        *,
+        wanted_bin: bool = False,
+    ) -> tuple[Asset | None, str | None]:
+        """PART C — the full version-safe binding, in one place.
+
+        Returns ``(asset, bin_key)``; ``(None, None)`` when any link of the
+        chain is missing so callers refuse rather than guess.
+
+        * Collision row must exist and be SUCCEEDED (QUEUED / RUNNING /
+          FAILED / version-mismatch must not surface old artifacts).
+        * ``build_params`` must align with the scene's CURRENT SceneVersion
+          (``sourceVersion`` content hash and, when recorded, the version id).
+        * Job-scoped layouts: the Asset row must belong to the collision's own
+          job (``metadata_["collisionJobId"]``) and match the current version.
+        * Legacy single-build layouts (``job_id IS NULL``) are served ONLY when
+          ownership is provable: ``collision.asset_id`` points at a unique
+          legacy Asset consistent with the current version and not owned by a
+          job; a sibling kind (json↔glb) must live in the SAME storage
+          directory with exactly-one candidate — otherwise refuse and require
+          a rebuild (never ``created_at DESC`` guessing).
+        """
+        current_version = self._session.get(SceneVersion, scene.current_version_id)
+        if current_version is None:
+            return None, None
+        collision = self._repo.get_by_scene_id(scene.id)
+        if collision is None or collision.status != "SUCCEEDED":
+            return None, None
+        # Version alignment, mirroring get_collision's STALE semantics: a
+        # RECORDED sourceVersion/sourceVersionId that mismatches the current
+        # version refuses serving (old builds never masquerade as current).
+        # Rows that recorded nothing (FIX-05-era legacy) cannot be proven
+        # mismatched and keep serving — zero regression.
+        params = collision.build_params or {}
+        recorded_sv = params.get("sourceVersion")
+        if recorded_sv and recorded_sv != current_version.asset_version:
+            return None, None
+        recorded_svid = params.get("sourceVersionId")
+        if recorded_svid and str(recorded_svid) != str(current_version.id):
+            return None, None
+        if collision.job_id is not None:
+            asset = self._job_scoped_asset(scene, current_version, collision.job_id, kind)
+        else:
+            asset = self._legacy_asset(scene, current_version, collision, kind)
+        if asset is None:
+            return None, None
+        if wanted_bin:
+            bin_key = (asset.metadata_ or {}).get("binStorageKey")
+            if not bin_key:
+                return None, None
+            # C-10: json and its bin MUST come from the same build directory.
+            # A json whose binStorageKey points at another job's dir (or a
+            # sibling legacy dir) is a mispairing — refuse.
+            if os.path.dirname(bin_key) != os.path.dirname(asset.storage_key):
+                return None, None
+            return asset, bin_key
+        return asset, None
+
+    def _job_scoped_asset(
+        self, scene: Scene, current_version: SceneVersion, job_id: uuid.UUID, kind: str
+    ) -> Asset | None:
+        """Asset row of ONE collision build, owned by the collision's job."""
+        for candidate in self._assets_of_job(scene.id, job_id, kind):
+            if candidate.version_id in (
+                None,  # pre-pinning rows still belong to their own job
+                current_version.id,
+            ):
+                return candidate
+        return None
+
+    def _legacy_asset(
+        self,
+        scene: Scene,
+        current_version: SceneVersion,
+        collision: Any,
+        kind: str,
+    ) -> Asset | None:
+        """Provable legacy single-build resolution (no job scoping)."""
+        if collision.asset_id is None:
+            # No pointer at all → we cannot prove ownership → refuse (C-09).
+            return None
+        pointed = self._session.get(Asset, collision.asset_id)
+        if pointed is None or pointed.version_id not in (None, current_version.id):
+            return None
+        if pointed.kind == kind:
+            return pointed
+        # Sibling of the same legacy build: same kind + same storage
+        # directory + version-aligned + never owned by a job, and EXACTLY
+        # one candidate — anything else is unprovable, refuse.
+        pointed_dir = os.path.dirname(pointed.storage_key)
+        matches = [
+            candidate
+            for candidate in (
+                self._session.query(Asset)
+                .filter(
+                    Asset.scene_id == scene.id,
+                    Asset.kind == kind,
+                    Asset.created_at.is_not(None),
+                )
+                .order_by(Asset.created_at.asc())
+            )
+            if candidate.version_id in (None, current_version.id)
+            and (candidate.metadata_ or {}).get("collisionJobId") is None
+            and os.path.dirname(candidate.storage_key) == pointed_dir
+        ]
+        if len(matches) != 1:
+            return None
+        return matches[0]
+
+    def _assert_bin_key_safe(self, scene_id: uuid.UUID, bin_key: str) -> None:
+        """C-10 + PART H: ``binStorageKey`` must stay in the scene's own
+        collision area and must never escape it (no traversal, no absolute
+        path, no leading slash, no ``..``)."""
+        norm = os.path.normpath(bin_key)
+        if (
+            norm.startswith(("/", "../"))
+            or ".." in norm.split("/")
+            or f"collision/{scene_id}/" not in "/" + norm
+        ):
+            raise NotFoundError(f"场景 {scene_id} 缺少合法的 voxel.bin 资源")
 
     def _assets_of_job(
         self, scene_id: uuid.UUID, job_id: uuid.UUID | None, kind: str
@@ -294,17 +473,6 @@ class CollisionService:
             )
             .order_by(Asset.created_at.asc())
             .all()
-        )
-
-    def _latest_collision_asset(
-        self, scene_id: uuid.UUID, kind: str
-    ) -> Asset | None:
-        """Legacy fallback for pre-§C single-build layouts (no job scoping)."""
-        return (
-            self._session.query(Asset)
-            .filter(Asset.scene_id == scene_id, Asset.kind == kind)
-            .order_by(Asset.created_at.desc())
-            .first()
         )
 
     def dispatch_auto_collision(
@@ -373,7 +541,7 @@ class CollisionService:
                 kind=JobKind.BUILD_COLLISION.value,
                 status=JobStatus.QUEUED.value,
                 progress=0,
-                celery_task_id=_new_claim(),
+                celery_task_id=_new_claim(self._session),
             )
             self._session.add(job)
             self._session.flush()
@@ -407,20 +575,31 @@ class CollisionService:
                         # DISPATCH_INCOMPLETE — rows committed but the broker
                         # send was never confirmed; claim and re-send the same
                         # job (worker is duplicate-safe).  Never a second job.
-                        job.celery_task_id = _new_claim()
+                        job.celery_task_id = _new_claim(self._session)
                         job.status = JobStatus.QUEUED.value
                         job.error_code = None
                         job.error_message_safe = None
                         collision = existing
                     elif str(tid).startswith(_CLAIM_PREFIX):
                         # A concurrent (or crashed) sender holds the claim.
+                        # FIX-UPLOAD-01.2 PART A: waiting 5s for a confirmation
+                        # does NOT make a 60s claim stale.  A FRESH claim is
+                        # never taken over; only a claim that is actually older
+                        # than the TTL on the *database* clock may be.
+                        observed_claim = str(tid)
+                        expired = _claim_expired(
+                            observed_claim, _db_now_ms(self._session)
+                        )
                         self._session.rollback()  # never wait while holding the
                         # scene lock — the sender needs it released to confirm.
-                        if _claim_stale(tid, _DISPATCH_CLAIM_TTL_S):
+                        if expired:
                             # Orphaned claim (sender died between commit and
-                            # send) → take it over in a fresh transaction.
+                            # send) → CAS takeover in a fresh transaction.
                             return self._take_over_stale_claim(
-                                existing.id, scene, current_version
+                                existing.id,
+                                scene.id,
+                                observed_claim,
+                                current_version,
                             )
                         confirmed = self._wait_for_dispatch_confirmation(
                             job.id, _DISPATCH_WAIT_CONFIRM_S
@@ -431,10 +610,12 @@ class CollisionService:
                                 status=existing.status,
                                 message="碰撞构建任务派发已确认",
                             )
-                        # Sender vanished right after claiming without a broker
-                        # id → take over.
-                        return self._take_over_stale_claim(
-                            existing.id, scene, current_version
+                        # Still fresh: the sender may just be slow.  Report
+                        # pending — taking over now would double-dispatch.
+                        return CollisionBuildResponse(
+                            job_id=str(existing.job_id),
+                            status=existing.status,
+                            message="碰撞构建任务派发中（尚未确认）",
                         )
                     else:
                         # In-flight with a confirmed dispatch — no second job.
@@ -492,7 +673,7 @@ class CollisionService:
                 # DISPATCH_INCOMPLETE — re-send the SAME job (worker is
                 # duplicate-safe); never stack a second job row.
                 job = existing_job
-                job.celery_task_id = _new_claim()
+                job.celery_task_id = _new_claim(self._session)
                 job.status = JobStatus.QUEUED.value
                 job.error_code = None
                 job.error_message_safe = None
@@ -528,6 +709,10 @@ class CollisionService:
         params["sourceVersionId"] = str(current_version.id)
         params["worldTransformHash"] = world_hash
         collision.build_params = params
+        # FIX-UPLOAD-01.2 PART A: remember the claim we hold so the broker
+        # write-back is a compare-and-set — a late success can never overwrite
+        # a newer sender's takeover.
+        my_claim = str(job.celery_task_id or "")
         self._session.flush()
         # DB commit FIRST (worker must see the job row + the claim survives a
         # crash), then dispatch.  Releases the scene row lock.
@@ -541,8 +726,12 @@ class CollisionService:
         try:
             if self._send_task is not None:
                 result = self._send_task(task_name, args=args)
-                job.celery_task_id = str(result.id)
-                self._session.commit()
+                # Claim-guarded write-back: only our claim may be replaced by
+                # the broker id (a takeover winner's claim is left untouched).
+                self._record_broker_confirmation(
+                    job.id, expected_claim=my_claim, task_id=str(result.id)
+                )
+                self._session.expire_all()  # orphan the caller's stale view
                 logger.info(
                     "Auto-dispatched %s for scene %s version %s",
                     task_name, scene.id, current_version.asset_version,
@@ -553,20 +742,11 @@ class CollisionService:
                 message=f"碰撞构建任务已创建 (模式: {collision.mode})",
             )
         except Exception:
-            # Dispatch failure: FAIL collision side with a stable code, never
-            # leak broker internals, and never touch the scene state.  Clear
-            # the claim so recovery treats it as dispatch-incomplete.
+            # Dispatch failure: FAIL the job/collision ONLY while our claim is
+            # still the persisted one — a newer sender's job is never touched.
             logger.exception("Auto-collision dispatch failed for scene %s", scene.id)
-            try:
-                job.status = "FAILED"
-                job.error_code = "COLLISION_DISPATCH_FAILED"
-                job.error_message_safe = "碰撞构建任务派发失败，可稍后重试"
-                job.celery_task_id = None
-                collision.status = "FAILED"
-                collision.error_message = "碰撞构建任务派发失败，可稍后重试"
-                self._session.commit()
-            except Exception:  # pragma: no cover - best-effort bookkeeping
-                self._session.rollback()
+            self._record_broker_failure(job.id, expected_claim=my_claim)
+            self._session.expire_all()  # orphan the caller's stale view
             return CollisionBuildResponse(
                 job_id=str(job.id),
                 status="FAILED",
@@ -598,52 +778,215 @@ class CollisionService:
             time.sleep(0.05)
         return None
 
-    def _take_over_stale_claim(
+    def _record_broker_confirmation(
         self,
-        collision_id: uuid.UUID,
-        scene: Scene,
-        current_version: SceneVersion,
-    ) -> CollisionBuildResponse:
-        """Take over a crashed sender's claim in a FRESH transaction and send.
+        job_id: uuid.UUID,
+        *,
+        expected_claim: str,
+        task_id: str,
+    ) -> bool:
+        """CAS-confirm a broker accept onto the Job row (A-05/A-07).
 
-        FOR UPDATE compare-and-set on the Job row: only take over when the
-        claim is still the (stale) one observed; a parallel takeover or a newer
-        real delivery wins and we do nothing.  The same job id is re-sent —
-        the worker's idempotency guard absorbs a duplicate that slipped through.
+        Only the sender whose claim is STILL the persisted one may write its
+        broker task id.  A sender that lost its claim to a takeover (or to a
+        newer dispatch) must not clobber the winner's state — a late success is
+        silently dropped.  Returns True iff the write happened.
         """
         from sqlalchemy import select
 
-        from app.db.models.collision_asset import CollisionAsset
         from app.db.session import SessionLocal
 
         sess = SessionLocal()
         try:
-            coll = sess.get(CollisionAsset, collision_id)
+            job = sess.scalars(
+                select(Job).where(Job.id == job_id).with_for_update()
+            ).first()
+            if job is None:
+                sess.rollback()
+                return False
+            if str(job.celery_task_id or "") != expected_claim:
+                # A newer sender replaced our claim — we lost the race.
+                sess.rollback()
+                return False
+            job.celery_task_id = task_id
+            sess.commit()
+            return True
+        except Exception:
+            sess.rollback()
+            raise
+        finally:
+            sess.close()
+
+    def _record_broker_failure(
+        self,
+        job_id: uuid.UUID,
+        *,
+        expected_claim: str,
+    ) -> bool:
+        """CAS-record a dispatch failure on the Job row (A-06).
+
+        A late sender whose claim was already replaced must NOT mark a newer
+        sender's job FAILED.  Only when our claim is still the persisted one do
+        we FAIL the job and clear the claim so recovery treats it as
+        dispatch-incomplete (recoverable).  Returns True iff we owned the job.
+        """
+        from sqlalchemy import select
+
+        from app.db.models.collision_asset import CollisionAsset
+        from app.db.models.scene import Scene
+        from app.db.session import SessionLocal
+
+        sess = SessionLocal()
+        try:
+            # Peek the job's scene id WITHOUT any lock (only to pick rows).
+            peek = sess.get(Job, job_id)
+            if peek is None:
+                sess.rollback()
+                return False
+            scene_id = peek.scene_id
+            # Unified lock order Scene → CollisionAsset → Job, matching the
+            # worker finalization (avoids any cross-order deadlock).
+            sess.scalars(
+                select(Scene)
+                .where(Scene.id == scene_id)
+                .with_for_update(of=Scene)
+            ).first()
+            coll = sess.scalars(
+                select(CollisionAsset)
+                .where(CollisionAsset.scene_id == scene_id)
+                .with_for_update()
+            ).first()
+            probe = sess.scalars(
+                select(Job).where(Job.id == job_id).with_for_update()
+            ).first()
+            if probe is None:
+                sess.rollback()
+                return False
+            if str(probe.celery_task_id or "") != expected_claim:
+                sess.rollback()
+                return False
+            probe.status = JobStatus.FAILED.value
+            probe.error_code = "COLLISION_DISPATCH_FAILED"
+            probe.error_message_safe = "碰撞构建任务派发失败，可稍后重试"
+            probe.celery_task_id = None
+            if coll is not None and coll.job_id == job_id:
+                coll.status = "FAILED"
+                coll.error_message = "碰撞构建任务派发失败，可稍后重试"
+            sess.commit()
+            return True
+        except Exception:
+            sess.rollback()
+            raise
+        finally:
+            sess.close()
+
+    def _take_over_stale_claim(
+        self,
+        collision_id: uuid.UUID,
+        scene_id: uuid.UUID,
+        expected_claim: str,
+        current_version: SceneVersion,
+    ) -> CollisionBuildResponse:
+        """Take over a crashed sender's claim in a FRESH transaction and send.
+
+        FIX-UPLOAD-01.2 PART A — the takeover is a locked compare-and-set, not
+        a "has 5s passed → fire".  Under the unified lock order
+        (Scene → CollisionAsset → Job) we re-read fresh state and proceed ONLY
+        if ALL of:
+
+          * the scene row still exists and is the same scene;
+          * the collision row still exists and still points at the same job;
+          * the job is not terminal;
+          * the persisted claim is EXACTLY the ``expected_claim`` we observed
+            (a parallel takeover replaced it → we lose, do nothing);
+          * that claim is still expired on the DATABASE clock;
+          * the scene's current version is unchanged (a newer publish
+            invalidates the claim — we must not dispatch the old version).
+
+        The replace + COMMIT happen under the locks, then the broker send runs
+        outside them and is confirmed by a claim-guarded CAS write-back, so a
+        late sender can never overwrite the winner's broker id.
+        """
+        from sqlalchemy import select
+
+        from app.db.models.collision_asset import CollisionAsset
+        from app.db.models.scene import Scene
+        from app.db.session import SessionLocal
+
+        sess = SessionLocal()
+        try:
+            # Lock order Scene → CollisionAsset → Job, fresh reads only.
+            scene = sess.scalars(
+                select(Scene)
+                .where(Scene.id == scene_id)
+                .with_for_update(of=Scene)
+                .execution_options(populate_existing=True)
+            ).first()
+            if scene is None:
+                sess.rollback()
+                return CollisionBuildResponse(
+                    job_id="", status="FAILED", message="碰撞构建任务不存在"
+                )
+            coll = sess.scalars(
+                select(CollisionAsset)
+                .where(CollisionAsset.id == collision_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).first()
             if coll is None or coll.job_id is None:
+                sess.rollback()
                 return CollisionBuildResponse(
                     job_id="", status="FAILED", message="碰撞构建任务不存在"
                 )
             job = sess.scalars(
-                select(Job).where(Job.id == coll.job_id).with_for_update()
+                select(Job)
+                .where(Job.id == coll.job_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
             ).first()
             if job is None or job.status in _JOB_TERMINAL_STATUSES:
+                sess.rollback()
                 return CollisionBuildResponse(
                     job_id=str(coll.job_id),
                     status="QUEUED",
                     message="碰撞构建任务已结束，无需接管",
                 )
-            tid = job.celery_task_id
-            if tid is None or not str(tid).startswith(_CLAIM_PREFIX):
-                # A real (or newer missing) dispatch won → nothing to take over.
+            # CAS step 1: the persisted claim must still be the one observed.
+            if str(job.celery_task_id or "") != expected_claim:
+                # A parallel takeover (or a confirmed newer dispatch) won.
+                sess.rollback()
                 return CollisionBuildResponse(
                     job_id=str(coll.job_id),
                     status="QUEUED",
                     message="碰撞构建任务已在进行中",
                 )
-            job.celery_task_id = _new_claim()
+            # CAS step 2: the claim must still be expired on the DB clock.
+            if not _claim_expired(expected_claim, _db_now_ms(sess)):
+                # Fresh again — the sender may have confirmed between our read
+                # and our lock.  Never take over a live claim.
+                sess.rollback()
+                return CollisionBuildResponse(
+                    job_id=str(coll.job_id),
+                    status="QUEUED",
+                    message="碰撞构建任务派发中（尚未确认）",
+                )
+            # CAS step 3: the scene must still point at the version we were
+            # asked to dispatch — a newer publish invalidates the old claim.
+            if scene.current_version_id != current_version.id:
+                sess.rollback()
+                return CollisionBuildResponse(
+                    job_id=str(coll.job_id),
+                    status="QUEUED",
+                    message="碰撞构建任务版本已更新，由新版本接管",
+                )
+            # Atomic replace + COMMIT under the locks.
+            new_claim = _new_claim(sess)
+            job.celery_task_id = new_claim
             job.status = JobStatus.QUEUED.value
             job.error_code = None
             job.error_message_safe = None
+            coll.status = "QUEUED"
+            coll.error_message = None
             sess.commit()
             try:
                 if self._send_task is not None:
@@ -655,8 +998,13 @@ class CollisionService:
                             str(current_version.id),
                         ],
                     )
-                    job.celery_task_id = str(result.id)
-                    sess.commit()
+                    # Claim-guarded write-back: only our new claim can be
+                    # replaced by the broker id.
+                    self._record_broker_confirmation(
+                        coll.job_id,
+                        expected_claim=new_claim,
+                        task_id=str(result.id),
+                    )
                 return CollisionBuildResponse(
                     job_id=str(coll.job_id),
                     status="QUEUED",
@@ -666,13 +1014,9 @@ class CollisionService:
                 logger.exception(
                     "Claim takeover dispatch failed for scene %s", scene.id
                 )
-                job.status = JobStatus.FAILED.value
-                job.error_code = "COLLISION_DISPATCH_FAILED"
-                job.error_message_safe = "碰撞构建任务派发失败，可稍后重试"
-                job.celery_task_id = None
-                coll.status = "FAILED"
-                coll.error_message = "碰撞构建任务派发失败，可稍后重试"
-                sess.commit()
+                self._record_broker_failure(
+                    coll.job_id, expected_claim=new_claim
+                )
                 return CollisionBuildResponse(
                     job_id=str(coll.job_id),
                     status="FAILED",
