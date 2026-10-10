@@ -311,7 +311,10 @@ not unconditionally GREEN; intermittent CLI failures are recorded in section13.
 Web typecheck/lint/test/build PASS;27files/254tests. Build retains preexisting
 oversized-chunk warning. Real CLI small/304K/1M/full13M conversion PASS;
 full scenario remains PARTIAL because automatic Collision failed.
-Clean checkout gate must run after commit; currently PENDING.
+First clean checkout gate ran on ee94597: GATE_EXIT=1 (75workerPASS/16SKIP/
+1FAIL: a mocked-CLI staging unit test still required node_modules presence).
+Fixture now supplies its own mock CLI path rather than skipping the test;
+real CLI tests remain explicit archive SKIP. Re-run pending after test commit.
 No all-GPU/all-CPU acceleration or visual/hardware PASS inferred from tests.
 
 ## 23. Final HEAD

@@ -351,6 +351,10 @@ def test_output_is_written_into_version_scoped_staging(tmp_path, monkeypatch):
     """Two concurrent publishes of one scene must not share a staging dir."""
     import workers.pipeline.convert_scene as mod
 
+    cli = tmp_path / "mock-cli"
+    cli.touch()
+    monkeypatch.setattr(mod, "_NODE_BIN", cli)
+
     def fake(cmd, cwd=None, timeout=None):
         # Emulate the CLI's contract: write the file named as the output.
         if "--decimate" in cmd:
