@@ -1,7 +1,8 @@
 # FIX-CONVERT-01 — Large Gaussian PLY to Streamed SOG
 
 Date: 2026-10-10, Asia/Shanghai. **PARTIAL: conversion/publication/desktop
-loading verified; automatic collision timed out; clean-source gate pending**.
+loading/clean-source gate verified; automatic collision timed out and visual
+quality/native CLI exit reliability require further acceptance**.
 
 ## 1. Starting HEAD and worktree
 
@@ -139,6 +140,34 @@ serial encoder:47.470s,RSS804676KiB,7chunks/57files/16,566,284bytes,
 counts261806/78542/26181; exit0/info/verifier valid. Official1,047,226 subset
 LOD decimations63.265/72.777s; redundant CPU Stack sweep was not completed.
 
+GNU time resource records (CPU% is aggregate CPU time/wall time; filesystem
+outputs are512-byte blocks, not file payload bytes). These are real measurements,
+not estimated by target capacity; every completed row exit0:
+
+| Stack case | CPU% | Disk output blocks | Backend |
+|---|---:|---:|---|
+|Small4/32|114|2336|CPU|
+|Small64/32|130|1200|CPU|
+|Small128/32|125|1200|CPU|
+|Small256/32|128|1200|CPU|
+|Small512/32|126|1200|CPU|
+|304K4/8|209|49000|GPU0|
+|304K64/32|190|39456|GPU0|
+|304K128/32|188|29888|GPU0|
+|304K256/32|186|25128|GPU0|
+|304K512/32|179|22640|GPU0|
+|304K64/16|194|39720|GPU0|
+|304K64/32|100|39536|CPU|
+|1M64/32|197|134152|GPU0|
+|262K64/32serial|123|32760|GPU0|
+
+Files/bytes in candidate tables count output LOD metadata/chunk payloads,
+excluding benchmark measurement files and subsequently generated verification
+manifest/build-info/checksum files. Full published files/bytes include all assets.
+Candidates64/128/256/512 passed official info AND project verification; native
+Viewer E2E was performed on the final13M version, not individually on every
+candidate. Per-candidate visual near/far/PICO verification is NOT claimed.
+
 ## 11. Selected profiles
 
 Balanced **64K/32**, quality **64K/16**, eco **512K/32**; identical ratios/SH.
@@ -160,6 +189,10 @@ this real evidence. No torch/CUDA/Gaussian-training change.
 
 Both old and dedicated formal worker `/proc/environ` confirm CLI14400s,
 Celery hard18000s/soft17400s. Single CLI allowance is not pipeline allowance.
+Example env now shows this measured deployment budget while defaults remain
+finite/configurable. Existing worker processes retain modules loaded before
+the patch; none were mass-restarted. Future jobs require a normal safe rolling
+worker deployment; editing source on disk does not hot-reload a live worker.
 stdout/stderr to workdir logfile; errors retain only64KiB tail, actual exit
 codes preserved. Timeout/interruption reaps only its own CLI group.
 Background noTTY. Intermittent small CPU CLI exit hangs remain reproducible:
@@ -305,20 +338,40 @@ counts and hidden changed chunks were each run failing before their fixes.
 DB-writing suites use a NEW independent test DB/isolated storage, never the
 original upload owner's production sessions. Production DB not rebuilt.
 Backend ruff PASS; mypy PASS84files; backend415PASS/1SKIP (416collected),
-483.34s and final metadata-only rerun exit0. Workers92PASS46.60s on one run;
-latest rerun91PASS/1FAIL164.01s (real SPLAT decimate exit timeout). The gate is
-not unconditionally GREEN; intermittent CLI failures are recorded in section13.
+483.34s and final metadata-only rerun415PASS/1SKIP463.01s. Final development
+Worker run **92PASS45.82s** with real CLI. A preceding rerun91PASS/1FAIL164.01s
+(real SPLAT decimate exit timeout) is retained as a reliability defect; a later
+GREEN run does not erase the intermittent CLI failures recorded in section13.
 Web typecheck/lint/test/build PASS;27files/254tests. Build retains preexisting
 oversized-chunk warning. Real CLI small/304K/1M/full13M conversion PASS;
 full scenario remains PARTIAL because automatic Collision failed.
 First clean checkout gate ran on ee94597: GATE_EXIT=1 (75workerPASS/16SKIP/
 1FAIL: a mocked-CLI staging unit test still required node_modules presence).
 Fixture now supplies its own mock CLI path rather than skipping the test;
-real CLI tests remain explicit archive SKIP. Re-run pending after test commit.
+real CLI tests remain explicit archive SKIP. Final clean-source gate on
+**cc4b6373a5a69ce1a61a791825c69d72225d1109**: **GATE_EXIT=0**. Fresh imports,
+ruff/mypy, backend tests PASS; workers76PASS/16SKIP22.26s. Fixed tracked torch
+2.14.0+cu126/gsplat1.5.3 installed ONLY into a fresh gate venv; imports/version,
+trainer help, CUDA and actual rasterization73litpixels/8splats PASS. Existing
+venv/torch/CUDA/lockfiles were not upgraded. Archive does not contain CLI, so
+real CLI evidence remains the development runs, including observed failures.
 No all-GPU/all-CPU acceleration or visual/hardware PASS inferred from tests.
 
 ## 23. Final HEAD
 
-Checkpoint report; executable gates/normal push results will be appended.
-Report commit resolves with `git log -1 -- docs/reports/FIX_CONVERT_01_LARGE_SCENE_SOG.md`.
+Software commit: `ee94597d66d9eeac905fe653cc7e2620fc2260d6`.
+Test/source gate commit: `cc4b6373a5a69ce1a61a791825c69d72225d1109`.
+The final documentation-only commit records these completed experiments;
+its own Final HEAD resolves with
+`git log -1 --format=%H -- docs/reports/FIX_CONVERT_01_LARGE_SCENE_SOG.md`
+(a commit cannot embed its own hash). Exact final HEAD/push are in the final
+task response; remote was fetched and still matched the starting baseline.
 No PLY/SOG/GLB/private data/log credentials are included in Git.
+
+Remaining blockers:13M automatic collision600s timeout; uncalibrated scene
+coordinates and screenshot blur; intermittent3.3.3 native CPU exit hangs;
+optional poster WebGPU failure; full13M CPU-only timing and2–3M representative
+trial not executed; PICO Neo3 hardware not tested. No new FIX-CONVERT-02 or
+out-of-scope Viewer/WebXR/collision/training algorithm development started.
+The valid published agricultural source is now loadable, but this is NOT an
+unqualified agricultural hardware-test readiness or complete final-chain PASS.
