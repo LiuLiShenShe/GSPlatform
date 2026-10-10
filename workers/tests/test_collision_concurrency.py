@@ -533,6 +533,7 @@ def test_real_cli_collision_build_produces_artifacts(tmp_path, monkeypatch):
         gpu="cpu", source_format="ply",
     )
     assert cr.ok, f"PLY conversion failed: {cr.reason}"
+    staging = cr.staging_dir or staging / cr.version_id
     assert (staging / "lod-meta.json").exists()
 
     # 2) Promote the staging into a published SOG asset the worker reads.

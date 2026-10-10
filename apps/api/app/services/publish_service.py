@@ -46,6 +46,7 @@ from app.db.models.job import Job
 from app.db.models.scene import Scene, SceneVersion
 from app.repositories.uploads import UploadRepository
 from app.storage.base import Storage
+from app.storage.local_disk import LocalDiskStorage
 
 logger = logging.getLogger("gsplatform.publish")
 
@@ -99,7 +100,21 @@ class PublishService:
         if self._storage.exists(version_key):
             staging_manifest = self._storage.read(f"{staging_key}/manifest.json")
             existing_manifest = self._storage.read(f"{version_key}/manifest.json")
-            if staging_manifest == existing_manifest:
+            def fingerprint(key: str) -> dict[str, str]:
+                if not isinstance(self._storage, LocalDiskStorage):
+                    raise ConflictError("存储后端不支持不可变版本目录核验")
+                directory = self._storage.root / key
+                return {
+                    path.relative_to(directory).as_posix(): self._storage.sha256(
+                        f"{key}/{path.relative_to(directory).as_posix()}"
+                    )
+                    for path in directory.rglob("*") if path.is_file()
+                }
+
+            if (
+                staging_manifest == existing_manifest
+                and fingerprint(staging_key) == fingerprint(version_key)
+            ):
                 logger.info(
                     "version %s already published; reusing immutable dir", version_key
                 )
@@ -145,6 +160,8 @@ class PublishService:
             .first()
         )
         if existing is not None:
+            if existing.sha256 != source_sha256 or existing.manifest != manifest:
+                raise ConflictError("版本身份与已发布资产内容不一致")
             self._ensure_version_assets(
                 scene,
                 existing.id,
@@ -206,12 +223,18 @@ class PublishService:
         SceneVersion already owns its assets, so each kind is only added when
         absent — never duplicated.
         """
-        existing_kinds = {
-            row[0]
-            for row in self._session.query(Asset.kind).filter(
-                Asset.version_id == version_pk
-            ).all()
-        }
+        existing_assets = self._session.query(Asset).filter(
+            Asset.version_id == version_pk
+        ).all()
+        existing_kinds = {asset.kind for asset in existing_assets}
+        for asset in existing_assets:
+            if asset.kind == AssetKind.SOG.value:
+                asset.sha256 = (manifest.get("stream") or {}).get("sha256", "")
+                asset.metadata_ = {
+                    "counts": counts,
+                    "lodLevels": len(counts),
+                    "sourceSha256": source_sha256,
+                }
         assets: list[Asset] = []
 
         if AssetKind.MANIFEST.value not in existing_kinds:
@@ -236,8 +259,12 @@ class PublishService:
                     storage_key=f"{version_dir_key}/lod-meta.json",
                     mime_type="application/json",
                     byte_size=entry_bytes,
-                    sha256=source_sha256,
-                    metadata_={"counts": counts, "lodLevels": len(counts)},
+                    sha256=(manifest.get("stream") or {}).get("sha256", ""),
+                    metadata_={
+                        "counts": counts,
+                        "lodLevels": len(counts),
+                        "sourceSha256": source_sha256,
+                    },
                 )
             )
         poster = manifest.get("poster") or {}
@@ -267,7 +294,7 @@ class PublishService:
         scene.current_version_id = version.id
         scene.status = SceneStatus.PUBLISHED.value
         scene.published_at = version.created_at
-        scene.splat_count = sum(counts)
+        scene.splat_count = counts[0] if counts else 0
         self._session.flush()
 
     # ------------------------------------------------------------------ #

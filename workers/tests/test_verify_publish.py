@@ -9,7 +9,7 @@ import pytest
 from workers.pipeline.verify_publish import verify_published_version
 
 
-def _write_version_dir(tmp_path, *, counts=(10, 20, 30), schema=1, format_k="streamed-sog"):
+def _write_version_dir(tmp_path, *, counts=(30, 20, 10), schema=1, format_k="streamed-sog"):
     """Create a version dir with manifest.json + lod-meta.json."""
     version_dir = tmp_path / "versions" / "abc123"
     version_dir.mkdir(parents=True)
@@ -37,7 +37,7 @@ class TestVerifyPublishedVersion:
         vdir = _write_version_dir(tmp_path)
         result = verify_published_version(vdir)
         assert result["entry_bytes"] > 0
-        assert result["counts"] == [10, 20, 30]
+        assert result["counts"] == [30, 20, 10]
 
     def test_missing_manifest(self, tmp_path):
         vdir = _write_version_dir(tmp_path)

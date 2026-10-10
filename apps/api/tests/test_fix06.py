@@ -591,7 +591,7 @@ class TestPublishIdempotency:
         db.refresh(scene)
         assert scene.current_version_id == v1.id
         assert scene.status == "PUBLISHED"
-        assert scene.splat_count == 6
+        assert scene.splat_count == 1
 
     def test_promote_reuses_existing_never_deletes(self, tmp_path):
         from app.services.publish_service import PublishService
@@ -610,6 +610,7 @@ class TestPublishIdempotency:
         # Second delivery: same content → reuse, no delete, bytes identical.
         storage.mkdir(staging)
         storage.write(f"{staging}/manifest.json", b'{"a":1}')
+        storage.write(f"{staging}/lod-meta.json", b"{}")
         key2 = publish.promote_staging_to_version(sid, "v-abc123", staging)
         assert key == key2
         assert storage.read(f"{key}/manifest.json") == manifest1

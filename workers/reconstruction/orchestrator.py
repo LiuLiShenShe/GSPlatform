@@ -406,6 +406,16 @@ def _rebuild_convert_state(ctx: JobContext) -> None:
         return
     staged = ctx.streamed_dir
     manifest_path = staged / "manifest.json"
+    if not manifest_path.is_file():
+        # Current layout: the version tree sits one level down.  Fall back to it
+        # so a resume can still recover a job staged by either generation.
+        nested = sorted(staged.glob("*/manifest.json"))
+        if len(nested) > 1:
+            raise StageError("CONVERTING", "CONVERT_FAILED", "多个候选转换版本，拒绝不明确的恢复")
+        if nested:
+            staged = nested[0].parent
+            ctx.streamed_dir = staged
+            manifest_path = nested[0]
     lod_meta_path = staged / "lod-meta.json"
     build_info_path = staged / "build-info.json"
     if not manifest_path.is_file():
@@ -880,6 +890,12 @@ def _stage_converting(ctx: JobContext) -> None:
         raise StageError("CONVERTING", "CONVERT_FAILED", cr.reason or "Streamed SOG 转换失败")
     ctx.convert_result = cr
     ctx.version_id = cr.version_id
+    # convert_to_streamed_sog now writes into a VERSION-scoped subdirectory of
+    # the staging dir it was given (so concurrent publishes of one scene never
+    # share/delete each other's output).  Repoint streamed_dir at that
+    # subdirectory; VERIFYING / PUBLISHING / _rebuild_convert_state then keep
+    # operating on exactly the version's manifest tree as before.
+    ctx.streamed_dir = ctx.streamed_dir / cr.version_id
     ctx.manager.write(_marker(ctx, "CONVERTING", cr.version_id))
     logger.info("[job %s] CONVERTING ok (version=%s)", ctx.job_id, cr.version_id)
 

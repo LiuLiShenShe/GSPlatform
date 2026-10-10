@@ -28,11 +28,11 @@ from workers.pipeline.convert_scene import convert_to_streamed_sog
 
 SCENE_UUID = "11111111-2222-3333-4444-555555555555"
 
+
 def _node_bin() -> Path:
     import workers.pipeline.convert_scene as mod
+
     return mod._NODE_BIN
-
-
 
 
 # These three tests execute the REAL pinned splat-transform CLI (the spy only
@@ -52,11 +52,19 @@ REQUIRES_CLI = pytest.mark.skipif(
 def _gaussian_ply_bytes(n: int = 512) -> bytes:
     """A real, minimal but complete 3DGS binary PLY (14 float properties)."""
     props = [
-        ("x", "float"), ("y", "float"), ("z", "float"),
-        ("f_dc_0", "float"), ("f_dc_1", "float"), ("f_dc_2", "float"),
+        ("x", "float"),
+        ("y", "float"),
+        ("z", "float"),
+        ("f_dc_0", "float"),
+        ("f_dc_1", "float"),
+        ("f_dc_2", "float"),
         ("opacity", "float"),
-        ("scale_0", "float"), ("scale_1", "float"), ("scale_2", "float"),
-        ("rot_0", "float"), ("rot_1", "float"), ("rot_2", "float"),
+        ("scale_0", "float"),
+        ("scale_1", "float"),
+        ("scale_2", "float"),
+        ("rot_0", "float"),
+        ("rot_1", "float"),
+        ("rot_2", "float"),
         ("rot_3", "float"),
     ]
     head = ["ply", "format binary_little_endian 1.0", f"element vertex {n}"]
@@ -68,18 +76,38 @@ def _gaussian_ply_bytes(n: int = 512) -> bytes:
         x = (i % 16) / 16.0 * 2 - 1
         y = ((i // 16) % 16) / 16.0 * 2 - 1
         z = ((i // 256) % 2) * 0.1
-        rows.append(struct.pack("<14f", x, y, z, 0.5, 0.5, 0.5, 0.9,
-                                -3.0, -3.0, -3.0, 1.0, 0.0, 0.0, 0.0))
+        rows.append(
+            struct.pack(
+                "<14f",
+                x,
+                y,
+                z,
+                0.5,
+                0.5,
+                0.5,
+                0.9,
+                -3.0,
+                -3.0,
+                -3.0,
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+            )
+        )
     return header + b"".join(rows)
 
 
 def _streamed_zip_bytes() -> bytes:
     """A pre-built streamed-SOG zip (root lod-meta.json) — passthrough fixture."""
     import io
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("lod-meta.json",
-                    '{"version":1,"counts":[10,20,30],"filenames":[],"tree":{}}')
+        zf.writestr(
+            "lod-meta.json",
+            '{"version":1,"counts":[10,20,30],"filenames":[],"tree":{}}',
+        )
     return buf.getvalue()
 
 
@@ -134,9 +162,10 @@ class TestProblemAStagedFormatExtension:
         assert "raw-input.ply" in seen.get("arg", ""), (
             f"splat-transform input was {seen.get('arg')!r}, expected raw-input.ply"
         )
-        # Real streamed-SOG staging output.
-        assert (staging / "manifest.json").exists()
-        assert (staging / "lod-meta.json").exists()
+        # Real streamed-SOG output, written into the VERSION-scoped staging dir.
+        vdir = staging / res.version_id
+        assert (vdir / "manifest.json").exists()
+        assert (vdir / "lod-meta.json").exists()
 
     @REQUIRES_CLI
     def test_declared_format_none_keeps_suffix_fallback(self, tmp_path, monkeypatch):
@@ -164,18 +193,34 @@ class TestProblemAStagedFormatExtension:
         assert "raw-input.ply" in seen.get("arg", "")
 
     @REQUIRES_CLI
-    def test_splat_in_upload_bin_converts_with_raw_input_splat(self, tmp_path, monkeypatch):
+    def test_splat_in_upload_bin_converts_with_raw_input_splat(
+        self, tmp_path, monkeypatch
+    ):
         """A declared ``splat`` upload must be fed as ``raw-input.splat``."""
         # Produce a real SPLAT from the tiny PLY using the pinned CLI.
-        node_bin = mod_node = _node_bin()
+        node_bin = _node_bin()
         ply = tmp_path / "tiny.ply"
         ply.write_bytes(_gaussian_ply_bytes(256))
         splat = tmp_path / "tiny.splat"
         import subprocess
+
         r = subprocess.run(
-            ["node", str(node_bin), "-g", "cpu", str(ply), str(splat),
-             "--overwrite", "--tty"],
-            capture_output=True, text=True, timeout=120, check=False,
+            [
+                "node",
+                str(node_bin),
+                "-g",
+                "cpu",
+                str(ply),
+                str(splat),
+                "--overwrite",
+                "--no-tty",
+                "--max-workers",
+                "0",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            check=False,
         )
         assert r.returncode == 0, f"could not build SPLAT fixture: {r.stderr}"
 
@@ -212,8 +257,9 @@ class TestProblemAStagedFormatExtension:
             src, staging, scene_id=SCENE_UUID, source_format="sog"
         )
         assert res.ok, f"SOG passthrough failed: {res.reason}"
-        assert (staging / "manifest.json").exists()
-        assert (staging / "lod-meta.json").exists()
+        vdir = staging / res.version_id
+        assert (vdir / "manifest.json").exists()
+        assert (vdir / "lod-meta.json").exists()
 
     def test_traversal_declared_format_cannot_escape(self, tmp_path):
         """A malicious declared format must not be interpolated into a path.
@@ -227,7 +273,9 @@ class TestProblemAStagedFormatExtension:
         staging = tmp_path / "published" / ".staging"
         # A path-traversal attempt as the declared format.
         res = convert_to_streamed_sog(
-            src, staging, scene_id=SCENE_UUID,
+            src,
+            staging,
+            scene_id=SCENE_UUID,
             source_format="../../../../etc/passwd.ply",
         )
         # Either it is rejected (unknown format) or it stays contained; in no
@@ -235,4 +283,3 @@ class TestProblemAStagedFormatExtension:
         if res.ok:
             for produced in list(staging.rglob("*")):
                 assert str(produced.resolve()).startswith(str(staging.parent.resolve()))
-
