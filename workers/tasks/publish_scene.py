@@ -132,7 +132,8 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             staging_path,
             scene_id=str(sid),
             profile="balanced",
-            gpu="cpu",
+            # device resolved from GS_CONVERT_GPU at call time (default "cpu");
+            # was previously hardcoded "cpu" regardless of available hardware.
             source_format=us.upload_format,
         )
         if not cr.ok:

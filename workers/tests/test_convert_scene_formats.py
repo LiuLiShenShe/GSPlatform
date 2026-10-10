@@ -117,7 +117,7 @@ class TestProblemAStagedFormatExtension:
 
         real_run = mod._run
 
-        def spy_run(cmd, cwd=None, timeout=mod._TIMEOUT):  # noqa: ANN001
+        def spy_run(cmd, cwd=None, timeout=None):  # noqa: ANN001
             for arg in cmd:
                 if "raw-input" in str(arg):
                     seen.setdefault("arg", str(arg))
@@ -151,7 +151,7 @@ class TestProblemAStagedFormatExtension:
         seen: dict[str, str] = {}
         real_run = mod._run
 
-        def spy_run(cmd, cwd=None, timeout=mod._TIMEOUT):  # noqa: ANN001
+        def spy_run(cmd, cwd=None, timeout=None):  # noqa: ANN001
             for arg in cmd:
                 if "raw-input" in str(arg):
                     seen.setdefault("arg", str(arg))
@@ -187,7 +187,7 @@ class TestProblemAStagedFormatExtension:
         seen: dict[str, str] = {}
         real_run = mod._run
 
-        def spy_run(cmd, cwd=None, timeout=mod._TIMEOUT):  # noqa: ANN001
+        def spy_run(cmd, cwd=None, timeout=None):  # noqa: ANN001
             for arg in cmd:
                 if "raw-input" in str(arg):
                     seen.setdefault("arg", str(arg))

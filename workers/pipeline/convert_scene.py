@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -62,7 +63,36 @@ _FORMAT_TO_EXT: dict[str, str] = {
     "zip": ".sog",
 }
 
-_TIMEOUT = 1200  # seconds — generous for large PLY files on CPU.
+def _env_int(name: str, default: int) -> int:
+    """Read an integer env var with a sane fallback (negative → default).
+
+    Kept here (rather than in app.core.config.Settings) because
+    ``convert_scene`` is importable without the API package; env-var driven
+    keeps operators able to size timeouts to hardware without a code deploy.
+    """
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("invalid %s=%r; using default %d", name, raw, default)
+        return default
+    return value if value > 0 else default
+
+
+# Per-CLI-step timeout.  The SOG stack scales super-linearly with gaussian
+# count: a 13M-gaussian scene needs more than the historical 1200s for the
+# stack step alone. Operators size this via GS_CONVERT_TIMEOUT_S; the default
+# (2h) covers very large PLY while still bounding a hung subprocess.
+_TIMEOUT = _env_int("GS_CONVERT_TIMEOUT_S", 7200)
+
+# Default compute device passed to splat-transform's ``-g`` ("cpu" or a GPU
+# adapter index like "0").  Decimation is CPU-bound either way; SOG compression
+# and GPU voxelization use the adapter when provided.  Resolved at call time
+# (never a def-time default) so operators can switch without a worker restart
+# of the module import.
+_DEFAULT_GPU = os.environ.get("GS_CONVERT_GPU", "cpu")
 
 
 @dataclass(frozen=True)
@@ -78,7 +108,11 @@ class ConvertResult:
 # ──────────────────────────────────────────────────────────────────────────────
 # Internal helpers
 # ──────────────────────────────────────────────────────────────────────────────
-def _run(cmd: list[str], cwd: Path | None = None, timeout: int = _TIMEOUT) -> str:
+def _run(cmd: list[str], cwd: Path | None = None, timeout: int | None = None) -> str:
+    # Resolve the timeout at call time (not as a def-time default) so a
+    # runtime/env change to ``_TIMEOUT`` actually takes effect.
+    if timeout is None:
+        timeout = _TIMEOUT
     result = subprocess.run(
         cmd,
         cwd=cwd,
@@ -176,10 +210,14 @@ def convert_to_streamed_sog(
     *,
     scene_id: str,
     profile: str = "balanced",
-    gpu: str = "cpu",
+    gpu: str | None = None,
     source_format: str | None = None,
 ) -> ConvertResult:
     """Convert *source_path* into a streamed-SOG tree inside *staging_dir*.
+
+    ``gpu`` is the device passed to splat-transform's ``-g`` ("cpu" or a GPU
+    adapter index).  ``None`` resolves to ``GS_CONVERT_GPU`` at call time
+    (default "cpu"); explicit pass-through from callers wins.
 
     ``source_format`` is the validated declared upload format (from the
     ``UploadSession``). When given, the internal copy splat-transform receives is
@@ -194,6 +232,8 @@ def convert_to_streamed_sog(
     """
     source_sha256 = _sha256_of(source_path)
     ver = source_sha256[:12]
+    if gpu is None:
+        gpu = _DEFAULT_GPU
     # Re-run safety: clear any leftover staging tree from a previous failed
     # attempt before writing the new version.
     if staging_dir.exists():

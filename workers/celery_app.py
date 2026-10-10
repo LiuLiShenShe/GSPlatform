@@ -9,6 +9,7 @@ app is the one that *executes* them.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -35,8 +36,11 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
-    task_time_limit=3600,
-    task_soft_time_limit=3300,
+    # Publish pipeline can legitimately run >1h on very large PLY (decimate ×3
+    # + SOG stack on 10M+ gaussians).  Sized by env so operators can tune
+    # without a deploy; defaults raised from the historical 3600s/3300s.
+    task_time_limit=int(os.environ.get("GS_TASK_TIME_LIMIT_S", "7200")),
+    task_soft_time_limit=int(os.environ.get("GS_TASK_SOFT_TIME_LIMIT_S", "6600")),
     result_expires=3600,
     broker_connection_retry_on_startup=True,
     task_default_queue="gsplatform",
