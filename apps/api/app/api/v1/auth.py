@@ -94,7 +94,6 @@ def register(
         display_name=body.displayName,
         ip=_client_ip(request),
     )
-    _set_cookies(response, tokens, settings)
     # Resolve the user for the response.
 
     from sqlalchemy import select
@@ -102,6 +101,8 @@ def register(
     from app.db.models.user import User
 
     user = db.execute(select(User).where(User.email == body.email.strip().lower())).scalar_one()
+    db.commit()
+    _set_cookies(response, tokens, settings)
     return SessionOut(userId=str(user.id), email=user.email, displayName=user.display_name)
 
 
@@ -130,13 +131,14 @@ def login(
         password=body.password,
         ip=_client_ip(request),
     )
-    _set_cookies(response, tokens, settings)
 
     from sqlalchemy import select
 
     from app.db.models.user import User
 
     user = db.execute(select(User).where(User.email == body.email.strip().lower())).scalar_one()
+    db.commit()
+    _set_cookies(response, tokens, settings)
     return SessionOut(userId=str(user.id), email=user.email, displayName=user.display_name)
 
 

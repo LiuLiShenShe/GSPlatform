@@ -68,6 +68,27 @@ def _login(client: TestClient, email: str, password: str = "password-123"):
 
 # ─── register / login ─────────────────────────────────────────────────────────
 class TestRegisterLogin:
+    @pytest.mark.parametrize("endpoint", ["register", "login"])
+    def test_session_is_committed_before_setting_cookies(self, client, monkeypatch, endpoint):
+        from app.api.v1 import auth
+        from app.db.session import SessionLocal
+        from app.services.auth_service import AuthService
+
+        email = _unique_email()
+        if endpoint == "login":
+            assert _register(client, email).status_code == 200
+        original = auth._set_cookies
+
+        def verify_committed_session(response, tokens, settings):
+            with SessionLocal() as independent_session:
+                resolved = AuthService(independent_session).resolve_session(tokens["raw_token"])
+                assert resolved[1] == email
+            original(response, tokens, settings)
+
+        monkeypatch.setattr(auth, "_set_cookies", verify_committed_session)
+        response = _register(client, email) if endpoint == "register" else _login(client, email)
+        assert response.status_code == 200
+
     def test_register_sets_session_and_csrf_cookies(self, client):
         resp = _register(client)
         assert resp.status_code == 200
