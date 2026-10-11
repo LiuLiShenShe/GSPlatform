@@ -341,6 +341,16 @@ Make SplatTransform the sole general-purpose conversion and collision engine whi
 
 ## Phase 3 — Official SuperSplat Editor Integration
 
+**Status (2026-10-11): PASS — PC-INTEGRATION-03 implemented and verified.**
+Official Editor v3.5.2 is independently pinned/built/self-hosted; real owner-cookie
+private import, selection/deletion/export, PLY/SOG submission, same-Scene immutable
+publication/CAS and the preserved official Viewer passed. Backend479/Worker125/
+Web267 tests, isolated PostgreSQL migrations, independent Editor source gate and
+clean-checkout/CUDA gate passed. Production deployment and PICO hardware validation
+were not performed. Phase 4 remains subject to user Git/functionality review.
+Evidence/limitations: [Phase 3 report](../reports/PC_INTEGRATION_03_EDITOR.md).
+Deployment/rollback: [Editor runbook](../operations/SUPERSPLAT_EDITOR_DEPLOYMENT.md).
+
 ### Goal
 
 Allow users to edit Gaussian content using the official SuperSplat Editor while GSPlatform remains the authority for identity, authorization, asset transfer, versioning, provenance, and publication.
