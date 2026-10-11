@@ -41,8 +41,10 @@ cd /fj/GSPlatform
 `up` is serialized with a lifecycle lock, refuses competing consumers on its
 dedicated broker and occupied unmanaged ports, and retains already managed
 processes. It requires the repository Alembic head, real authentication and Secure
-cookies. It detaches processes into separate sessions and records PID start time
-and command digest. Shutdown validates those receipts and uses pidfd signalling,
+cookies. It detaches processes into separate sessions and records PID start time,
+UID and executable device/inode identity; the command digest is audit metadata,
+not the identity of processes such as Vite that change their own title. Shutdown
+validates those receipts and uses pidfd signalling,
 not a numeric-PID kill susceptible to reuse. Only SIGTERM is sent. Workers with
 active/reserved work, or unavailable inspection, prevent shutdown; a slow drain
 is reported rather than force-killed. Repeated `down` is safe.

@@ -43,8 +43,12 @@ try:
     if fields[0] == 'Z':
         receipt_path.unlink()
         raise SystemExit(3)
-    command_digest = hashlib.sha256((process / 'cmdline').read_bytes()).hexdigest()
-    if fields[19] != receipt['startTicks'] or command_digest != receipt['commandDigest'] or process.stat().st_uid != os.getuid():
+    executable = (process / 'exe').stat()
+    if 'executableDevice' in receipt:
+        executable_matches = (executable.st_dev, executable.st_ino) == (receipt['executableDevice'], receipt['executableInode'])
+    else:
+        executable_matches = hashlib.sha256((process / 'cmdline').read_bytes()).hexdigest() == receipt['commandDigest']
+    if fields[19] != receipt['startTicks'] or not executable_matches or process.stat().st_uid != os.getuid():
         raise SystemExit('Refusing a foreign or reused PID receipt')
     if action == 'stop':
         signal.pidfd_send_signal(descriptor, signal.SIGTERM)
@@ -79,7 +83,8 @@ from pathlib import Path
 process_id = int(sys.argv[2])
 fields = (Path('/proc') / str(process_id) / 'stat').read_text().split(') ', 1)[1].split()
 command_digest = hashlib.sha256((Path('/proc') / str(process_id) / 'cmdline').read_bytes()).hexdigest()
-Path(sys.argv[1]).write_text(json.dumps({'pid': process_id, 'startTicks': fields[19], 'commandDigest': command_digest}) + '\n')
+executable = (Path('/proc') / str(process_id) / 'exe').stat()
+Path(sys.argv[1]).write_text(json.dumps({'pid': process_id, 'startTicks': fields[19], 'commandDigest': command_digest, 'executableDevice': executable.st_dev, 'executableInode': executable.st_ino}) + '\n')
 PY
     guard "$service" status >/dev/null
     echo "$service started"

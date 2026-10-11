@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -40,12 +41,15 @@ def invoke(environment, command):
 
 def record_process(state, process, *, stale=False, foreign=False):
     fields = Path(f"/proc/{process.pid}/stat").read_text().split(") ", 1)[1].split()
+    executable = Path(f"/proc/{process.pid}/exe").stat()
     (state / "api.pid").write_text(json.dumps({
         "pid": process.pid,
         "startTicks": str(int(fields[19]) + 1) if stale else fields[19],
         "commandDigest": "foreign" if foreign else hashlib.sha256(
             Path(f"/proc/{process.pid}/cmdline").read_bytes()
         ).hexdigest(),
+        "executableDevice": executable.st_dev,
+        "executableInode": executable.st_ino + 1 if foreign else executable.st_ino,
     }))
 
 
@@ -97,6 +101,39 @@ def test_down_is_idempotent_and_stops_only_owned_process(runtime_environment):
         process.wait(timeout=5)
         assert not (state / "api.pid").exists()
         assert invoke(environment, "down").returncode == 0
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+
+
+@pytest.mark.skipif(
+    not Path("/usr/local/bin/node").exists(), reason="Node process-title probe unavailable",
+)
+def test_owned_process_title_change_does_not_break_shutdown(runtime_environment):
+    state, _, environment = runtime_environment
+    process = subprocess.Popen(
+        ["/usr/local/bin/node", "-e",
+         "process.stdin.once('data', () => { process.title = 'vr00-title-change'; });"
+         "setInterval(() => {}, 1000);"],
+        stdin=subprocess.PIPE,
+        env={**environment, "GS_VR00_STATE_DIR": str(state)},
+    )
+    try:
+        record_process(state, process)
+        original = Path(f"/proc/{process.pid}/cmdline").read_bytes()
+        assert process.stdin is not None
+        process.stdin.write(b"change\n")
+        process.stdin.flush()
+        for _attempt in range(20):
+            if Path(f"/proc/{process.pid}/cmdline").read_bytes() != original:
+                break
+            time.sleep(0.1)
+        assert Path(f"/proc/{process.pid}/cmdline").read_bytes() != original
+        result = invoke(environment, "down")
+        assert result.returncode == 0, result.stderr
+        process.wait(timeout=5)
+        assert not (state / "api.pid").exists()
     finally:
         if process.poll() is None:
             process.terminate()
