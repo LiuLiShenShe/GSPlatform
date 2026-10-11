@@ -21,9 +21,6 @@ import json
 import logging
 import os
 import shutil
-import signal
-import subprocess
-import tempfile
 import time
 import zipfile
 from collections.abc import Callable
@@ -31,137 +28,30 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
+from workers.pipeline.conversion_policy import (
+    _FORMAT_TO_EXT,
+    _LOD_RATIOS,
+    _PROFILES,
+    _RECIPE_VERSION,
+    _TOOL_VERSION,
+    _canonical,
+    _source_recipe,
+    conversion_recipe,
+    resolve_conversion_policy,
+    version_id_for,
+)
 from workers.pipeline.validate_scene import _sha256_of, _validate_ply_header
 
 logger = logging.getLogger("gsplatform.workers.convert")
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Locked CLI location (same as scripts/build_streamed_sog.sh).
-# ──────────────────────────────────────────────────────────────────────────────
-_ROOT = Path(__file__).resolve().parent.parent.parent
-_NODE_BIN = (
-    _ROOT
-    / "node_modules"
-    / ".pnpm"
-    / "@playcanvas+splat-transform@3.3.3_playcanvas@2.22.0"
-    / "node_modules"
-    / "@playcanvas"
-    / "splat-transform"
-    / "bin"
-    / "cli.mjs"
+from workers.pipeline.splat_transform_adapter import (
+    CLI_PATH,
+    ROOT,
+    execution_record,
+    run_cli_command,
 )
 
-# Pinned CLI identity — part of the conversion recipe (see ``conversion_recipe``):
-# a different splat-transform can emit different bytes for the same input, so it
-# must be able to move the asset version.
-_TOOL_VERSION = "3.3.3"
-
-# Bump when the recipe *semantics* change (not for timeout/env tuning): it is
-# mixed into every asset_version so old and new outputs stay independently
-# addressable and immutable.
-_RECIPE_VERSION = "2"
-
-# LOD 0 is the ORIGINAL source (PlayCanvas: "LOD 0 = highest detail"); the two
-# reduced tiers are decimated from it.  Ratios are expressed as CLI percent
-# strings so the value that reaches the command line is the value recorded here.
-_LOD_RATIOS: tuple[str, ...] = ("30%", "10%")
-
-# Profiles: (--lod-chunk-count K, --lod-chunk-extent world units).
-# NOTE: the online CLI reference also documents ``--lod-chunk-min``, but the
-# version this repo pins (3.3.3) rejects it -- its ``--help`` lists only the
-# two options below, and passing the third fails with
-# ERR_PARSE_ARGS_UNKNOWN_OPTION. Do not add it without bumping the pinned CLI.
-_PROFILES: dict[str, tuple[int, int]] = {
-    "balanced": (64, 32),
-    "eco": (512, 32),
-    "quality": (64, 16),
-}
-
-# FIX-UPLOAD-01 §5: the *declared upload format* (validated upstream) maps to
-# the file extension splat-transform's input sniffing needs.  The upload is
-# staged server-side as ``upload.bin`` (random, server-owned name), so the
-# extension must come from this allowlist — never from a client filename /
-# ``upload.bin``'s ``.bin`` suffix.  ``zip`` uploads are streamed-SOG-ish
-# containers that splat-transform reads as ``.sog``.
-_FORMAT_TO_EXT: dict[str, str] = {
-    "ply": ".ply",
-    "splat": ".splat",
-    "sog": ".sog",
-    "zip": ".sog",
-}
-
-
-def conversion_recipe(
-    profile: str,
-    chunk_count: int,
-    chunk_extent: int,
-    gpu: str = "cpu",
-) -> dict:
-    """The set of inputs that determine the produced bytes.
-
-    Deliberately EXCLUDES operational settings (per-CLI timeout, logging,
-    staging paths, GPU adapter index) so an operator tuning
-    ``GS_CONVERT_TIMEOUT_S`` never forces a new immutable asset version.
-    """
-    return {
-        "recipeVersion": _RECIPE_VERSION,
-        "tool": "splat-transform",
-        "toolVersion": _TOOL_VERSION,
-        "profile": profile,
-        "lodRatios": ["100%", *_LOD_RATIOS],
-        "lodOrder": [0, 1, 2],
-        "lodChunkCount": chunk_count,
-        "lodChunkExtent": chunk_extent,
-        "lodChunkMin": None,
-        "shIterations": 10,
-        "computeBackend": "cpu" if gpu == "cpu" else "webgpu",
-    }
-
-
-def _canonical(obj: dict) -> str:
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"))
-
-
-def _source_recipe(source_path: Path, profile: str, gpu: str) -> dict:
-    recipe = conversion_recipe(profile, *_PROFILES[profile], gpu)
-    if not zipfile.is_zipfile(source_path):
-        return recipe
-    with zipfile.ZipFile(source_path) as archive:
-        if "lod-meta.json" not in archive.namelist():
-            return recipe
-        with archive.open("lod-meta.json") as entry:
-            metadata = json.loads(entry.read(16 * 1024 * 1024))
-    return {
-        "recipeVersion": _RECIPE_VERSION,
-        "mode": "streamed-passthrough",
-        "tool": None,
-        "toolVersion": metadata.get("asset", {}).get("generator"),
-        "profile": "passthrough",
-        "lodRatios": None,
-        "lodCounts": metadata.get("counts"),
-        "lodChunkCount": metadata.get("asset", {}).get("chunkGaussians", 0) / 1024
-        or None,
-        "lodChunkExtent": metadata.get("asset", {}).get("chunkExtent"),
-        "lodChunkMin": None,
-    }
-
-
-def version_id_for(source_sha256: str, recipe: dict) -> str:
-    """Deterministic asset version id for (source bytes, conversion recipe).
-
-    Previously this was ``source_sha256[:12]``, which meant re-converting an
-    unchanged PLY under different parameters produced the SAME id — and so
-    collided with the already-published immutable version dir (ConflictError in
-    ``promote_staging_to_version`` / silent row reuse in ``commit_version``).
-    Hashing the recipe in alongside the source makes each recipe its own
-    version while keeping the 12-hex-char shape the storage layout and URLs
-    already expect.  The pristine source hash is still recorded separately on
-    SceneVersion.sha256 for provenance.
-    """
-    digest = hashlib.sha256(
-        f"{source_sha256}\n{_canonical(recipe)}".encode()
-    ).hexdigest()
-    return digest[:12]
+_ROOT = ROOT
+_NODE_BIN = CLI_PATH
 
 
 def _env_int(name: str, default: int) -> int:
@@ -213,39 +103,8 @@ class ConvertResult:
 # Internal helpers
 # ──────────────────────────────────────────────────────────────────────────────
 def _run(cmd: list[str], cwd: Path | None = None, timeout: int | None = None) -> str:
-    # Resolve the timeout at call time (not as a def-time default) so a
-    # runtime/env change to ``_TIMEOUT`` actually takes effect.
-    if timeout is None:
-        timeout = _env_int("GS_CONVERT_TIMEOUT_S", _TIMEOUT)
-    output_file = (cwd / "cli.log").open("a+b") if cwd else tempfile.TemporaryFile()
-    with output_file as output:
-        process = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            stdout=output,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        try:
-            returncode = process.wait(timeout=timeout)
-        except BaseException:
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
-            logger.exception("CLI interrupted; child group reaped")
-            raise
-        output.flush()
-        output.seek(0, os.SEEK_END)
-        output.seek(max(0, output.tell() - 65536))
-        tail = output.read().decode("utf-8", errors="replace")
-    logger.info("CLI exit=%s", returncode)
-    if returncode != 0:
-        raise RuntimeError(f"命令失败 (rc={returncode}): {tail}")
-    return tail
+    timeout = timeout if timeout is not None else _env_int("GS_CONVERT_TIMEOUT_S", _TIMEOUT)
+    return run_cli_command(cmd, cwd=cwd, timeout=timeout)
 
 
 def _read_counts(lod_meta: Path) -> list[int]:
@@ -404,6 +263,7 @@ def _write_metadata(
     total_duration: float,
     stage_records: dict | None = None,
     max_workers: int | None = None,
+    executions: list[dict] | None = None,
 ) -> dict:
     """Write manifest.json / build-info.json / checksums.sha256 into staging.
 
@@ -460,6 +320,7 @@ def _write_metadata(
                 "chunkExtent": recipe.get("lodChunkExtent"),
                 "chunkMin": recipe.get("lodChunkMin"),
                 "gpuDevice": gpu if recipe.get("tool") else None,
+                "cliExecutions": executions,
                 "maxWorkers": max_workers,
                 "stageDurations": stage_durations,
                 "stages": stage_records or {},
@@ -515,6 +376,12 @@ def _convert_to_streamed_sog(
     started = time.monotonic()
     stage_durations: dict[str, float] = {}
     stage_records: dict[str, dict] = {}
+    executions: list[dict] = []
+
+    def invoke(command: list[str], **kwargs) -> str:
+        output = _run(command, **kwargs)
+        executions.append(execution_record(command, output or ""))
+        return output
     source_sha256 = source_sha256 or _sha256_of(source_path)
     if gpu is None:
         gpu = _DEFAULT_GPU
@@ -644,6 +511,11 @@ def _convert_to_streamed_sog(
                 stage_records=stage_records,
                 max_workers=None,
             )
+            from workers.pipeline.artifact_validator import validate_artifact_tree
+
+            if not json.loads((staging_dir / "lod-meta.json").read_text()).get("filenames"):
+                raise ValueError("Streamed SOG 缺少 chunk references")
+            validate_artifact_tree(staging_dir)
             shutil.rmtree(workdir, ignore_errors=True)
             return ConvertResult(
                 True,
@@ -656,6 +528,9 @@ def _convert_to_streamed_sog(
                 staging_dir=staging_dir,
             )
     except Exception as exc:
+        if recipe.get("mode") == "streamed-passthrough":
+            return ConvertResult(False, source_sha256=source_sha256,
+                                 reason=f"Streamed SOG 验证失败: {exc}", recipe=recipe)
         logger.info("Source is not a pre-built streamed zip; converting. (%s)", exc)
         shutil.rmtree(staging_dir, ignore_errors=True)
         staging_dir.mkdir(parents=True, exist_ok=True)
@@ -704,7 +579,7 @@ def _convert_to_streamed_sog(
                 recipe_key=recipe_key,
             ):
                 _marker_for(lod0).unlink(missing_ok=True)
-                _run(
+                invoke(
                     [
                         str(_NODE_BIN),
                         "-g",
@@ -740,7 +615,7 @@ def _convert_to_streamed_sog(
                 stage_end(name, beginning, "REUSED")
                 continue
             _marker_for(target).unlink(missing_ok=True)
-            _run(
+            invoke(
                 [
                     str(_NODE_BIN),
                     "-g",
@@ -779,7 +654,7 @@ def _convert_to_streamed_sog(
     entry = staging_dir / "lod-meta.json"
     stack_start = stage_begin("STACK")
     try:
-        _run(
+        invoke(
             [
                 str(_NODE_BIN),
                 "-g",
@@ -830,7 +705,7 @@ def _convert_to_streamed_sog(
     poster_start = stage_begin("POSTER")
     poster_status = "SUCCEEDED"
     try:
-        _run(
+        invoke(
             [
                 str(_NODE_BIN),
                 "-g",
@@ -868,7 +743,15 @@ def _convert_to_streamed_sog(
         total_duration=total_duration,
         stage_records=stage_records,
         max_workers=0,
+        executions=executions,
     )
+    from workers.pipeline.artifact_validator import validate_artifact_tree
+
+    try:
+        validate_artifact_tree(staging_dir)
+    except ValueError as exc:
+        return ConvertResult(False, source_sha256=source_sha256,
+                             reason=f"Artifact 验证失败: {exc}", recipe=recipe)
     return ConvertResult(
         True,
         version_id=ver,
@@ -892,13 +775,15 @@ def convert_to_streamed_sog(
     on_stage: Callable | None = None,
 ) -> ConvertResult:
     """Convert under an exclusive source/recipe lock; preserve valid intermediate files."""
-    if profile not in _PROFILES:
-        return ConvertResult(False, reason=f"不支持的转换 profile: {profile}")
-    if source_format is not None and source_format not in _FORMAT_TO_EXT:
-        return ConvertResult(False, reason="不支持的转换格式")
-    source_sha256 = _sha256_of(source_path)
     gpu = gpu if gpu is not None else os.environ.get("GS_CONVERT_GPU", _DEFAULT_GPU)
-    recipe = _source_recipe(source_path, profile, gpu)
+    try:
+        policy = resolve_conversion_policy(
+            source_path, profile=profile, source_format=source_format, gpu=gpu
+        )
+    except ValueError as exc:
+        return ConvertResult(False, reason=str(exc))
+    source_sha256 = _sha256_of(source_path)
+    recipe = policy.recipe
     version = version_id_for(source_sha256, recipe)
     lock_dir = staging_dir.parent / ".conversion-locks"
     lock_dir.mkdir(parents=True, exist_ok=True)

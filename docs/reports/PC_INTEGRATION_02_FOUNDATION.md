@@ -71,7 +71,43 @@ finite declared fields; v1 router registers the authorized processing routes.
 
 ## 4. P2-B — conversion seams
 
-NOT STARTED.
+PASS (targeted gate). `conversion_policy.py` contains the exact old recipe-v2
+functions and fixed 64K/32, 512K/32, 64K/16 profiles; `convert_scene.py` re-exports
+its historical facade/identifiers. Same source/recipe identity is compared directly
+against starting-HEAD code for all profiles and CPU/GPU selections. The publish
+task now consumes the scene's finite conversion profile, defaulting to balanced.
+
+`splat_transform_adapter.py` validates real `--version`, owns argv/cwd/env/process
+group/timeouts, caps disk logs at 16 MiB and in-memory tails at 64 KiB, and preserves
+nonzero exits. Default conversion/Celery limits are unchanged. A small Node preload
+records actual device-request observations and adapter identity, not configured GPU
+intent; unknown is retained when telemetry is unavailable. It never changes official
+CLI algorithms/source. On Node versions with `process.execve`, an explicit upstream
+`process.exit(code)` hands its exact code to a clean Node process, avoiding native
+teardown deadlocks. It does NOT infer success from logs/output or kill unfinished
+work as success. Older Node versions retain normal finite timeout failure semantics.
+Official Node reference: https://nodejs.org/docs/latest-v24.x/api/process.html .
+
+`artifact_validator.py` is the single implementation behind `verify_publish.py`;
+checksums, path containment, counts/order, chunk payloads/tree references, BuildInfo,
+source and recipe/actual-command consistency remain checked. Real streamed ZIP/SOG
+passthrough validates without CLI. Incomplete empty test containers were corrected,
+not safety checks weakened. Validated decimation reuse/flock/staging/promote/fencing
+remain in the compatibility facade/task/service; no publication state-machine rewrite.
+
+Evidence: first run 59 PASS / 2 native-exit timeout FAIL (275.55s); subsequent runs
+recorded 69 PASS / 1 incomplete mock artifact FAIL and 69 PASS / 3 native timeout FAIL.
+Module-completion launcher also failed one native timeout and was removed. Exact-code
+exit adapter gate: **73 PASS / 0 SKIP / 0 FAIL, 53.65s**, actual official CLI installed.
+Adapter-focused tests: 9 PASS; verifier/source suite: 28 PASS. Additional tree checks
+then passed 7 targeted tests and read-only small/1M artifact validation.
+
+Real agricultural fixture conversion (17,820 Gaussians; existing official subset)
+produced counts 17,820 / 5,346 / 1,782, asset `41314bbc11fb`; actual NVIDIA RTX A6000
+WebGPU observations recorded. Optional poster hit the existing 90s timeout, honestly
+SKIPPED (publication remains valid). Real plain SOG → Streamed SOG → ZIP passthrough
+round-trip passed (256/77/26). Existing 1M tree read-only validated:
+1,006,948 / 302,084 / 100,695. No 13M source processing.
 
 ## 5. P2-C — collision admission and UI
 

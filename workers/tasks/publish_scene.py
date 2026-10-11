@@ -172,12 +172,15 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             )
 
         from workers.pipeline.convert_scene import convert_to_streamed_sog
+        from app.db.models.scene_processing import SceneProcessingSettings
+
+        processing = session.get(SceneProcessingSettings, sid)
 
         cr = convert_to_streamed_sog(
             source_path,
             staging_path,
             scene_id=str(sid),
-            profile="balanced",
+            profile=processing.conversion_profile if processing else "balanced",
             # device resolved from GS_CONVERT_GPU at call time (default "cpu");
             # was previously hardcoded "cpu" regardless of available hardware.
             source_format=us.upload_format,

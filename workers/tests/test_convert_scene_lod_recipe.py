@@ -368,9 +368,15 @@ def test_output_is_written_into_version_scoped_staging(tmp_path, monkeypatch):
         else:
             out.write_bytes(
                 json.dumps(
-                    {"counts": [64, 19, 6], "filenames": [], "tree": {}}
+                    {"counts": [64, 19, 6], "filenames": ["chunk/meta.json"], "tree": {}}
                 ).encode()
             )
+            chunk = out.parent / "chunk"
+            chunk.mkdir()
+            (chunk / "meta.json").write_text(
+                json.dumps({"count": 89, "means": {"files": ["means.webp"]}})
+            )
+            (chunk / "means.webp").write_bytes(b"nonempty-test-chunk")
         return ""
 
     monkeypatch.setattr(mod, "_run", fake)

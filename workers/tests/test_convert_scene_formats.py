@@ -106,8 +106,10 @@ def _streamed_zip_bytes() -> bytes:
     with zipfile.ZipFile(buf, "w") as zf:
         zf.writestr(
             "lod-meta.json",
-            '{"version":1,"counts":[10,20,30],"filenames":[],"tree":{}}',
+            '{"version":1,"counts":[30,20,10],"filenames":["chunk/meta.json"],"tree":{}}',
         )
+        zf.writestr("chunk/meta.json", '{"count":60,"means":{"files":["means.webp"]}}')
+        zf.writestr("chunk/means.webp", b"test-nonempty-payload")
     return buf.getvalue()
 
 
