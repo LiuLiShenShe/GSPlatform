@@ -65,6 +65,7 @@ def create_share(
         scene_slug=scene_slug,
         hours=body.hours if body is not None else None,
     )
+    db.commit()
     return CreateShareOut(**result)
 
 
@@ -90,6 +91,7 @@ def revoke_share(
         scene_slug=scene_slug,
         share_id=uuid.UUID(share_id),
     )
+    db.commit()
     return {"revoked": True}
 
 
