@@ -27,9 +27,11 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -44,6 +46,8 @@ from app.db.models.enums import (
 )
 from app.db.models.job import Job
 from app.db.models.scene import Scene, SceneVersion
+from app.db.models.scene_edit_session import SceneEditSession
+from app.db.models.scene_spatial_state import SceneSpatialState
 from app.repositories.uploads import UploadRepository
 from app.storage.base import Storage
 from app.storage.local_disk import LocalDiskStorage
@@ -135,6 +139,7 @@ class PublishService:
         entry_url: str,
         counts: list[int],
         source_sha256: str,
+        edit_session_id: uuid.UUID | None = None,
     ) -> SceneVersion:
         """Persist SceneVersion + Assets and flip the scene to PUBLISHED.
 
@@ -147,9 +152,13 @@ class PublishService:
         it never inserts a duplicate SceneVersion/Assets, which previously
         blew up as an IntegrityError on the second commit.
         """
-        scene = self._session.query(Scene).filter(Scene.id == scene_id).first()
+        scene = self._session.scalars(
+            select(Scene).where(Scene.id == scene_id).with_for_update(of=Scene)
+            .execution_options(populate_existing=True)
+        ).first()
         if scene is None:
             raise NotFoundError("场景不存在")
+        edit = self.check_edit_publication(scene, edit_session_id) if edit_session_id else None
 
         existing = (
             self._session.query(SceneVersion)
@@ -173,6 +182,8 @@ class PublishService:
                 source_sha256=source_sha256,
             )
             self._flip_scene_published(scene, existing, counts)
+            if edit:
+                self._complete_edit_publication(scene, existing, edit, manifest, counts)
             self._bridge_dev_scene_view(scene, version_id)
             return existing
 
@@ -199,8 +210,60 @@ class PublishService:
             source_sha256=source_sha256,
         )
         self._flip_scene_published(scene, version, counts)
+        if edit:
+            self._complete_edit_publication(scene, version, edit, manifest, counts)
         self._bridge_dev_scene_view(scene, version_id)
         return version
+
+    def check_edit_publication(
+        self, scene: Scene, edit_session_id: uuid.UUID,
+    ) -> SceneEditSession:
+        from app.services.editor_session import EditBaseVersionChanged, EditSessionError
+
+        edit = self._session.scalars(
+            select(SceneEditSession).where(SceneEditSession.id == edit_session_id)
+            .with_for_update().execution_options(populate_existing=True)
+        ).first()
+        if (edit is None or edit.scene_id != scene.id or edit.owner_id != scene.owner_id
+                or scene.deleted_at is not None):
+            raise EditSessionError("编辑发布所有权或场景不符")
+        if edit.expires_at <= datetime.now(UTC) or edit.status in ("EXPIRED", "CANCELLED"):
+            raise EditSessionError("编辑会话已过期或取消")
+        if scene.current_version_id != edit.source_version_id:
+            raise EditBaseVersionChanged("编辑基准版本已变化；合法结果保持私有隔离保存")
+        return edit
+
+    def _complete_edit_publication(
+        self, scene: Scene, version: SceneVersion, edit: SceneEditSession,
+        manifest: dict[str, Any], counts: list[int],
+    ) -> None:
+        from app.db.models.scene_processing import SceneProcessingSettings
+
+        if edit.result_sha256 != version.sha256:
+            raise ConflictError("导出校验和与发布结果不符")
+        processing = self._session.get(SceneProcessingSettings, scene.id)
+        previous_policy = processing.collision_policy if processing else "MANUAL_ONLY"
+        if processing is None:
+            processing = SceneProcessingSettings(scene_id=scene.id)
+            self._session.add(processing)
+        processing.collision_policy = "MANUAL_ONLY"
+        now = datetime.now(UTC)
+        edit.result_version_id = version.id
+        edit.completed_at = now
+        edit.status = "COMPLETED"
+        edit.provenance = {
+            **(edit.provenance or {}), "resultVersionId": str(version.id),
+            "conversionRecipe": manifest.get("conversionRecipe"),
+            "exportGaussianCount": counts[0] if counts else 0,
+            "spatialBindings": "STALE", "collisionPolicy": "MANUAL_ONLY",
+            "previousCollisionPolicy": previous_policy,
+        }
+        spatial = self._session.get(SceneSpatialState, scene.id)
+        if spatial is None:
+            self._session.add(SceneSpatialState(
+                scene_id=scene.id, source_version_id=edit.source_version_id,
+                state="STALE", stale_at=now,
+            ))
 
     def _version_dir_key(self, scene_id: uuid.UUID, version_id: str) -> str:
         return f"published/{scene_id}/versions/{version_id}"

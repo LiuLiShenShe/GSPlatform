@@ -26,6 +26,7 @@ import { AnnotationPanel } from '../features/authoring/AnnotationPanel';
 import { BackgroundMusicPanel } from '../features/authoring/BackgroundMusicPanel';
 import { CollisionPanel } from '../features/authoring/CollisionPanel';
 import { ViewpointPanel } from '../features/authoring/ViewpointPanel';
+import { GaussianEditorPanel } from '../features/authoring/GaussianEditorPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
 import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 import { resolveSceneRuntimeDescriptor } from '../scene-runtime/descriptorResolver';
@@ -341,6 +342,7 @@ export default function SceneAuthoringPage() {
           </Button>
         </Space>
 
+        <GaussianEditorPanel sceneId={effectiveSceneId} />
         <InitialViewPanel
           presentation={authoring.presentation}
           onSetInitialView={authoring.setInitialView}

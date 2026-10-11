@@ -97,6 +97,7 @@ export class ResumableUploader {
   async run(): Promise<void> {
     this.startedAt = Date.now();
     let offset = this.session.offset;
+    let offsetConflicts = 0;
 
     // Resume path: re-query server offset so a page refresh can continue.
     if (offset > 0) {
@@ -130,6 +131,7 @@ export class ResumableUploader {
           timeout: 120_000,
         });
         offset = end;
+        offsetConflicts = 0;
         this.sentBytes = offset;
         this.emitProgress();
       } catch (error) {
@@ -141,7 +143,8 @@ export class ResumableUploader {
           continue;
         }
         // offset conflict (409) — resync from server truth
-        if ((error as { response?: { status?: number } })?.response?.status === 409) {
+        if ((error as { response?: { status?: number } })?.response?.status === 409 && offsetConflicts < 2) {
+          offsetConflicts += 1;
           offset = await this.queryServerOffset();
           this.sentBytes = offset;
           this.emitProgress();
@@ -165,13 +168,17 @@ export class ResumableUploader {
   }
 
   async cancel(): Promise<void> {
-    this.cancelled = true;
-    this.activeController?.abort();
+    this.stop();
     try {
       await httpClient.delete(`/uploads/${this.session.uploadId}`);
     } catch {
       // best-effort server cleanup
     }
+  }
+
+  stop(): void {
+    this.cancelled = true;
+    this.activeController?.abort();
   }
 
   pause(): void {

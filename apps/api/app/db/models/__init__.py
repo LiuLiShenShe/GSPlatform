@@ -19,8 +19,10 @@ from app.db.models.favorite import Favorite
 from app.db.models.job import Job
 from app.db.models.scene import Scene, SceneVersion
 from app.db.models.scene_annotation import SceneAnnotation
+from app.db.models.scene_edit_session import SceneEditSession
 from app.db.models.scene_presentation import ScenePresentation
 from app.db.models.scene_processing import SceneProcessingSettings
+from app.db.models.scene_spatial_state import SceneSpatialState
 from app.db.models.scene_viewpoint import SceneViewpoint
 from app.db.models.session import Session
 from app.db.models.share_link import ShareLink
@@ -40,8 +42,10 @@ __all__ = [
     "Scene",
     "SceneAnnotation",
     "SceneCategory",
+    "SceneEditSession",
     "ScenePresentation",
     "SceneProcessingSettings",
+    "SceneSpatialState",
     "SceneStatus",
     "SceneVersion",
     "SceneViewpoint",

@@ -7,6 +7,7 @@ import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -21,6 +22,7 @@ from app.db.models.enums import (
 )
 from app.db.models.job import Job
 from app.db.models.scene import Scene
+from app.db.models.scene_edit_session import SceneEditSession
 from app.db.models.upload_session import UploadSession
 from app.repositories.uploads import UploadRepository
 from app.schemas.uploads import (
@@ -91,7 +93,8 @@ class UploadService:
     # public use cases
     # ------------------------------------------------------------------ #
     def create_session(
-        self, req: CreateUploadRequest, identity: RequestIdentity
+        self, req: CreateUploadRequest, identity: RequestIdentity,
+        *, edit_session: SceneEditSession | None = None,
     ) -> UploadSessionOut:
         self._check_limits(req, identity.user_id)
         upload_id = uuid.uuid4()
@@ -117,12 +120,18 @@ class UploadService:
             scene_type=req.scene_type,
             conversion_profile=req.conversion_profile,
         )
+        if edit_session is not None:
+            us.scene_id = edit_session.scene_id
+            us.expires_at = min(us.expires_at, edit_session.expires_at)
+            edit_session.upload_id = us.id
+            edit_session.status = "UPLOADING"
         self._storage.mkdir(f"staging/{upload_id}")
         self._session.commit()
         return self._to_out(us)
 
     def get_status(self, upload_id: uuid.UUID, identity: RequestIdentity) -> UploadStatusOut:
         us = self._owned_or_raise(upload_id, identity)
+        self._check_edit_upload(us, identity, active=False)
         return self._to_status(us)
 
     def append_chunk(
@@ -133,7 +142,8 @@ class UploadService:
         *,
         declared_offset: int,
     ) -> UploadSessionOut:
-        us = self._owned_or_raise(upload_id, identity)
+        us = self._owned_or_raise_for_update(upload_id, identity)
+        self._check_edit_upload(us, identity, active=True)
         # State machine (FIX-06 §8): bytes may only be appended while the
         # session is still CREATED or UPLOADING.  Once the bytes are complete,
         # queued, published or failed, appending is a protocol error (409) —
@@ -205,6 +215,9 @@ class UploadService:
         # Row-lock the session so concurrent complete calls serialize: only the
         # first may create the Scene/Job (FIX-06 §9 idempotency).
         us = self._owned_or_raise_for_update(upload_id, identity)
+        edit = self._check_edit_upload(us, identity, active=False)
+        if edit is not None:
+            return self._complete_edit(us, edit, identity, expected_size, client_sha256)
 
         # Phase 07: RECONSTRUCT sessions never publish here — the
         # reconstruction submit step owns the publish side. Confirm the bytes
@@ -304,6 +317,7 @@ class UploadService:
 
     def cancel(self, upload_id: uuid.UUID, identity: RequestIdentity) -> UploadSessionOut:
         us = self._owned_or_raise_for_update(upload_id, identity)
+        edit = self._check_edit_upload(us, identity, active=False)
         # State machine (FIX-06 §8): only in-flight uploads are cancellable.
         # A queued/publishing/succeeded session owns side effects (Scene / Jobs /
         # storage) that a cancel must not silently tear down.
@@ -317,6 +331,9 @@ class UploadService:
                 details={"status": us.status},
             )
         self._repo.update_status(upload_id, UploadSessionStatus.CANCELLED)
+        if edit is not None:
+            edit.status = "CANCELLED"
+            edit.cancelled_at = datetime.now(UTC)
         self._storage.delete(self._quarantine_key(upload_id))
         self._storage.delete(us.storage_key)
         self._session.commit()
@@ -339,6 +356,78 @@ class UploadService:
         if us is None:
             raise NotFoundError("上传会话不存在或不属于当前用户")
         return us
+
+    def _check_edit_upload(
+        self, us: UploadSession, identity: RequestIdentity, *, active: bool,
+    ) -> SceneEditSession | None:
+        edit = self._session.query(SceneEditSession).filter(
+            SceneEditSession.upload_id == us.id
+        ).first()
+        if edit is not None:
+            from app.services.editor_session import EditorSessionService
+
+            scene = self._session.get(Scene, edit.scene_id)
+            if scene is None:
+                raise NotFoundError("场景不存在")
+            _, edit = EditorSessionService(self._session, self._settings).owned(
+                scene.slug, edit.id, identity, active=active, lock=True,
+            )
+        return edit
+
+    def _complete_edit(
+        self, us: UploadSession, edit: SceneEditSession, identity: RequestIdentity,
+        expected_size: int | None, client_sha256: str | None,
+    ) -> UploadCompleteOut:
+        from app.services.editor_session import EditBaseVersionChanged, EditSessionError
+
+        scene = self._session.get(Scene, edit.scene_id)
+        if scene is None or scene.owner_id != identity.user_id:
+            raise NotFoundError("场景不存在")
+        if edit.status == "COMPLETED":
+            if (expected_size not in (None, us.total_size)
+                    or client_sha256 not in (None, edit.result_sha256)):
+                raise ConflictError("已完成会话只能幂等重试同一导出")
+            return self._complete_out(us, job_id=edit.job_id)
+        if edit.status in ("EXPIRED", "CANCELLED"):
+            raise EditSessionError(f"编辑会话已终止：{edit.status}")
+        if edit.job_id is not None:
+            job = self._session.get(Job, edit.job_id)
+            if job is not None and job.status != "FAILED":
+                return self._complete_out(us, job_id=job.id)
+            if edit.error_code == "EDIT_BASE_VERSION_CHANGED":
+                raise EditBaseVersionChanged("编辑基准版本已变化；导出文件保持私有隔离保存")
+        if scene.current_version_id != edit.source_version_id:
+            raise EditBaseVersionChanged("当前版本已变化；已上传文件未发布且不会覆盖新版本")
+        if us.status not in ("UPLOADED", "FAILED"):
+            raise EditSessionError("导出文件尚未完整上传")
+        source_key = us.storage_key
+        quarantine_key = f"quarantine/{us.id}/{Path(us.storage_key).name}"
+        if not self._storage.exists(source_key) and self._storage.exists(quarantine_key):
+            source_key = quarantine_key
+        real_size = self._storage.size(source_key)
+        if real_size != us.total_size or expected_size not in (None, us.total_size):
+            raise ConflictError("编辑导出字节数与声明不符")
+        real_sha = self._storage.sha256(source_key)
+        if any(value and value != real_sha for value in (us.declared_sha256, client_sha256)):
+            raise ConflictError("编辑导出 SHA-256 校验失败")
+        if edit.result_sha256 and edit.result_sha256 != real_sha:
+            raise ConflictError("会话导出内容已固定，不能替换")
+        edit.result_sha256 = real_sha
+        edit.provenance = {
+            "sourceSceneId": str(scene.id), "sourceVersionId": str(edit.source_version_id),
+            "sourceAssetVersion": edit.source_asset_version,
+            "editorUpstreamCommit": edit.editor_upstream_commit,
+            "editorBuildIdentity": edit.editor_build_identity, "editSessionId": str(edit.id),
+            "submittedBy": str(identity.user_id), "submittedAt": datetime.now(UTC).isoformat(),
+            "exportFormat": us.upload_format, "exportSHA256": real_sha,
+            "sourceKind": edit.source_kind, "selectedLod": edit.selected_lod,
+        }
+        job = self._repo.create_publish_job(scene_id=scene.id, owner_id=identity.user_id)
+        edit.job_id = job.id
+        edit.status = "QUEUED"
+        edit.error_code = None
+        self._dispatch_publish(us, scene, job)
+        return self._complete_out(us, job_id=job.id)
 
     def _owned_or_raise_for_update(
         self, upload_id: uuid.UUID, identity: RequestIdentity
@@ -410,7 +499,14 @@ class UploadService:
             data["collisionPolicyReason"] = decision["reasonCode"]
             data["sceneId"] = scene.id
             data["sceneSlug"] = scene.slug
-            publish_job = self._repo.get_latest_publish_job(scene.id)
+            edit = self._session.query(SceneEditSession).filter(
+                SceneEditSession.upload_id == us.id
+            ).first()
+            publish_job = (self._session.get(Job, edit.job_id) if edit and edit.job_id
+                           else self._repo.get_latest_publish_job(scene.id))
+            if edit:
+                data["collisionRequired"] = False
+                data["collisionPolicyReason"] = "POLICY_MANUAL_ONLY"
             if publish_job is not None:
                 data["publishJobId"] = publish_job.id
                 data["publishStatus"] = publish_job.status

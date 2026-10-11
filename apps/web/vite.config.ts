@@ -314,7 +314,11 @@ export default defineConfig({
     // 应用自身走 http.ts 的绝对 :8001 + CORS，不经此代理，互不影响。
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8001',
+        target: process.env.GS_API_PROXY_TARGET ?? 'http://127.0.0.1:8001',
+        changeOrigin: false,
+      },
+      '/gaussian-editor': {
+        target: process.env.GS_EDITOR_PROXY_TARGET ?? 'http://127.0.0.1:18031',
         changeOrigin: false,
       },
     },

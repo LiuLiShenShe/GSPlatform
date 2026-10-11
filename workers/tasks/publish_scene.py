@@ -19,6 +19,8 @@ from workers.celery_app import celery_app
 from app.core.config import settings
 from app.db.models.enums import JobStatus, UploadSessionStatus
 from app.db.models.job import Job
+from app.db.models.scene import Scene
+from app.db.models.scene_edit_session import SceneEditSession
 from app.db.session import SessionLocal
 from app.repositories.uploads import UploadRepository
 from app.services.publish_service import PublishService
@@ -59,6 +61,7 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         return {"ok": False, "error": "upload_session_not_found"}
 
     job = session.query(Job).filter(Job.id == jid).first()
+    edit = session.query(SceneEditSession).filter(SceneEditSession.upload_id == uid).first()
     if job is None:
         logger.error("Job %s not found", job_id)
         session.close()
@@ -77,10 +80,11 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             from app.services.celery_client import send_task
             from app.services.collision import CollisionService
 
-            coll_svc = CollisionService(session, storage, send_task=send_task)
-            coll_svc.ensure_auto_collision_for_current_version(
-                sid, us.owner_id, retry_failed=True
-            )
+            if edit is None:
+                coll_svc = CollisionService(session, storage, send_task=send_task)
+                coll_svc.ensure_auto_collision_for_current_version(
+                    sid, us.owner_id, retry_failed=True
+                )
             session.commit()
         except Exception:
             session.rollback()
@@ -121,6 +125,11 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
     version_staging: Path | None = None
 
     try:
+        if edit is not None:
+            if (edit.scene_id != sid or edit.owner_id != us.owner_id or edit.job_id != jid
+                    or edit.expires_at <= datetime.now(timezone.utc)
+                    or edit.status in ("CANCELLED", "EXPIRED", "COMPLETED")):
+                raise ValueError("编辑会话不再允许发布")
         # ── 1. VALIDATING ─────────────────────────────────────────────────────
         job.stage = "VALIDATING"
         job.progress = 5
@@ -141,6 +150,12 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         )
         if not vr.ok:
             raise ValueError(f"上传文件验证失败: {vr.reason}")
+        if edit is not None and vr.sha256 != edit.result_sha256:
+            raise ValueError("编辑导出 SHA-256 与会话记录不符")
+        if edit is not None and us.upload_format == "ply":
+            from workers.pipeline.validate_editor_export import validate_editor_ply
+
+            validate_editor_ply(source_path, edit.source_counts[edit.selected_lod or 0])
         source_validated = True
 
         job.progress = 20
@@ -188,6 +203,10 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         )
         if not cr.ok:
             raise ValueError(f"转换失败: {cr.reason}")
+        if edit is not None:
+            export_count = (cr.manifest or {}).get("stream", {}).get("counts", [0])[0]
+            if not 0 < export_count <= edit.source_counts[edit.selected_lod or 0]:
+                raise ValueError("导出 Gaussian 数量超过会话声明的来源 LOD")
 
         ver = cr.version_id
         # convert_to_streamed_sog writes into a VERSION-scoped subdirectory of
@@ -248,6 +267,12 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             raise RuntimeError("Publish execution generation changed")
         if owned_job.status != JobStatus.RUNNING.value:
             raise RuntimeError("Publish job is no longer running")
+        if edit is not None:
+            locked_scene = session.scalars(
+                select(Scene).where(Scene.id == sid).with_for_update(of=Scene)
+                .execution_options(populate_existing=True)
+            ).one()
+            publish_svc.check_edit_publication(locked_scene, edit.id)
         if version_staging != scene_dir / "versions" / ver:
             publish_svc.promote_staging_to_version(sid, ver, staging_key)
 
@@ -259,6 +284,7 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             entry_url=f"versions/{ver}/lod-meta.json",
             counts=(cr.manifest or {}).get("stream", {}).get("counts", [0, 0, 0]),
             source_sha256=cr.source_sha256,
+            edit_session_id=edit.id if edit else None,
         )
         job.progress = 100
         job.stage = "SUCCEEDED"
@@ -286,9 +312,9 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             from app.services.collision import CollisionService
 
             coll_svc = CollisionService(session, storage, send_task=send_task)
-            response = coll_svc.ensure_auto_collision_for_current_version(
+            response = (coll_svc.ensure_auto_collision_for_current_version(
                 sid, us.owner_id, retry_failed=True
-            )
+            ) if edit is None else None)
             if response is not None:
                 logger.info(
                     "Auto-collision for scene %s → job=%s status=%s",
@@ -338,13 +364,23 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             src_staging_dir.rename(quarantine_dir)
         # update DB state
         try:
+            error_code = getattr(exc, "code", "PUBLISH_FAILED")
             job.status = "FAILED"
             job.finished_at = datetime.now(timezone.utc)
             job.lease_expires_at = None
             job.stage = job.stage or "UNKNOWN"
-            job.error_code = "PUBLISH_FAILED"
+            job.error_code = error_code
             job.error_message_safe = str(exc)[:1000]
             repo.update_status(uid, UploadSessionStatus.FAILED)
+            if edit is not None:
+                session.refresh(edit)
+                if edit.status not in ("CANCELLED", "EXPIRED"):
+                    edit.status = "FAILED"
+                edit.error_code = error_code
+                if (source_validated and src_staging_dir.exists()
+                        and not quarantine_dir.exists()):
+                    quarantine_dir.parent.mkdir(parents=True, exist_ok=True)
+                    src_staging_dir.rename(quarantine_dir)
             session.commit()
         except Exception:
             session.rollback()
@@ -384,6 +420,9 @@ def cleanup_expired_uploads() -> dict:
 
         svc = UploadService(session, storage, settings, send_task=None)
         expired = svc.expire_stale()
+        from app.services.editor_session import EditorSessionService
+
+        edit_exports_cleaned = EditorSessionService(session, settings).cleanup_exports()
 
         from app.services.celery_client import send_task
         from app.services.collision import CollisionService
@@ -393,6 +432,7 @@ def cleanup_expired_uploads() -> dict:
         return {
             "ok": True,
             "expired": expired,
+            "edit_exports_cleaned": edit_exports_cleaned,
             "collision_recovery": recovery,
         }
     finally:

@@ -355,6 +355,14 @@ class SceneRuntimeService:
         annotations = self._build_annotations(scene)
         background_audio = self._build_background_audio(scene)
         collision = self._build_collision(scene)
+        from app.db.models.scene_spatial_state import SceneSpatialState
+
+        spatial = self._session.get(SceneSpatialState, scene.id)
+        if spatial is not None and spatial.state == "STALE":
+            presentation.initialCamera = RuntimeInitialCamera()
+            presentation.worldTransform = RuntimeWorldTransform()
+            viewpoints = []
+            annotations = []
 
         return SceneRuntimeDescriptorV1(
             schemaVersion=1,

@@ -79,6 +79,12 @@ class Settings(BaseSettings):
     # Logical names; deployment overrides via GS_STORAGE_ROOT env var.
     storage_root: str = "/home/test/gsplatform-data"
 
+    editor_enabled: bool = False
+    editor_build_manifest: str = ""
+    editor_session_hours: int = 4
+    editor_max_gaussians: int = 5_000_000
+    editor_export_retention_days: int = 7
+
     # Scene asset origin tree (Phase 09; FIX-01).
     # Production Nginx maps the INTERNAL location `/_scene-origin/<slug>/...`
     # onto this tree; FastAPI authorizes every scene-asset request and hands

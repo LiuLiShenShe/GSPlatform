@@ -1,0 +1,12 @@
+{
+  "upstreamRepository": "https://github.com/playcanvas/supersplat.git",
+  "upstreamTag": "v3.5.2",
+  "upstreamCommit": "f2a1b4975b4766e0ee0c95e63c2737dc2ecb6e5b",
+  "packageLockSha256": "5cc025bfdaa565bcd80a1ee13d29607f2c1ab0903aa76914ad83ae0a6cfd8b2d",
+  "licenseSha256": "42fa51ddd556be151a29f381fb97ee975825dcc454e805ea3ea9c079cca04d34",
+  "license": "MIT",
+  "minimumNode": "20.19.0",
+  "basePath": "/gaussian-editor/",
+  "installCommand": "npm ci --no-audit --no-fund",
+  "buildCommand": "BASE_HREF=/gaussian-editor/ npm run build"
+}

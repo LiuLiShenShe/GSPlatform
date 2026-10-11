@@ -107,7 +107,14 @@ async def patch_upload(
     identity: RequestIdentity = Depends(require_csrf),
     svc: UploadService = Depends(_service),
 ) -> UploadSessionOut:
-    body = await request.body()
+    chunks = []
+    body_size = 0
+    async for chunk in request.stream():
+        body_size += len(chunk)
+        if body_size > svc._settings.upload_chunk_max_bytes:
+            raise ConflictError("分块超过大小上限")
+        chunks.append(chunk)
+    body = b"".join(chunks)
     if not body:
         raise ConflictError("请求体不能为空")
     if len(body) > svc._settings.upload_chunk_max_bytes:
