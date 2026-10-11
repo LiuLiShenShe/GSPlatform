@@ -23,6 +23,22 @@ def test_process_nonzero_is_not_swallowed(tmp_path):
         run_process([sys.executable, "-c", "raise SystemExit(17)"], cwd=tmp_path, timeout=5)
 
 
+def test_node_explicit_exit_preserves_exact_nonzero_code(tmp_path):
+    executable = tmp_path / "cli.mjs"
+    executable.write_text(
+        "if (process.argv.includes('--version')) {console.log('splat-transform v3.3.3');}"
+        "else {process.exit(17);}"
+    )
+    with pytest.raises(RuntimeError, match="rc=17"):
+        run_cli_command([str(executable)], cwd=tmp_path, timeout=10)
+
+
+@pytest.mark.skipif(not CLI_PATH.is_file(), reason="Pinned CLI absent in clean source archive")
+def test_real_official_cli_failure_is_not_swallowed(tmp_path):
+    with pytest.raises(RuntimeError, match="rc=1"):
+        run_cli_command([str(CLI_PATH), "--not-an-official-option"], cwd=tmp_path, timeout=30)
+
+
 def test_disk_and_memory_logging_are_bounded(tmp_path):
     output = run_process([sys.executable, "-c", "print('x' * 20000000)"],
                          cwd=tmp_path, timeout=15)

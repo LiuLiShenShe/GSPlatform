@@ -535,6 +535,8 @@ class CollisionService:
             and (existing.build_params or {}).get("sourceVersion") == current_version.asset_version
         )
         if not decision["shouldBuild"] and not continuing_existing_job:
+            logger.info("Collision admission scene=%s reason=%s source=%s", scene.id,
+                        decision["reasonCode"], decision["sourceVersion"])
             self._session.rollback()
             if decision["reasonCode"] == "ALREADY_SUCCEEDED" and existing is not None:
                 return CollisionBuildResponse(job_id=str(existing.job_id or ""),

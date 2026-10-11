@@ -298,7 +298,7 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
                 )
             else:
                 logger.info(
-                    "Scene %s has no current version; collision skipped", scene_id
+                    "Scene %s has no newly admitted collision work", scene_id
                 )
             session.commit()
         except Exception as exc:  # noqa: BLE001 - never fail a published scene

@@ -168,7 +168,76 @@ timeout are unchanged. This direct dependency is within collision safety scope.
 
 ## 6. P2-D — regression and architecture acceptance
 
-NOT STARTED.
+IN PROGRESS: clean-checkout and fresh serial full backend gate still pending.
+
+### Real isolated end-to-end acceptance
+
+Dedicated PostgreSQL `gsplatform_pc02_e2e_*`, dedicated Redis container on loopback
+16382, temporary API 18022/Vite 15173 and Celery solo worker `pc02-isolated` were used.
+No production worker/broker was restarted or given test messages. Real session
+authentication/CSRF, HTTP chunk upload, Celery conversion/publication and official
+Viewer run without mocks. Private environment/token files remain outside Git.
+
+Opt-in `pc-integration02-foundation.spec.ts`: **3 PASS, 2.3 minutes**. Real small PLY
+published as `41314bbc11fb`, PUBLISHED/SUCCEEDED with exactly one publish job and no
+collision job; server-authoritative not-required UI stops requests and offers Viewer.
+Desktop diagnostics: official runtime, WebGPU, loaded=true, progress=100, gsplats=1782
+(selected streamed LOD), no manifest fallback/errors. XR software route: official
+runtime, WebGL2, loaded=true, progress=100; immersive VR unavailable in headless
+browser, so no hardware/immersive-session PASS claim. No physical Walk allowed.
+
+Separate acknowledged nonphysical small Streamed ZIP published as `dc8398d56196`;
+manual build without acknowledgement rejected 409. Approved build AND rebuild use
+real official CLI, succeed with distinct fenced job IDs, and serve current-version
+voxel JSON/bin and GLB (glTF magic) through owner authorization; anonymous asset
+access rejected 401. Descriptor carries current voxel URL, stale=false, enabled=false;
+Viewer still loads and Walk remains disabled. Admission `physicalScaleVerified=false`
+persists after finalization. ZIP passthrough does not run decimation/stack.
+
+Initial browser attempts exposed test assumptions, not application defects: ambiguous
+category selector; too-short wait for optional poster timeout; absent collision is
+null in the existing descriptor; official renderer reports webgl2; collision build
+response uses historical `job_id`; login must await committed identity before the next
+request. All corrected against actual contracts; no security assertion was weakened.
+Manual-focused final sequence passed independently (16.4s) before full 3-test PASS.
+
+### Software gates and migration
+
+Workers full gate: **106 PASS, 80.95s**, including real PLY/SPLAT/SOG/ZIP and exact
+upstream nonzero-exit tests. Prior full workers run: 104 PASS, 84.70s, before adding
+two exit-code tests. Web: typecheck/lint PASS; **261 PASS / 27 files, 10.09s**;
+production build PASS (8.74s), existing large-bundle warning retained.
+Backend ruff (including migrations) / mypy (89 files) PASS. First full backend found
+worker import path and release fixture hard-coding the production database (still
+at old migration head); fixtures now use explicit isolated GS_TEST_DATABASE_URL and
+correct worker path. A subsequent overlapping test run deleted its sibling run's
+UploadSession, yielding 457 PASS/1 test-fixture FAIL; stopped only the overlapping
+private pytest and created a fresh independent database for final serial acceptance.
+No application state machine was relaxed to hide these failures.
+
+Fresh isolated E2E/final/worker PostgreSQL databases upgraded all existing migrations
+to `ab02cd03ef04`; `alembic current == heads`. Existing-data upgrade/downgrade snapshot
+compatibility was already verified in P2-A. Production remains unmigrated/undeployed.
+
+### Ownership and scope audit
+
+Official SuperSplat Viewer/createViewer, PlayCanvas rendering/LOD/Walk/WebXR/settings
+and official SplatTransform decimation/chunk/encoding/voxel/mesh remain the sole
+production Gaussian paths. GSPlatform retains users/ACL/CSRF, uploads, finite policies,
+immutable SceneVersion/provenance/assets, validated publication, jobs/recovery/leases/
+claims/fencing and its platform business. No package manifest or lockfile changes.
+No `apps/viewer` activation/deletion, renderer copy, Gaussian algorithm, XR runtime,
+Editor integration, reconstruction dependency or agriculture phenotype schema change.
+Remaining `workers/collision/indoor.py` / `outdoor.py` are untouched future candidates;
+existing reconstruction COLMAP/gsplat is outside Phase 2 conversion scope.
+Direct test dependencies outside suggested files: release preflight fixture consumes
+the migration head on the correct test DB; opt-in browser acceptance verifies the
+real existing official Viewer paths; build_collision preserves admission metadata.
+
+Deferred: measured-calibration ingestion and meter/transform normalization (Phase 4),
+resource-cost benchmarking beyond conservative admission bounds, optional poster
+headless rendering issue, removal of unused legacy implementations after independent
+consumer review. No new agricultural measurement system or Gaussian algorithm added.
 
 ## 7. Historical compatibility baseline
 
@@ -182,6 +251,15 @@ Initial metadata SHA256:
 | build-info.json | b6b5f31aa3ca37f8beaa81ad9bf351edca00661afcb332e95452a9745cc8cec2 |
 | lod-meta.json | df735f57c853a77c5b5a758a6c19c5b7e76654581e9f8aba13521f7088fa75ab |
 | checksums.sha256 | 8f5c92b1f2617657c0a149bb30f1e30c8084b4f645ad6005e1a7e227f379a1f4 |
+
+Read-only full artifact verification passed 13,090,324 / 3,927,097 / 1,309,032 LODs
+and all recorded checksum payloads. After implementation, exact Scene/SceneVersion
+database fields (including manifest) and all four file hashes/sizes/mtime_ns remain
+identical. Existing production API runtime and authorized immutable manifest GET
+both return HTTP 200; response manifest SHA256 equals the original above. No source
+file conversion, collision retry, current pointer change, session reset or asset copy
+to Git occurred. Existing collision success/old-job and private serving semantics are
+covered by PostgreSQL regression, independent of this scene's historical timeout.
 
 ## 8. NOT EXECUTED / limits
 

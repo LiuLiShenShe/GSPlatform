@@ -139,9 +139,11 @@ def test_legacy_succeeded_collision_not_deleted_under_manual_policy(db, public_s
     assert collision.status == "SUCCEEDED"
 
 
-def test_duplicate_completed_publish_respects_manual_policy(db, public_scene):
+def test_duplicate_completed_publish_respects_manual_policy(db, public_scene, monkeypatch):
     from datetime import UTC, datetime, timedelta
+    from pathlib import Path
 
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
     from workers.tasks.publish_scene import publish_scene
 
     from app.db.models.upload_session import UploadSession

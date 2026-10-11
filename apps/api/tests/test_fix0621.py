@@ -56,7 +56,9 @@ WEB_DIST = REPO / "apps" / "web" / "dist"
 # The same dev PostgreSQL the backend suite runs against (already at the single
 # alembic head) — used so release-mode [L] (alembic current == head) is a REAL
 # check, and pg_isready/redis-cli probes pass via PATH stubs.
-DEV_DATABASE_URL = "postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/gsplatform"
+DEV_DATABASE_URL = os.environ.get("GS_TEST_DATABASE_URL") or os.environ.get(
+    "GS_DATABASE_URL", "postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/gsplatform"
+)
 
 
 # ── Clean release tree from `git archive HEAD` (§28) ────────────────────────

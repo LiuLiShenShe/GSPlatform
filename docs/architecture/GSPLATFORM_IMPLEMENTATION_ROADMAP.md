@@ -154,6 +154,18 @@ Delete or revert only the Phase 1 documentation commit. Do not reset or clean th
 
 ## Phase 2 — 3DGS Foundation Closure
 
+### Implementation Status (PC-INTEGRATION-02, 2026-10-11)
+
+P2-A/P2-B/P2-C implemented and targeted gates passed; P2-D acceptance is in progress.
+See `docs/reports/PC_INTEGRATION_02_FOUNDATION.md` for actual evidence and limitations.
+Independent `SceneProcessingSettings` preserves the original display category and
+immutable SceneVersion. Recipe v2 and locked 3.3.3 parameters remain unchanged.
+Automatic collision is default-off and calibration/budget-aware across publish and
+recovery; explicit nonphysical manual builds remain available without enabling Walk.
+Measured VERIFIED ingestion and nonunit/nonidentity collision normalization are not
+invented in Phase 2: without a trusted measurement source they remain fail-closed and
+are deferred to Phase 4. No Phase 3 implementation or production deployment is implied.
+
 ### Goal
 
 Make SplatTransform the sole general-purpose conversion and collision engine while retaining GSPlatform’s platform reliability, asset lifecycle, versioning, permissions, and failure recovery.
