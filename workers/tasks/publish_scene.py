@@ -156,6 +156,10 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             from workers.pipeline.validate_editor_export import validate_editor_ply
 
             validate_editor_ply(source_path, edit.source_counts[edit.selected_lod or 0])
+        if edit is not None and us.upload_format == "sog":
+            from workers.pipeline.validate_editor_export import validate_editor_sog
+
+            validate_editor_sog(source_path, edit.source_counts[edit.selected_lod or 0])
         source_validated = True
 
         job.progress = 20

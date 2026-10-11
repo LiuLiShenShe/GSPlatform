@@ -1,10 +1,12 @@
 """Validate the official uncompressed Gaussian PLY delivery contract."""
 
+import json
 import struct
+import zipfile
 
 import pytest
 
-from workers.pipeline.validate_editor_export import validate_editor_ply
+from workers.pipeline.validate_editor_export import validate_editor_ply, validate_editor_sog
 
 
 def gaussian_ply(count=2):
@@ -28,6 +30,7 @@ def test_official_gaussian_properties_count_and_exact_bytes(tmp_path):
     gaussian_ply().replace(b"property float rot_3", b"property float rot_2"),
     gaussian_ply().replace(b"format binary_little_endian", b"format binary_big_endian"),
     gaussian_ply().replace(b"element vertex 2", b"element vertex 999999999"),
+    gaussian_ply().replace(b"element vertex 2", b"element vertex 0\nelement vertex 2"),
     gaussian_ply()[:-4], gaussian_ply() + b"extra data",
 ])
 def test_malformed_oversized_wrong_properties_and_payload_rejected(tmp_path, payload):
@@ -42,3 +45,32 @@ def test_source_lod_count_cannot_be_misrepresented(tmp_path):
     source.write_bytes(gaussian_ply(3))
     with pytest.raises(ValueError):
         validate_editor_ply(source, 2)
+
+
+def test_sog_gaussian_count_is_bounded_before_official_decode(tmp_path):
+    source = tmp_path / "export.sog"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("meta.json", json.dumps({"version": 2, "count": 2}))
+    validate_editor_sog(source, 3)
+
+
+@pytest.mark.parametrize("metadata", [
+    {"version": 2, "count": 999999999}, {"version": 2, "count": 0},
+    {"version": 2, "count": True}, {"version": 2, "count": "2"},
+    {"version": 3, "count": 2}, ["wrong shape"],
+])
+def test_malformed_or_oversized_sog_count_rejected(tmp_path, metadata):
+    source = tmp_path / "export.sog"
+    with zipfile.ZipFile(source, "w") as archive:
+        archive.writestr("meta.json", json.dumps(metadata))
+    with pytest.raises(ValueError):
+        validate_editor_sog(source, 3)
+
+
+def test_sog_metadata_size_and_missing_meta_rejected(tmp_path):
+    source = tmp_path / "export.sog"
+    for name, payload in [("meta.json", b"x" * 262145), ("lod-meta.json", b"{}")]:
+        with zipfile.ZipFile(source, "w") as archive:
+            archive.writestr(name, payload)
+        with pytest.raises(ValueError):
+            validate_editor_sog(source, 3)

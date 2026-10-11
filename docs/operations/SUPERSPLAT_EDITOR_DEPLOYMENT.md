@@ -105,6 +105,10 @@ retained for `GS_EDITOR_EXPORT_RETENTION_DAYS` (default 7 days after session exp
 for diagnosis/recovery. The existing scheduled cleanup task handles only terminal,
 non-running edit exports, never published version directories or audit records.
 Never downgrade a migration containing live edit audits merely to roll back UI.
+Keep the P3-aware API/runtime/worker while linked edit uploads or STALE edited
+scenes exist; a pre-P3 binary does not understand their publication/spatial guards.
+Disable launch and revert the independent artifact first, then drain/cancel jobs
+and use an explicitly reviewed compatible code rollback.
 
 ## Acceptance status
 
@@ -146,7 +150,10 @@ cleanup, and cancelled running work cannot move the current pointer.
 
 Ordinary uncompressed official PLY export is preferred. Do not enable Compress PLY;
 submit rejects other PLY layouts, malformed/oversized headers, wrong properties,
-count and exact-byte mismatches. SOG is a checked ZIP with real metadata. `.ssproj`
+count and exact-byte mismatches. SOG is a checked bundled ZIP with bounded v2
+metadata/count before CLI decoding (the actual locked Editor export format), no
+duplicate members, and existing archive safety. Streamed ZIP is not an Editor
+export contract. `.ssproj`
 is never accepted. SHA, size, archive traversal/symlinks/bombs and immutable output
 checks still use existing upload/validator/adapter primitives. The browser computes
 SHA before upload and caps that in-memory submission at 1 GiB; the server's existing

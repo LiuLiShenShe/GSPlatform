@@ -228,3 +228,42 @@ def test_export_retention_preserves_current_and_history(owner, db):
     assert not (Path(settings.storage_root) / "staging" / upload["uploadId"]).exists()
     assert db.get(Scene, scene.id).current_version_id == current
     assert db.get(SceneVersion, current) is not None
+
+
+def test_stale_spatial_history_is_preserved_but_not_used_by_runtime(owner, db):
+    from app.db.models.asset import Asset
+    from app.db.models.collision_asset import CollisionAsset
+    from app.db.models.scene_presentation import ScenePresentation
+    from app.services.collision import world_transform_hash
+
+    client, scene, _ = owner
+    position = {"x": 1.0, "y": 2.0, "z": 3.0}
+    presentation = ScenePresentation(scene_id=scene.id, world_position=position,
+                                     initial_camera_position=position, collision_enabled=True)
+    db.add(presentation)
+    db.add(SceneSpatialState(scene_id=scene.id, source_version_id=scene.current_version_id,
+                             state="STALE", stale_at=datetime.now(UTC)))
+    asset = Asset(scene_id=scene.id, version_id=scene.current_version_id,
+                  kind="COLLISION_GLB", storage_key="private/collision.glb",
+                  mime_type="model/gltf-binary", byte_size=3, sha256="a" * 64, metadata_={})
+    db.add(asset)
+    db.flush()
+    collision = CollisionAsset(scene_id=scene.id, asset_id=asset.id, mode="OUTDOOR",
+                               status="SUCCEEDED", build_params={
+                                   "sourceVersion": scene.current_version.asset_version,
+                                   "worldTransformHash": world_transform_hash(position, None, None),
+                               })
+    db.add(collision)
+    db.commit()
+    runtime = client.get(f"/api/v1/scenes/{scene.slug}/runtime").json()
+    assert runtime["presentation"]["initialCamera"]["position"] is None
+    assert runtime["presentation"]["worldTransform"]["position"] is None
+    assert runtime["viewpoints"] == []
+    assert runtime["annotations"] == []
+    assert runtime["collision"]["stale"] is True
+    assert runtime["collision"]["enabled"] is False
+    assert runtime["collision"]["url"] is None
+    db.refresh(presentation)
+    assert presentation.world_position == position
+    assert presentation.initial_camera_position == position
+    assert db.get(CollisionAsset, collision.id).status == "SUCCEEDED"

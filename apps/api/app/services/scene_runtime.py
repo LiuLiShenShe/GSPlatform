@@ -363,6 +363,10 @@ class SceneRuntimeService:
             presentation.worldTransform = RuntimeWorldTransform()
             viewpoints = []
             annotations = []
+            if collision is not None:
+                collision.enabled = False
+                collision.stale = True
+                collision.url = None
 
         return SceneRuntimeDescriptorV1(
             schemaVersion=1,
