@@ -37,6 +37,8 @@ class UploadRepository:
         category: str,
         declared_sha256: str | None,
         purpose: str = "PUBLISH",
+        scene_type: str = "UNSPECIFIED",
+        conversion_profile: str = "balanced",
     ) -> UploadSession:
         us = UploadSession(
             id=id,
@@ -53,6 +55,8 @@ class UploadRepository:
             category=category,
             declared_sha256=declared_sha256,
             purpose=purpose,
+            scene_type=scene_type,
+            conversion_profile=conversion_profile,
         )
         self._session.add(us)
         self._session.flush()

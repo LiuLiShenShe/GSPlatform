@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.scene_processing import ConversionProfile, SceneType
+
 
 class CreateUploadRequest(BaseModel):
     """Client declaration of an upload before any bytes are transferred."""
@@ -30,6 +32,8 @@ class CreateUploadRequest(BaseModel):
     )
     # Phase 07: PUBLISH (scene upload, legacy path) or RECONSTRUCT (3DGS input).
     purpose: str = Field(default="PUBLISH", pattern=r"^(PUBLISH|RECONSTRUCT)$")
+    scene_type: SceneType = "UNSPECIFIED"
+    conversion_profile: ConversionProfile = "balanced"
 
 
 class UploadSessionOut(BaseModel):

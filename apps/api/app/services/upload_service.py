@@ -114,6 +114,8 @@ class UploadService:
             category=req.category,
             declared_sha256=req.sha256,
             purpose=req.purpose,
+            scene_type=req.scene_type,
+            conversion_profile=req.conversion_profile,
         )
         self._storage.mkdir(f"staging/{upload_id}")
         self._session.commit()
@@ -366,6 +368,14 @@ class UploadService:
             size_bytes=size,
         )
         self._session.add(scene)
+        self._session.flush()
+        from app.db.models.scene_processing import SceneProcessingSettings
+
+        self._session.add(SceneProcessingSettings(
+            scene_id=scene.id,
+            scene_type=us.scene_type,
+            conversion_profile=us.conversion_profile,
+        ))
         self._session.flush()
         return scene
 

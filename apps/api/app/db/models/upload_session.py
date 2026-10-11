@@ -58,6 +58,12 @@ class UploadSession(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     visibility: Mapped[str] = mapped_column(String(20), nullable=False)
     category: Mapped[str] = mapped_column(String(40), nullable=False)
+    scene_type: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="UNSPECIFIED", server_default="UNSPECIFIED"
+    )
+    conversion_profile: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="balanced", server_default="balanced"
+    )
 
     # Phase 07: PUBLISH (legacy) or RECONSTRUCT (3DGS pipeline).
     purpose: Mapped[str] = mapped_column(
@@ -75,6 +81,13 @@ class UploadSession(Base):
     )
 
     __table_args__ = (
+        CheckConstraint(
+            "scene_type IN ('UNSPECIFIED','PLANT_OBJECT','GREENHOUSE_SCENE','FIELD_SCENE')",
+            name="scene_type_valid",
+        ),
+        CheckConstraint(
+            "conversion_profile IN ('balanced','eco','quality')", name="conversion_profile_valid"
+        ),
         CheckConstraint(
             "status IN ('CREATED', 'UPLOADING', 'UPLOADED', 'QUEUED', 'VALIDATING', "
             "'CONVERTING', 'VERIFYING', 'PUBLISHING', 'SUCCEEDED', 'FAILED', "
