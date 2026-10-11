@@ -66,6 +66,10 @@ def create_edit(owner):
 def test_owner_create_private_source_range_and_cookie_no_token(owner):
     client, scene, _ = owner
     edit = create_edit(owner)
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as independent:
+        assert independent.get(SceneEditSession, edit["id"]) is not None
     assert edit["sceneId"] == str(scene.id)
     assert edit["sourceVersionId"] == str(scene.current_version_id)
     assert edit["sourceKind"] == "FULL_RESOLUTION_SOURCE"
@@ -184,6 +188,22 @@ def test_changed_editor_build_cannot_silently_resume_old_session(owner):
     data["artifactSha256"] = "b" * 64
     receipt.write_text(json.dumps(data))
     assert client.get(edit["sourceUrl"]).status_code == 409
+
+
+def test_create_is_committed_before_service_returns_or_source_request_starts(owner):
+    from app.core.identity import RequestIdentity
+    from app.db.session import SessionLocal
+    from app.schemas.editor_session import CreateEditSessionRequest
+    from app.services.editor_session import EditorSessionService
+
+    _, scene, _ = owner
+    identity = RequestIdentity(user_id=scene.owner_id, email="fixture@example.com",
+                               display_name="Fixture", source="session")
+    with SessionLocal() as creator:
+        edit = EditorSessionService(creator, settings).create(scene.slug,
+            CreateEditSessionRequest(expectedCurrentVersion=scene.current_version_id), identity)
+        with SessionLocal() as downloader:
+            assert downloader.get(SceneEditSession, edit.id) is not None
 
 
 def test_streamed_lod_disclosure_and_memory_admission(owner, db):

@@ -129,7 +129,9 @@ class EditorSessionService:
         )
         self.session.add(edit)
         self.session.flush()
-        return self.out(scene, edit)
+        result = self.out(scene, edit)
+        self.session.commit()
+        return result
 
     def owned(self, slug: str, session_id: uuid.UUID, identity: RequestIdentity,
               *, active: bool = False, lock: bool = False) -> tuple[Scene, SceneEditSession]:
