@@ -168,9 +168,17 @@ class PublishService:
             )
             .first()
         )
+        if edit and edit.status == "COMPLETED" and (
+            existing is None or edit.result_version_id != existing.id
+        ):
+            raise ConflictError("已完成编辑会话不能发布不同版本")
         if existing is not None:
             if existing.sha256 != source_sha256 or existing.manifest != manifest:
                 raise ConflictError("版本身份与已发布资产内容不一致")
+            if edit and edit.status == "COMPLETED":
+                if edit.result_sha256 != existing.sha256:
+                    raise ConflictError("导出校验和与发布结果不符")
+                return existing
             self._ensure_version_assets(
                 scene,
                 existing.id,
@@ -227,6 +235,8 @@ class PublishService:
         if (edit is None or edit.scene_id != scene.id or edit.owner_id != scene.owner_id
                 or scene.deleted_at is not None):
             raise EditSessionError("编辑发布所有权或场景不符")
+        if edit.status == "COMPLETED":
+            return edit
         if edit.expires_at <= datetime.now(UTC) or edit.status in ("EXPIRED", "CANCELLED"):
             raise EditSessionError("编辑会话已过期或取消")
         if scene.current_version_id != edit.source_version_id:
@@ -243,27 +253,37 @@ class PublishService:
             raise ConflictError("导出校验和与发布结果不符")
         processing = self._session.get(SceneProcessingSettings, scene.id)
         previous_policy = processing.collision_policy if processing else "MANUAL_ONLY"
-        if processing is None:
-            processing = SceneProcessingSettings(scene_id=scene.id)
-            self._session.add(processing)
-        processing.collision_policy = "MANUAL_ONLY"
+        spatial = self._session.get(SceneSpatialState, scene.id)
+        geometry_changed = version.id != edit.source_version_id
         now = datetime.now(UTC)
+        if geometry_changed:
+            if processing is None:
+                processing = SceneProcessingSettings(scene_id=scene.id)
+                self._session.add(processing)
+            processing.collision_policy = "MANUAL_ONLY"
+            if spatial is None:
+                spatial = SceneSpatialState(
+                    scene_id=scene.id, source_version_id=edit.source_version_id,
+                    state="STALE", stale_at=now,
+                )
+                self._session.add(spatial)
+            else:
+                spatial.state = "STALE"
+                spatial.stale_at = now
         edit.result_version_id = version.id
         edit.completed_at = now
         edit.status = "COMPLETED"
         edit.provenance = {
             **(edit.provenance or {}), "resultVersionId": str(version.id),
+            "invalidatedFromVersionId": str(edit.source_version_id) if geometry_changed else None,
+            "publishedVersionId": str(version.id),
+            "spatialInvalidationReason": "GAUSSIAN_GEOMETRY_CHANGED" if geometry_changed else None,
             "conversionRecipe": manifest.get("conversionRecipe"),
             "exportGaussianCount": counts[0] if counts else 0,
-            "spatialBindings": "STALE", "collisionPolicy": "MANUAL_ONLY",
+            "spatialBindings": spatial.state if spatial else None,
+            "collisionPolicy": processing.collision_policy if processing else previous_policy,
             "previousCollisionPolicy": previous_policy,
         }
-        spatial = self._session.get(SceneSpatialState, scene.id)
-        if spatial is None:
-            self._session.add(SceneSpatialState(
-                scene_id=scene.id, source_version_id=edit.source_version_id,
-                state="STALE", stale_at=now,
-            ))
 
     def _version_dir_key(self, scene_id: uuid.UUID, version_id: str) -> str:
         return f"published/{scene_id}/versions/{version_id}"
