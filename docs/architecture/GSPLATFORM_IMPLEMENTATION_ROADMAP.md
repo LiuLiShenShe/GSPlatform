@@ -156,7 +156,9 @@ Delete or revert only the Phase 1 documentation commit. Do not reset or clean th
 
 ### Implementation Status (PC-INTEGRATION-02, 2026-10-11)
 
-P2-A/P2-B/P2-C implemented and targeted gates passed; P2-D acceptance is in progress.
+P2-A/P2-B/P2-C/P2-D complete: PASS. Backend458 / workers106 / Web261 / real
+Playwright3 tests pass; clean-checkout GATE_EXIT=0 and historical 13M read-only
+integrity pass. Phase 3 is ready for user review, not started automatically.
 See `docs/reports/PC_INTEGRATION_02_FOUNDATION.md` for actual evidence and limitations.
 Independent `SceneProcessingSettings` preserves the original display category and
 immutable SceneVersion. Recipe v2 and locked 3.3.3 parameters remain unchanged.

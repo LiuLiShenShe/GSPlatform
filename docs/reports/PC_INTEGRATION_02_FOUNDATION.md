@@ -53,6 +53,16 @@ of `Scene.category`. Legacy defaults resolved without writing: UNSPECIFIED/balan
 MANUAL_ONLY/UNVERIFIED. Upload declarations store scene type/profile until the existing
 completion transaction creates a Scene; no premature scene ID or state-machine change.
 
+The table has a Scene foreign-key primary key, constrained scene_type/profile/policy,
+created_at/updated_at and minimal calibration columns: calibration_state,
+meters_per_scene_unit, reference_method/value, calibration_source_version,
+calibration_transform_identity and calibration_evidence (JSONB provenance, evidence
+hash, verifier; trusted approved collisionBudget when applicable). Database checks
+reject missing/nonfinite measurement bindings and missing VERIFIED evidence.
+GET/PATCH `/api/v1/scenes/{slug}/processing` reuse SceneAccessPolicy; public/shared
+read access and owner-only CSRF-protected write are distinct. Unknown/internal
+parameters are rejected, never serialized into an executable command.
+
 Scale assumptions bind server-side to the current asset version and transform identity;
 source/transform changes make the effective state UNVERIFIED. World scale alone never
 proves meters. Public PATCH accepts only UNVERIFIED/ASSUMED and rejects VERIFIED or
@@ -127,6 +137,9 @@ the existing collision generator does not normalize them; no algorithm was added
 Default operator limits are 1M Gaussians / 256 MiB source, configurable only server-side
 by `GS_COLLISION_MAX_GAUSSIANS` / `GS_COLLISION_MAX_SOURCE_BYTES`. These are conservative
 admission bounds, not assertions of peak memory or execution time.
+Reason codes include POLICY_MANUAL_ONLY, CALIBRATION_UNVERIFIED, CALIBRATION_STALE,
+RESOURCE_BUDGET_EXCEEDED, ALREADY_RUNNING, ALREADY_SUCCEEDED, READY_TO_BUILD, plus
+CURRENT_VERSION_REQUIRED and CALIBRATION_REQUIRES_UNIT_NORMALIZATION.
 
 Manual requests require current publication, ACL/CSRF, mode and budget; unverified
 scale additionally needs a strict explicit nonphysical acknowledgement. Admission
@@ -151,8 +164,9 @@ backend ruff and correctly scoped mypy (89 files) PASS. Earlier runs found 2 pol
 interaction failures (missing-job and stale claim), corrected by distinguishing
 current existing work from new admission; original recovery assertions retained.
 A concurrent test run exposed global test-admission cross-talk, corrected by
-restricting the legacy nonphysical admission fixture to its own unconfigured scenes;
-database gates are serial thereafter. Security injection tests now require 422,
+restricting the legacy nonphysical admission fixture to its own unconfigured scenes.
+Final acceptance runs use independent databases; shared-database exploratory overlaps
+are not acceptance evidence. Security injection tests now require 422,
 not silently ignored internal fields, and retain version-pinning verification.
 Legacy claim/concurrency suites explicitly admit nonphysical work in their scoped
 fixture, preserving their reliability assertions without pretending to have VERIFIED
@@ -168,7 +182,8 @@ timeout are unchanged. This direct dependency is within collision safety scope.
 
 ## 6. P2-D — regression and architecture acceptance
 
-IN PROGRESS: clean-checkout and fresh serial full backend gate still pending.
+PASS. Final real CLI, PostgreSQL, complete software suites, browser acceptance,
+historical read-only integrity and clean-checkout gates are complete.
 
 ### Real isolated end-to-end acceptance
 
@@ -200,6 +215,13 @@ null in the existing descriptor; official renderer reports webgl2; collision bui
 response uses historical `job_id`; login must await committed identity before the next
 request. All corrected against actual contracts; no security assertion was weakened.
 Manual-focused final sequence passed independently (16.4s) before full 3-test PASS.
+Final test scenes: PLY `u-6055772b16a6` and separate manual ZIP `u-3fe3de0a5052`;
+the latter has 2 SUCCEEDED BUILD_COLLISION jobs and 1 SUCCEEDED PUBLISH job.
+Real duplicate publish on the PLY: 1 SceneVersion, 28 artifact hashes unchanged,
+0 collision jobs. Real Celery periodic cleanup/reconciliation checked 9 scenes and
+ensured 0 new collision jobs; existing total (6 manual jobs from test attempts) unchanged.
+Temporary API/Vite/worker/Redis were stopped after verifying 0 active isolated jobs.
+Only owned process IDs were stopped; production services remained untouched.
 
 ### Software gates and migration
 
@@ -214,10 +236,32 @@ correct worker path. A subsequent overlapping test run deleted its sibling run's
 UploadSession, yielding 457 PASS/1 test-fixture FAIL; stopped only the overlapping
 private pytest and created a fresh independent database for final serial acceptance.
 No application state machine was relaxed to hide these failures.
+Final required backend gate: **458 PASS, 0 SKIP, 500.54s** on fresh isolated PostgreSQL;
+ruff app/tests and mypy app PASS. Final repeated workers gate: **106 PASS, 0 SKIP,
+92.05s**. Viewer, Runtime, experience/picking/transform adapters, CollisionPanel,
+Upload and XR tests are included in the full Web gate; official engine paths untouched.
 
 Fresh isolated E2E/final/worker PostgreSQL databases upgraded all existing migrations
 to `ab02cd03ef04`; `alembic current == heads`. Existing-data upgrade/downgrade snapshot
 compatibility was already verified in P2-A. Production remains unmigrated/undeployed.
+
+### Clean-checkout acceptance
+
+`./deploy/scripts/verify_release_source.sh --keep` against implementation commit
+`48a7fe2070e52803c1551700e32e0df751bf607d`: **PASS, GATE_EXIT=0**.
+Archive `/tmp/gsplatform-verify-zUi4SO` has no .git/.env/node_modules; fresh Python3.13
+venv imports, ruff and mypy PASS; backend suite green with 8 existing environment
+skips (missing Git/build/reconstruction dependencies in this archive dimension).
+Workers: **87 PASS / 19 honest SKIP, 35.79s**, independently repeated with explicit
+skip reasons (87 PASS/19 SKIP, 41.26s): 17 pinned CLI absent and 2 Git-history absent.
+The development environment separately passes all 106 workers with real official CLI,
+so archive skips do not substitute for conversion/collision acceptance.
+
+Fresh reconstruction venv installs exactly tracked torch2.14.0+cu126/gsplat1.5.3;
+imports, trainer --help, CUDA on 2 NVIDIA RTX A6000s, and real rasterization
+(75 lit pixels / 8 splats) PASS. Existing installed reconstruction dependencies
+were not upgraded. Archive did not run optional web-install/build; the working
+checkout ran all required pnpm gates and real Playwright independently.
 
 ### Ownership and scope audit
 
@@ -260,12 +304,62 @@ both return HTTP 200; response manifest SHA256 equals the original above. No sou
 file conversion, collision retry, current pointer change, session reset or asset copy
 to Git occurred. Existing collision success/old-job and private serving semantics are
 covered by PostgreSQL regression, independent of this scene's historical timeout.
+New code's SceneAccessPolicy/SceneAssetService also resolved the original versioned
+manifest in a read-only production transaction with identical hash and immutable
+cache policy; this does not require writing calibration defaults into the old scene.
 
 ## 8. NOT EXECUTED / limits
 
 13M conversion, 13M collision retry, PICO Neo3 hardware, production deployment and
 production migration are intentionally NOT EXECUTED. No assets copied into Git.
+Real trusted VERIFIED automatic-collision activation was NOT EXECUTED: no reliable
+measurement source exists in Phase 2, so public VERIFIED writes are impossible and
+automatic admission remains fail-closed. Nonidentity/nonunit normalization is deferred.
+Optional poster generation hit its existing 90s timeout and is recorded SKIPPED;
+published SOG/Viewer are valid. Native exit adaptation was verified on Linux/Node24;
+older Node versions without execve retain bounded timeout/failure, not claimed PASS.
 
 ## 9. Git delivery and final gates
 
-PENDING stage evidence. Do not infer PASS from planned work.
+| Stage | Commit | Result |
+|---|---|---|
+| P2-A | cd35b09 | PASS — PostgreSQL migration/settings/ACL/upload compatibility |
+| P2-B | 82098f6 | PASS — pinned CLI, recipe v2, profiles, formats, safety/recovery |
+| P2-C | 251905b | PASS — centralized fail-closed admission/manual/status/fencing |
+| P2-D | 48a7fe2 | PASS — real E2E and full regression/clean archive |
+
+This final documentation-only completion commit records results after the tested
+implementation; code/package trees are unchanged from the clean-checkout gate.
+Normal `origin/main` push and final HEAD/origin-main/clean-status receipt are performed
+after this report commit and included in the terminal delivery response.
+
+| Gate | Result / Evidence |
+|---|---|
+| P2-A-01 | PASS — separate constrained processing table, unchanged display category |
+| P2-A-02 | PASS — old row snapshots/version identities and historical assets |
+| P2-A-03 | PASS — UNVERIFIED/ASSUMED nonphysical, forged VERIFIED rejected |
+| P2-A-04 | PASS — owner/read/share/anonymous/CSRF tests |
+| P2-B-01 | PASS — official CLI invocation only, no Gaussian algorithm copy |
+| P2-B-02 | PASS — balanced64K/32, eco512K/32, quality64K/16 |
+| P2-B-03 | PASS — baseline recipe v2 canonical identity comparison |
+| P2-B-04 | PASS — real PLY/SPLAT/SOG/ZIP and Streamed passthrough |
+| P2-B-05 | PASS — checksums, artifact checks, atomic/idempotent recovery tests |
+| P2-C-01 | PASS — real new upload no collision job |
+| P2-C-02 | PASS — real duplicate unchanged artifacts/no job |
+| P2-C-03 | PASS — real periodic Celery reconciliation no new job |
+| P2-C-04 | PASS — separate real manual build/rebuild, nonphysical acknowledgement |
+| P2-C-05 | PASS — PostgreSQL lease/claim/concurrency/fencing suites |
+| P2-C-06 | PASS — server-authoritative UI stop; browser request count stable |
+| P2-D-01 | PASS — 458 backend tests + ruff/mypy |
+| P2-D-02 | PASS — 106 worker tests, no development skips |
+| P2-D-03 | PASS — 261 Web tests/typecheck/lint/build |
+| P2-D-04 | PASS — pinned real CLI conversion/voxel/GLB |
+| P2-D-05 | PASS — isolated additive PostgreSQL upgrade/current=head/snapshot |
+| P2-D-06 | PASS — official Desktop WebGPU/XR WebGL2 browser + unit regression |
+| P2-D-07 | PASS — clean checkout GATE_EXIT=0; honest environment skips listed |
+| P2-D-08 | PASS — original 13M metadata/checksums/pointer/category unchanged |
+
+PC-INTEGRATION-02: PASS. PLAYCANVAS-FIRST 3DGS FOUNDATION CONSOLIDATED.
+OFFICIAL SPLATTRANSFORM INTEGRATION VERIFIED. COLLISION POLICY CALIBRATION-AWARE.
+EXISTING SCENES AND VIEWER PRESERVED. READY FOR PHASE 3 AFTER USER REVIEW.
+No remaining Phase 2 blocking issue. Stop here; no Phase 3/Editor work is started.
