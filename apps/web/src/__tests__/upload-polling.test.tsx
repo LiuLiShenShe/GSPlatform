@@ -62,6 +62,12 @@ afterEach(() => {
 
 // ── §A2 — pure terminal predicate ───────────────────────────────────────────
 describe('shouldStopProcessingPoll（§A2 停止条件）', () => {
+  it('服务端明确 collisionRequired=false → 发布成功立即结束', () => {
+    expect(shouldStopProcessingPoll(status({ collisionRequired: false, collisionStatus: null }))).toBe(true);
+  });
+  it('服务端明确 collisionRequired=true 且未调度 → 继续观察', () => {
+    expect(shouldStopProcessingPoll(status({ collisionRequired: true, collisionStatus: null }))).toBe(false);
+  });
   it('publish SUCCEEDED + collision null → 不停止（等待调度）', () => {
     expect(shouldStopProcessingPoll(status({ collisionStatus: null }))).toBe(false);
   });
@@ -91,6 +97,19 @@ describe('shouldStopProcessingPoll（§A2 停止条件）', () => {
 
 // ── §A1/§A2/§E6 — hook lifecycle with a controlled sequence ────────────────
 describe('useUploadProcessingPoll（轮询生命周期）', () => {
+  it('默认手动策略：发布完成后不等待不存在的碰撞任务', async () => {
+    (fetchUploadProcessingStatus as Mock).mockResolvedValue(status({
+      collisionJobId: null, collisionRequired: false, collisionPolicyReason: 'POLICY_MANUAL_ONLY',
+    }));
+    const { result } = renderHook(() => useUploadProcessingPoll('up-1', true));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(result.current.polling).toBe(false);
+    expect(result.current.collisionRequired).toBe(false);
+    expect(result.current.collisionPolicyReason).toBe('POLICY_MANUAL_ONLY');
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROCESSING_OBSERVATION_LIMIT_MS); });
+    expect(fetchUploadProcessingStatus).toHaveBeenCalledTimes(1);
+    expect(result.current.unconfirmed).toBe(false);
+  });
   it('publish SUCCEEDED 后不提前终止：持续观察到 collision 终态', async () => {
     const seq = [
       status({ status: 'RUNNING', publishStatus: null, collisionStatus: null }), // poll 1
@@ -267,6 +286,23 @@ describe('UploadPage 真实轮询时序（§E6）', () => {
       };
     });
   };
+
+  it('Publish 成功且碰撞非必需：显示完成与按需生成，不无限轮询', async () => {
+    (fetchUploadProcessingStatus as Mock).mockResolvedValue(status({
+      collisionJobId: null, collisionRequired: false, collisionPolicyReason: 'POLICY_MANUAL_ONLY',
+    }));
+    mockUploaderFlow();
+    renderApp({ route: '/upload' });
+    await setupUpload();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    expect(screen.getByText('碰撞非必需')).toBeInTheDocument();
+    expect(screen.getByText(/碰撞未启用，可按需生成/)).toBeInTheDocument();
+    expect(screen.queryByText(/等待碰撞任务调度/)).not.toBeInTheDocument();
+    expect(document.querySelector('a[href="/scene/scene-1"]')).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(PROCESSING_OBSERVATION_LIMIT_MS); });
+    expect(fetchUploadProcessingStatus).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/状态尚未确认/)).not.toBeInTheDocument();
+  });
 
   it('publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用', async () => {
     const seq = [

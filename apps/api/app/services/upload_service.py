@@ -403,6 +403,11 @@ class UploadService:
         if us.scene_id is not None:
             scene = self._session.get(Scene, us.scene_id)
         if scene is not None and scene.deleted_at is None:
+            from app.services.collision_policy import resolve_collision_decision
+
+            decision = resolve_collision_decision(self._session, scene)
+            data["collisionRequired"] = decision["shouldBuild"]
+            data["collisionPolicyReason"] = decision["reasonCode"]
             data["sceneId"] = scene.id
             data["sceneSlug"] = scene.slug
             publish_job = self._repo.get_latest_publish_job(scene.id)
@@ -419,6 +424,17 @@ class UploadService:
                 .first()
             )
             if collision_job is not None:
-                data["collisionJobId"] = collision_job.id
-                data["collisionStatus"] = collision_job.status
+                from app.db.models.collision_asset import CollisionAsset
+
+                collision = self._session.query(CollisionAsset).filter(
+                    CollisionAsset.scene_id == scene.id,
+                    CollisionAsset.job_id == collision_job.id,
+                ).first()
+                params = collision.build_params if collision is not None else None
+                version = scene.current_version
+                if (params and version
+                        and params.get("sourceVersion") == version.asset_version):
+                    data["collisionJobId"] = collision_job.id
+                    data["collisionStatus"] = collision_job.status
+                    data["collisionRequired"] = True
         return UploadStatusOut(**data)

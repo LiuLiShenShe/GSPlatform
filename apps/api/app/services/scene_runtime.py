@@ -504,12 +504,18 @@ class SceneRuntimeService:
             url, fmt = f"{base}/mesh", "glb"
         pres = self._presentations.get_by_scene(scene.id)
         enabled = pres.collision_enabled if pres is not None else False
+        from app.services.scene_processing import processing_for_scene
+
+        enabled = enabled and processing_for_scene(
+            self._session, scene
+        ).calibration.physicalWalkAllowed
 
         # FIX-05 §23/§24：STALE = 世界变换在构建后发生改变。官方 runtime 无法对
         # 已构建碰撞可靠地重施加变换，所以比较「构建时记录的世界变换 hash」与
         # 当前 hash；不匹配 → UI 必须禁用 walk 并要求重建。恒等/未记录（None）对
         # 恒等/未记录（None）视为一致（存量场景零回归）。
         build_params = collision.build_params or {}
+        enabled = enabled and build_params.get("physicalScaleVerified") is not False
         recorded_hash = build_params.get("worldTransformHash")
         current_hash = (
             world_transform_hash(

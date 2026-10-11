@@ -71,6 +71,8 @@ class UploadStatusOut(UploadSessionOut):
     # Collision job (kind=BUILD_COLLISION) for the scene.
     collisionJobId: UUID | None = None
     collisionStatus: str | None = None
+    collisionRequired: bool = False
+    collisionPolicyReason: str | None = None
 
 
 class UploadCompleteRequest(BaseModel):

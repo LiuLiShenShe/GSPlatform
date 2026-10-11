@@ -101,6 +101,7 @@ Module-completion launcher also failed one native timeout and was removed. Exact
 exit adapter gate: **73 PASS / 0 SKIP / 0 FAIL, 53.65s**, actual official CLI installed.
 Adapter-focused tests: 9 PASS; verifier/source suite: 28 PASS. Additional tree checks
 then passed 7 targeted tests and read-only small/1M artifact validation.
+Final repeated conversion gate after tree checks: 73 PASS, 54.01s.
 
 Real agricultural fixture conversion (17,820 Gaussians; existing official subset)
 produced counts 17,820 / 5,346 / 1,782, asset `41314bbc11fb`; actual NVIDIA RTX A6000
@@ -111,7 +112,59 @@ round-trip passed (256/77/26). Existing 1M tree read-only validated:
 
 ## 5. P2-C — collision admission and UI
 
-NOT STARTED.
+PASS (targeted gate). One `resolve_collision_decision` governs new publish,
+duplicate delivery, periodic reconciliation and manual build/rebuild admission.
+All four scene types default MANUAL_ONLY. AUTO requires current measured calibration,
+identity transform / normalized meter units, explicit policy and approved count/source-
+byte budget. UNVERIFIED, ASSUMED, stale, unknown/oversize cost never auto-admit.
+Stable reason codes are policy results, not fabricated Celery/Job states.
+
+No trusted measurement workflow exists in Phase 2: public PATCH cannot record VERIFIED.
+No fake VERIFIED fixtures were inserted. Real positive calibrated automatic admission
+is deferred to a provenance-verifying calibration workflow; Phase 2 is deliberately
+fail-closed. Nonidentity transforms/nonunit verified scales also fail closed because
+the existing collision generator does not normalize them; no algorithm was added.
+Default operator limits are 1M Gaussians / 256 MiB source, configurable only server-side
+by `GS_COLLISION_MAX_GAUSSIANS` / `GS_COLLISION_MAX_SOURCE_BYTES`. These are conservative
+admission bounds, not assertions of peak memory or execution time.
+
+Manual requests require current publication, ACL/CSRF, mode and budget; unverified
+scale additionally needs a strict explicit nonphysical acknowledgement. Admission
+metadata survives atomic worker finalization; runtime never enables physical Walk
+from such a result. Existing collision URLs/assets and persisted collision_enabled
+are retained; effective physical Walk is disabled without valid calibration.
+Already admitted current-version jobs keep lease/claim recovery independently of
+new-work policy. An orphan row or old-version job cannot bypass MANUAL_ONLY to create
+a new job. Version-safe asset serving and all fencing generations remain unchanged.
+
+Upload status exposes `collisionRequired` and `collisionPolicyReason`; only actual
+current-version bound jobs provide collision status/ID. Completed publication with
+collision not required stops polling and displays “碰撞未启用，可按需生成”. Required
+work continues to terminal state; failures remain independent from publication.
+5-minute observation cap, backoff, stale-response guard, re-query and cleanup remain.
+CollisionPanel shows server policy/type/scale, permission-gated manual controls and
+explicit nonphysical acknowledgement, not a new editor/calibration UI.
+
+Targeted PostgreSQL reliability gate: **178 PASS, 250.85s**; final policy/security/
+worker supplement **55 PASS, 55.00s**. Focused Web **34 PASS, 9.08s**, typecheck/lint,
+backend ruff and correctly scoped mypy (89 files) PASS. Earlier runs found 2 policy
+interaction failures (missing-job and stale claim), corrected by distinguishing
+current existing work from new admission; original recovery assertions retained.
+A concurrent test run exposed global test-admission cross-talk, corrected by
+restricting the legacy nonphysical admission fixture to its own unconfigured scenes;
+database gates are serial thereafter. Security injection tests now require 422,
+not silently ignored internal fields, and retain version-pinning verification.
+Legacy claim/concurrency suites explicitly admit nonphysical work in their scoped
+fixture, preserving their reliability assertions without pretending to have VERIFIED
+scale. Running mypy from repository root produced 2 unrelated unused-ignore errors;
+the required `apps/api` invocation succeeds unchanged.
+
+Real 17,820-Gaussian official collision CLI generated voxel JSON/bin and GLB:
+29,724 nodes, 22,698 leaves, no warnings. Observed voxel backend: WebGPU / NVIDIA RTX
+A6000; observed GLB backend: CPU (not inferred from `-g 0`). Both CLI exits 0.
+`workers/collision/splat.py` uses the same pinned bounded process adapter for device
+enumeration and execution; its official voxel/floor-fill/mesh parameters and 600s
+timeout are unchanged. This direct dependency is within collision safety scope.
 
 ## 6. P2-D — regression and architecture acceptance
 

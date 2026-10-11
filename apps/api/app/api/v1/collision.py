@@ -29,6 +29,7 @@ from app.schemas.collision import (
     CollisionAssetOut,
     CollisionAssetUpdateRequest,
     CollisionBuildResponse,
+    CollisionRebuildRequest,
 )
 from app.services.celery_client import send_task
 from app.services.collision import CollisionService
@@ -228,8 +229,10 @@ def update_collision(
 @router.post("/{slug}/collision/rebuild", response_model=CollisionBuildResponse)
 def rebuild_collision(
     slug: str,
+    body: CollisionRebuildRequest = CollisionRebuildRequest(),
     identity: RequestIdentity = Depends(require_csrf),
     svc: CollisionService = Depends(_service),
 ) -> CollisionBuildResponse:
     """Rebuild collision asset."""
-    return svc.rebuild(slug, identity.user_id)
+    return svc.rebuild(slug, identity.user_id,
+                       acknowledge_unverified_scale=body.acknowledge_unverified_scale)

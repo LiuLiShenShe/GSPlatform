@@ -78,6 +78,7 @@ class SplatBuildResult:
     mode: str = ""
     gpu: str = ""
     warnings: list[str] = field(default_factory=list)
+    cli_executions: list[dict] = field(default_factory=list)
 
     def to_params(self) -> dict:
         """Serializable build metadata (stored in CollisionAsset.build_params)."""
@@ -86,6 +87,8 @@ class SplatBuildResult:
             "toolVersion": "3.3.3",
             "mode": self.mode,
             "gpu": self.gpu,
+            "gpuRequested": self.gpu,
+            "cliExecutions": self.cli_executions,
             "artifacts": {
                 "voxelJson": self.voxel_json.name if self.voxel_json else None,
                 "voxelBin": self.voxel_bin.name if self.voxel_bin else None,
@@ -111,29 +114,19 @@ class SplatBuildResult:
 def _resolve_cli() -> Path:
     if _NODE_BIN.exists():
         return _NODE_BIN
-    exe = shutil.which("splat-transform")
-    if exe:
-        return Path(exe)
     raise SplatCollisionError(f"splat-transform CLI 不可用: {_NODE_BIN}")
 
 
 def _run(cmd: list[str], timeout: int = _TIMEOUT) -> str:
-    # check=True：CLI 非零退出时抛 CalledProcessError，但我们想要自定义
-    # 错误信息（含 stdout/stderr 尾部），故用 returncode 手动判断。
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        errors="replace",
-        check=False,
-    )
-    if result.returncode != 0:
-        raise SplatCollisionError(
-            f"命令失败 (rc={result.returncode}): {cmd}\n"
-            f"stdout:\n{result.stdout[-4000:]}\nstderr:\n{result.stderr[-4000:]}"
-        )
-    return result.stdout
+    from workers.pipeline.splat_transform_adapter import run_cli_command
+
+    command = cmd[1:] if Path(cmd[0]).name == "node" else cmd
+    try:
+        return run_cli_command(command, cwd=None, timeout=timeout)
+    except subprocess.TimeoutExpired as exc:
+        raise SplatCollisionError(f"splat-transform 超时 ({timeout}s)") from exc
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise SplatCollisionError(f"splat-transform 失败: {exc}") from exc
 
 
 def _scene_center(source: Path) -> tuple[float, float, float]:
@@ -191,15 +184,9 @@ def build_collision_artifacts(
         gpu_sel = gpu
     else:
         try:
-            out = subprocess.run(
-                [node, str(cli), "--list-gpus"],
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False,
-            )
-            has_nvidia = "NVIDIA" in out.stdout or "NVIDIA" in out.stderr
-        except (OSError, subprocess.TimeoutExpired):
+            output = _run([node, str(cli), "--list-gpus"], timeout=30)
+            has_nvidia = "NVIDIA" in output
+        except SplatCollisionError:
             has_nvidia = False
         gpu_sel = str(_GPU_INDEX_DEFAULT) if has_nvidia else "cpu"
 
@@ -210,6 +197,7 @@ def build_collision_artifacts(
         stale.unlink(missing_ok=True)
 
     warnings: list[str] = []
+    cli_executions: list[dict] = []
     voxel_meta: dict | None = None
 
     # ── INDOOR / OUTDOOR generation policy (SSV-07 §5) ──────────────────────
@@ -235,7 +223,10 @@ def build_collision_artifacts(
             *policy_args,
             str(voxel_json),
         ]
-        _run(cmd)
+        from workers.pipeline.splat_transform_adapter import execution_record
+
+        output = _run(cmd)
+        cli_executions.append(execution_record(cmd[1:], output))
         if not voxel_json.exists() or not voxel_bin.exists():
             raise SplatCollisionError(
                 "voxel 输出缺失: "
@@ -263,7 +254,8 @@ def build_collision_artifacts(
             "--collision-mesh", "faces",
             str(collision_glb),
         ]
-        _run(cmd)
+        output = _run(cmd)
+        cli_executions.append(execution_record(cmd[1:], output))
         if not collision_glb.exists():
             raise SplatCollisionError("collision.glb 输出缺失")
         logger.info("collision mesh OK bytes=%d", collision_glb.stat().st_size)
@@ -291,4 +283,5 @@ def build_collision_artifacts(
         mode=mode,
         gpu=gpu_sel,
         warnings=warnings,
+        cli_executions=cli_executions,
     )

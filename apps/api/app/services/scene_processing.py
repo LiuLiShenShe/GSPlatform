@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -51,7 +53,12 @@ def processing_for_scene(session: Session, scene: Scene) -> SceneProcessingOut:
     calibration.stale = row.calibration_state != "UNVERIFIED" and not bound
     if bound:
         calibration.state = calibration.recordedState
-    calibration.physicalWalkAllowed = calibration.state == "VERIFIED"
+    calibration.physicalWalkAllowed = (
+        calibration.state == "VERIFIED"
+        and calibration.metersPerSceneUnit is not None
+        and math.isclose(calibration.metersPerSceneUnit, 1.0, rel_tol=1e-9)
+        and calibration.transformIdentity == "identity"
+    )
     return SceneProcessingOut(
         sceneType=row.scene_type,
         conversionProfile=row.conversion_profile,
@@ -71,7 +78,11 @@ class SceneProcessingService:
         self, slug: str, identity: RequestIdentity | None, share_token: str | None = None
     ) -> SceneProcessingOut:
         scene = self._access.resolve_readable_scene(slug, identity, share_token=share_token)
-        return processing_for_scene(self._session, scene)
+        result = processing_for_scene(self._session, scene)
+        from app.services.collision_policy import resolve_collision_decision
+
+        result.collisionDecision = resolve_collision_decision(self._session, scene)
+        return result
 
     def patch(
         self, slug: str, identity: RequestIdentity, request: SceneProcessingPatch
@@ -109,4 +120,8 @@ class SceneProcessingService:
             row.calibration_transform_identity = transform_identity(self._session, scene)
             row.calibration_evidence = {"provenance": assumption.provenance}
         self._session.flush()
-        return processing_for_scene(self._session, scene)
+        result = processing_for_scene(self._session, scene)
+        from app.services.collision_policy import resolve_collision_decision
+
+        result.collisionDecision = resolve_collision_decision(self._session, scene)
+        return result

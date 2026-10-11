@@ -14,8 +14,8 @@
  * 重力/坡度限制/台阶高度/玩家高度 **不再以可调控件出现**（避免"看起来能配、
  * 实际无效"的虚假能力）；DB 字段保留向后兼容但构建请求不再携带（后端忽略）。
  */
-import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Select, Switch, Alert, Space, Typography, Spin } from 'antd';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Card, Button, Select, Switch, Alert, Space, Typography, Spin, Checkbox } from 'antd';
 import { ReloadOutlined, BuildOutlined } from '@ant-design/icons';
 import {
   getCollision,
@@ -24,6 +24,7 @@ import {
   rebuildCollision,
   type CollisionAsset,
 } from '../../services/collisionApi';
+import { getSceneProcessing, type SceneProcessingSettings } from '../../services/sceneProcessingApi';
 
 const { Text } = Typography;
 
@@ -52,6 +53,26 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
   const [mode, setMode] = useState<'INDOOR' | 'OUTDOOR'>('OUTDOOR');
   const [collisionEnabled, setCollisionEnabled] = useState(false);
   const [savingEnabled, setSavingEnabled] = useState(false);
+  const [processing, setProcessing] = useState<SceneProcessingSettings | null>(null);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [buildError, setBuildError] = useState<string | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let disposed = false;
+    setProcessing(null);
+    setAcknowledged(false);
+    setBuildError(null);
+    getSceneProcessing(sceneId).then((value) => {
+      if (!disposed) setProcessing(value);
+    }).catch(() => {
+      if (!disposed) setBuildError('处理策略读取失败，请刷新后重试');
+    });
+    return () => {
+      disposed = true;
+      if (refreshTimer.current !== null) clearTimeout(refreshTimer.current);
+    };
+  }, [sceneId]);
 
   const fetchCollision = useCallback(async () => {
     try {
@@ -75,13 +96,14 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
   const handleBuild = async () => {
     try {
       setBuilding(true);
-      // FIX-03 §9：构建请求只带 mode（物理参数对官方 runtime 无效，不再发送）。
-      const request = { mode };
+      const request = { mode, acknowledge_unverified_scale: acknowledged };
+      setBuildError(null);
       await buildCollision(sceneId, request);
       // Poll for status
-      setTimeout(fetchCollision, 2000);
+      refreshTimer.current = setTimeout(fetchCollision, 2000);
     } catch (error) {
       console.error('Build failed:', error);
+      setBuildError('碰撞构建请求失败；不影响已发布场景查看，请检查版本、尺度确认和资源预算');
     } finally {
       setBuilding(false);
     }
@@ -90,10 +112,12 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
   const handleRebuild = async () => {
     try {
       setBuilding(true);
-      await rebuildCollision(sceneId);
-      setTimeout(fetchCollision, 2000);
+      setBuildError(null);
+      await rebuildCollision(sceneId, undefined, acknowledged);
+      refreshTimer.current = setTimeout(fetchCollision, 2000);
     } catch (error) {
       console.error('Rebuild failed:', error);
+      setBuildError('碰撞重建请求失败；不影响已发布场景查看');
     } finally {
       setBuilding(false);
     }
@@ -122,6 +146,19 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
   return (
     <Card title="碰撞设置" size="small">
       <Space direction="vertical" style={{ width: '100%' }}>
+        <Alert type="info" message="场景处理策略" description={processing
+          ? `类型：${processing.sceneType}；碰撞策略：${processing.collisionPolicy}；尺度：${processing.calibration.state}；未自动构建原因：${processing.collisionDecision?.reasonCode ?? '未知'}`
+          : '正在读取服务端处理策略'} data-testid="collision-processing-policy" />
+        {processing && !processing.calibration.physicalWalkAllowed && (
+          <Alert type="warning" message="尚无有效米制标定，物理 Walk 禁用"
+            description="可明确确认后生成非物理测试碰撞；ASSUMED 不代表 VERIFIED。碰撞失败不影响场景查看。" />
+        )}
+        {isOwner && !processing?.calibration.physicalWalkAllowed && (
+          <Checkbox checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)}>
+            我确认仅生成非物理测试碰撞，不将场景单位当作真实米制
+          </Checkbox>
+        )}
+        {buildError && <Alert type="error" message={buildError} />}
         {/* FIX-03 §9：注明官方 Walk 固定物理，以下参数不可配置 —— 不再显示可调控件 */}
         <Alert
           type="info"
@@ -161,7 +198,7 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
                 icon={<BuildOutlined />}
                 onClick={handleBuild}
                 loading={building}
-                disabled={!isOwner}
+                disabled={!isOwner || !processing || (!processing.calibration.physicalWalkAllowed && !acknowledged)}
               >
                 构建碰撞
               </Button>
@@ -189,7 +226,7 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
                   checked={collisionEnabled}
                   onChange={handleToggleEnabled}
                   loading={savingEnabled}
-                  disabled={building || !isOwner}
+                  disabled={building || !isOwner || !processing?.calibration.physicalWalkAllowed}
                   data-testid="collision-enabled-switch"
                 />
               </Space>
@@ -199,7 +236,7 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
                   icon={<ReloadOutlined />}
                   onClick={handleRebuild}
                   loading={building}
-                  disabled={!isOwner}
+                  disabled={!isOwner || !processing || (!processing.calibration.physicalWalkAllowed && !acknowledged)}
                 >
                   重建碰撞
                 </Button>
@@ -230,7 +267,7 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
               {collision.status === 'FAILED' && (
                 <Alert
                   message="碰撞构建失败"
-                  description={collision.errorMessage || '未知错误'}
+                  description={`${collision.errorMessage || '未知错误'}；碰撞失败不影响已发布场景查看`}
                   type="error"
                   showIcon
                 />

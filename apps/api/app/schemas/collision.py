@@ -23,6 +23,15 @@ class CollisionAssetCreateRequest(BaseModel):
     slope_limit_degrees: float = Field(default=45.0, description="Max walkable slope in degrees")
     step_offset: float = Field(default=0.3, description="Max step height in meters")
     player_height: float = Field(default=1.8, description="Player eye height in meters")
+    acknowledge_unverified_scale: bool = Field(default=False, strict=True)
+
+    model_config = {"extra": "forbid"}
+
+
+class CollisionRebuildRequest(BaseModel):
+    acknowledge_unverified_scale: bool = Field(default=False, strict=True)
+
+    model_config = {"extra": "forbid"}
 
 
 class CollisionAssetUpdateRequest(BaseModel):

@@ -15,6 +15,30 @@ os.environ.setdefault("GS_ENV", "development")
 os.environ.setdefault("GS_DEV_IDENTITY_ENABLED", "true")
 
 
+@pytest.fixture(autouse=True)
+def _explicit_manual_admission_for_legacy_reliability_tests(request, monkeypatch):
+    modules = {
+        "test_fix_upload01.py", "test_fix_upload011.py", "test_fix_upload012.py",
+        "test_fix_upload013.py",
+    }
+    if request.path.name not in modules:
+        return
+    from app.services import collision_policy
+
+    original = collision_policy.resolve_collision_decision
+
+    def manual_test_admission(session, scene, **kwargs):
+        from app.db.models.scene_processing import SceneProcessingSettings
+
+        if session.get(SceneProcessingSettings, scene.id) is not None:
+            return original(session, scene, **kwargs)
+        kwargs["trigger_mode"] = "MANUAL"
+        kwargs["acknowledge_unverified_scale"] = True
+        return original(session, scene, **kwargs)
+
+    monkeypatch.setattr(collision_policy, "resolve_collision_decision", manual_test_admission)
+
+
 def pytest_configure(config):  # noqa: D103
     """Prune leftover test upload sessions so the concurrency limit never trips."""
     # Import after env is set so Settings picks up dev-identity.
@@ -124,4 +148,3 @@ def draft_scene(db, dev_user_id):
         status="DRAFT",
         visibility="PRIVATE",
     )
-

@@ -722,7 +722,12 @@ def _finalize_build(
         raise RuntimeError("碰撞构建未产出可用资产")
 
     collision_asset_id = preferred_asset.id
-    build_params = result.to_params()
+    admission_params = {
+        key: value for key, value in (coll.build_params or {}).items()
+        if key in ("triggerMode", "calibrationState", "physicalScaleVerified",
+                   "unverifiedScaleAcknowledged", "resourceEstimate")
+    }
+    build_params = {**result.to_params(), **admission_params}
     # FIX-05 §23：保留 API 在派发时记录的世界变换哈希（STALE 判定基准）。
     build_params["worldTransformHash"] = world_transform_hash
     # FIX-UPLOAD-01.1 §D：持久化版本关联 —— 本碰撞由哪个发布版本构建而来。

@@ -102,12 +102,12 @@ export default function UploadPage() {
 
   // FIX-UPLOAD-01.1 §A1-§A4 — the processing poll is driven by a dedicated
   // hook with correct terminal semantics: it keeps watching after publish
-  // SUCCEEDED until the auto collision job reaches a terminal state, cleans up
+  // SUCCEEDED until required collision work ends, cleans up
   // on unmount/uploadId change, guards against stale responses, and surfaces an
   // honest "状态尚未确认" entry (never a fabricated terminal) after the cap.
   const processingPoll = useUploadProcessingPoll(currentUploadId, phase === 'processing');
   const {
-    publishStatus, collisionStatus, publishJobId,
+    publishStatus, collisionStatus, collisionRequired, collisionPolicyReason, publishJobId,
     sceneId, sceneSlug, unconfirmed, reQuery,
   } = processingPoll;
 
@@ -354,11 +354,15 @@ export default function UploadPage() {
 
       {phase === 'processing' && (
         <div>
-          <Typography.Paragraph>文件上传完成，服务端正在处理…</Typography.Paragraph>
+          <Typography.Paragraph>{publishStatus === 'SUCCEEDED'
+            ? '场景发布成功，可以查看；碰撞按服务端策略独立处理。'
+            : '文件上传完成，服务端正在处理…'}</Typography.Paragraph>
           <ProcessingStatus
             uploadStatus={processingPoll.uploadStatus}
             publishStatus={publishStatus}
             collisionStatus={collisionStatus}
+            collisionRequired={collisionRequired}
+            collisionPolicyReason={collisionPolicyReason}
             publishJobId={publishJobId}
             sceneId={sceneId}
             sceneSlug={sceneSlug}

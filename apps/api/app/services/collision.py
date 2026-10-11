@@ -525,6 +525,21 @@ class CollisionService:
             return None
 
         existing = self._repo.get_by_scene_id(scene.id)
+        from app.services.collision_policy import resolve_collision_decision
+
+        decision = resolve_collision_decision(self._session, scene)
+        continuing_existing_job = (
+            existing is not None and existing.status in ("QUEUED", "RUNNING")
+            and existing.job_id is not None
+            and self._session.get(Job, existing.job_id) is not None
+            and (existing.build_params or {}).get("sourceVersion") == current_version.asset_version
+        )
+        if not decision["shouldBuild"] and not continuing_existing_job:
+            self._session.rollback()
+            if decision["reasonCode"] == "ALREADY_SUCCEEDED" and existing is not None:
+                return CollisionBuildResponse(job_id=str(existing.job_id or ""),
+                                              status="SUCCEEDED", message="当前版本碰撞已存在")
+            return None
         current_asset = current_version.asset_version
 
         def _fresh_job() -> Job:
@@ -544,6 +559,12 @@ class CollisionService:
             # MISSING — publish committed, but the auto-collision never ran
             # (crash between ``commit_version`` and the chaining block).
             collision = self._repo.create(scene_id=scene.id, mode=mode)
+            collision.build_params = {
+                "triggerMode": decision["triggerMode"],
+                "calibrationState": decision["calibrationState"],
+                "physicalScaleVerified": decision["physicalScaleVerified"],
+                "resourceEstimate": decision["resourceEstimate"],
+            }
             collision.attempt += 1
             collision.status = "QUEUED"
             job = _fresh_job()
@@ -1195,6 +1216,9 @@ class CollisionService:
         scene row lock and pins the source version onto the job.
         """
         scene = self._get_scene(slug)
+        from app.services.scene_access import SceneAccessPolicy
+
+        SceneAccessPolicy(self._session).resolve_readable_for_user(slug, owner_id)
         _validate_owner(scene, owner_id)
         # §C — serialize with auto-dispatch / rebuild on the scene row lock.
         locked_scene = self._lock_scene_for_update(scene.id)
@@ -1204,6 +1228,8 @@ class CollisionService:
 
         if req.mode not in ("INDOOR", "OUTDOOR"):
             raise ConflictError("mode 必须是 INDOOR 或 OUTDOOR")
+
+        decision = self._manual_decision(scene, req.acknowledge_unverified_scale)
 
         existing = self._repo.get_by_scene_id(scene.id)
         if existing is not None and existing.status in ("QUEUED", "RUNNING"):
@@ -1248,6 +1274,12 @@ class CollisionService:
         self._session.flush()
 
         collision.job_id = job.id
+        collision.build_params = {
+            "triggerMode": "MANUAL", "calibrationState": decision["calibrationState"],
+            "physicalScaleVerified": decision["physicalScaleVerified"],
+            "unverifiedScaleAcknowledged": req.acknowledge_unverified_scale,
+            "resourceEstimate": decision["resourceEstimate"],
+        }
         # FIX-UPLOAD-01.1 §D：持久化版本绑定 —— 若场景已发布，钉扎当前版本。
         # (未发布场景没有版本可钉扎；worker 会在构建时回退到当前版本。)
         current_version = (
@@ -1297,9 +1329,14 @@ class CollisionService:
         self,
         slug: str,
         owner_id: uuid.UUID,
+        *,
+        acknowledge_unverified_scale: bool = False,
     ) -> CollisionBuildResponse:
         """Rebuild collision asset."""
         scene = self._get_scene(slug)
+        from app.services.scene_access import SceneAccessPolicy
+
+        SceneAccessPolicy(self._session).resolve_readable_for_user(slug, owner_id)
         _validate_owner(scene, owner_id)
         # §C — serialize with auto-dispatch / manual build on the scene row.
         locked_scene = self._lock_scene_for_update(scene.id)
@@ -1313,6 +1350,14 @@ class CollisionService:
 
         if collision.status in ("QUEUED", "RUNNING"):
             raise ConflictError("碰撞构建任务正在进行中")
+
+        decision = self._manual_decision(scene, acknowledge_unverified_scale, rebuilding=True)
+        collision.build_params = {
+            "triggerMode": "MANUAL", "calibrationState": decision["calibrationState"],
+            "physicalScaleVerified": decision["physicalScaleVerified"],
+            "unverifiedScaleAcknowledged": acknowledge_unverified_scale,
+            "resourceEstimate": decision["resourceEstimate"],
+        }
 
         self._repo.increment_attempt(collision.id)
 
@@ -1343,3 +1388,16 @@ class CollisionService:
             current_version,
             success_message=f"碰撞重建任务已创建 (尝试 #{collision.attempt})",
         )
+
+    def _manual_decision(
+        self, scene: Scene, acknowledged: bool, *, rebuilding: bool = False
+    ) -> dict[str, Any]:
+        from app.services.collision_policy import resolve_collision_decision
+
+        decision = resolve_collision_decision(
+            self._session, scene, trigger_mode="MANUAL",
+            acknowledge_unverified_scale=acknowledged, rebuilding=rebuilding,
+        )
+        if not decision["shouldBuild"]:
+            raise ConflictError(f"碰撞构建未获批准: {decision['reasonCode']}")
+        return decision

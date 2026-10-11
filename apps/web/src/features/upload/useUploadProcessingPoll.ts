@@ -35,6 +35,7 @@ export function shouldStopProcessingPoll(st: UploadProcessingStatus): boolean {
   if (st.status !== 'SUCCEEDED') return false;
   if (st.publishStatus === 'FAILED') return true;
   if (st.publishStatus !== 'SUCCEEDED') return false;
+  if (st.collisionRequired === false) return true;
   return st.collisionStatus === 'SUCCEEDED' || st.collisionStatus === 'FAILED';
 }
 
@@ -42,6 +43,8 @@ export interface UploadProcessingPollState {
   uploadStatus: string;
   publishStatus: string | null;
   collisionStatus: string | null;
+  collisionRequired: boolean | null;
+  collisionPolicyReason: string | null;
   publishJobId: string | null;
   sceneId: string | null;
   sceneSlug: string | null;
@@ -61,6 +64,8 @@ const INITIAL: UploadProcessingPollState = {
   uploadStatus: 'QUEUED',
   publishStatus: null,
   collisionStatus: null,
+  collisionRequired: null,
+  collisionPolicyReason: null,
   publishJobId: null,
   sceneId: null,
   sceneSlug: null,
@@ -114,6 +119,8 @@ export function useUploadProcessingPoll(
         uploadStatus: st.status,
         publishStatus: st.publishStatus,
         collisionStatus: st.collisionStatus,
+        collisionRequired: st.collisionRequired ?? null,
+        collisionPolicyReason: st.collisionPolicyReason ?? null,
         publishJobId: st.publishJobId,
         sceneId: st.sceneId,
         sceneSlug: st.sceneSlug,

@@ -37,6 +37,8 @@ export interface ProcessingStatusProps {
   publishStatus: string | null;
   /** Collision Job status (kind=BUILD_COLLISION) — null until auto-built. */
   collisionStatus: string | null;
+  collisionRequired?: boolean | null;
+  collisionPolicyReason?: string | null;
   /** Publish Job id (for the Steps key / diagnostics). */
   publishJobId: string | null;
   /** Scene identity used for post-success navigation. */
@@ -103,6 +105,8 @@ export function ProcessingStatus({
   uploadStatus,
   publishStatus,
   collisionStatus,
+  collisionRequired,
+  collisionPolicyReason,
   publishJobId: _publishJobId,
   sceneId,
   sceneSlug,
@@ -113,7 +117,9 @@ export function ProcessingStatus({
   const publishDone = publishStatus === 'SUCCEEDED';
   const publishFailed = publishStatus === 'FAILED';
   const publishIdx = stageIndex(publishStatus, PUBLISH_STAGE_ORDER);
-  const tag = collisionTag(collisionStatus, publishDone);
+  const tag = collisionRequired === false
+    ? { text: '碰撞非必需', color: 'default' }
+    : collisionTag(collisionStatus, publishDone);
 
   return (
     <div style={{ marginTop: 16 }}>
@@ -159,7 +165,9 @@ export function ProcessingStatus({
       <Space direction="vertical" size={4}>
         <Tag color={tag.color}>{tag.text}</Tag>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          {collisionDescription(collisionStatus, publishDone)}
+          {collisionRequired === false
+            ? `碰撞未启用，可按需生成。${collisionPolicyReason ? `策略：${collisionPolicyReason}` : ''}`
+            : collisionDescription(collisionStatus, publishDone)}
         </Typography.Text>
       </Space>
 

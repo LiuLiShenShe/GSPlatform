@@ -78,7 +78,7 @@ def _session_login(client: TestClient) -> tuple[uuid.UUID, str]:
 
 def _scene_owned_by(db, user_id: uuid.UUID):
     from app.db.models.enums import SceneStatus
-    from app.db.models.scene import Scene
+    from app.db.models.scene import Scene, SceneVersion
 
     scene = Scene(
         owner_id=user_id,
@@ -89,6 +89,13 @@ def _scene_owned_by(db, user_id: uuid.UUID):
         status=SceneStatus.PUBLISHED.value,
     )
     db.add(scene)
+    db.flush()
+    version = SceneVersion(scene_id=scene.id, asset_version=uuid.uuid4().hex[:12],
+                           format="streamed-sog", size_bytes=1024,
+                           manifest={"stream": {"counts": [100, 30, 10]}})
+    db.add(version)
+    db.flush()
+    scene.current_version_id = version.id
     db.commit()
     db.refresh(scene)
     return scene
@@ -183,7 +190,7 @@ class TestCollisionBuildOwnerAuth:
         monkeypatch.setattr(CollisionService, "_dispatch_build", _stub_dispatch)
         resp = client.post(
             f"/api/v1/scenes/{scene.slug}/collision/build",
-            json={"mode": "OUTDOOR"},
+            json={"mode": "OUTDOOR", "acknowledge_unverified_scale": True},
             headers={"X-CSRF-Token": csrf},
         )
         assert resp.status_code == 200, resp.text
@@ -225,6 +232,13 @@ class TestCollisionBuildOwnerAuth:
                 "sourceVersion": "../../../../etc/passwd",
                 "sourceVersionId": "11111111-1111-1111-1111-111111111111",
             },
+            headers={"X-CSRF-Token": csrf},
+        )
+        assert resp.status_code == 422, resp.text
+        assert sent == []
+        resp = client.post(
+            f"/api/v1/scenes/{scene.slug}/collision/build",
+            json={"mode": "OUTDOOR", "acknowledge_unverified_scale": True},
             headers={"X-CSRF-Token": csrf},
         )
         assert resp.status_code == 200, resp.text

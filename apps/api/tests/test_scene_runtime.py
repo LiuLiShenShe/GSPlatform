@@ -610,7 +610,7 @@ class TestCollision:
         assert collision["slopeLimitDegrees"] == 45.0
         assert collision["stepOffset"] == 0.3
         assert collision["playerHeight"] == 1.8
-        assert collision["enabled"] is True
+        assert collision["enabled"] is False
 
     def test_collision_prefers_voxel(self, db, public_scene):
         """SSV-07: when both artifacts exist, the voxel octree is preferred and

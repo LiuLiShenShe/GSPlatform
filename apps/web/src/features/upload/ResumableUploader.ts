@@ -46,6 +46,8 @@ export interface UploadProcessingStatus {
   publishStatus: string | null;
   collisionJobId: string | null;
   collisionStatus: string | null;
+  collisionRequired?: boolean;
+  collisionPolicyReason?: string | null;
 }
 
 /** Poll the read-only status surface once. */

@@ -32,6 +32,7 @@ export interface CollisionBuildRequest {
   slopeLimitDegrees?: number;
   stepOffset?: number;
   playerHeight?: number;
+  acknowledge_unverified_scale?: boolean;
 }
 
 export interface CollisionUpdateRequest {
@@ -104,10 +105,11 @@ export async function updateCollision(
 export async function rebuildCollision(
   sceneId: string,
   signal?: AbortSignal,
+  acknowledgeUnverifiedScale = false,
 ): Promise<CollisionBuildResponse> {
   const response = await httpClient.post<CollisionBuildResponse>(
     `/scenes/${encodeURIComponent(sceneId)}/collision/rebuild`,
-    {},
+    { acknowledge_unverified_scale: acknowledgeUnverifiedScale },
     { signal },
   );
   return response.data;

@@ -70,3 +70,4 @@ class SceneProcessingOut(BaseModel):
     calibration: CalibrationOut = Field(default_factory=CalibrationOut)
     createdAt: datetime | None = None
     updatedAt: datetime | None = None
+    collisionDecision: dict[str, Any] | None = None
