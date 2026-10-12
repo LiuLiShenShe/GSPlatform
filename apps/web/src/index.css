@@ -1037,3 +1037,29 @@ a {
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+.gs-xr__performance {
+  position: absolute;
+  top: 60px;
+  left: 12px;
+  z-index: 60;
+  width: min(420px, calc(100vw - 24px));
+  max-height: 45vh;
+  overflow: auto;
+  padding: 12px;
+  background: rgba(16, 24, 32, 0.94);
+  border: 1px solid #667788;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.gs-xr__performance button {
+  margin: 3px;
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+.gs-xr__performance pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

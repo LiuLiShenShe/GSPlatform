@@ -22,19 +22,24 @@
  * 退出后可用；沉浸会话内 WebXR 渲染 3D 场景，浏览器 HTML 不会出现在头显视野中
  * （产品行为 = 退出沉浸后使用 2D Overlay，见验收报告 §MEDIA）。
  */
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useSuperSplatXR } from '../features/viewer-official/useSuperSplatXR';
 import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
 import { useBackgroundAudio } from '../hooks/useBackgroundAudio';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
+import { diagnosticsEnabled } from '../scene-runtime/RuntimePerformanceDiagnostics';
+import { XRPerformancePanel } from '../features/viewer-official/XRPerformancePanel';
 
 export default function XRViewerPage() {
   const { sceneId } = useParams<{ sceneId: string }>();
   const effectiveSceneId = sceneId ?? '';
   useDocumentTitle(effectiveSceneId ? `XR 场景 ${effectiveSceneId}` : 'XR 场景');
 
-  const state = useSuperSplatXR(effectiveSceneId);
+  const location = useLocation();
+  const recordPerformance = diagnosticsEnabled(location.search,
+    import.meta.env.DEV || import.meta.env.VITE_XR_PERFORMANCE_DIAGNOSTICS === 'true');
+  const state = useSuperSplatXR(effectiveSceneId, recordPerformance);
 
   // FIX-03 §5/§6/§7：背景音频（XR 页同样由 GSPlatform 控制器管理，官方 soundUrl 停用）。
   const backgroundAudio = useBackgroundAudio(state.descriptor?.backgroundAudio ?? null, effectiveSceneId);
@@ -56,6 +61,7 @@ export default function XRViewerPage() {
     <div className="gs-xr" data-testid="xr-viewer-page" data-runtime="official">
       {/* 3D 场景铺满 viewport */}
       <div className="gs-xr__mount" ref={state.containerRef} data-testid="xr-mount" />
+      {recordPerformance && <XRPerformancePanel state={state} />}
 
       {/* 极简 UI（产品层，非工程面板） */}
       <header className="gs-xr__topbar">
@@ -151,6 +157,7 @@ export default function XRViewerPage() {
           xrMode: state.xrMode,
           renderer: state.renderer,
           gsplats: state.gsplats,
+          performanceMode: state.performanceMode,
           progress: Math.round(state.progress),
           hasCollision: state.hasCollision,
           walkAllowed: state.walkAllowed,
@@ -164,7 +171,7 @@ export default function XRViewerPage() {
           isManifestFallback: state.isManifestFallback,
           error: state.error,
           camera: (() => {
-            const pose = state.getCameraPose();
+            const pose = state.cameraPose;
             return pose
               ? {
                   position: pose.position.map((v) => Number(v.toFixed(4))),
@@ -189,7 +196,7 @@ export default function XRViewerPage() {
       <span className="gs-xr__diag" data-testid="diag-navigator-xr">{state.diagnostics.navigatorXR ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-camera">
         {(() => {
-          const pose = state.getCameraPose();
+          const pose = state.cameraPose;
           return pose
             ? `${pose.position.map((v) => Number(v.toFixed(3))).join(', ')} / ${pose.target.map((v) => Number(v.toFixed(3))).join(', ')} / ${Number(pose.fov.toFixed(2))}`
             : '—';
