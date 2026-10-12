@@ -9,6 +9,12 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from workers.pipeline.splat_transform_adapter import inspect_source
+
+STREAMING_THRESHOLD = 1_000_000
+MIN_LOD_GAUSSIANS = 125_000
+MAX_LOD_LEVELS = 8
+
 # Pinned CLI identity — part of the conversion recipe (see ``conversion_recipe``):
 # a different splat-transform can emit different bytes for the same input, so it
 # must be able to move the asset version.
@@ -130,6 +136,35 @@ class ResolvedConversionPolicy:
     gpu: str
     recipe: dict
     output_format: str = "streamed-sog"
+    gaussian_count: int = 0
+
+
+def automatic_recipe(count: int, profile: str, gpu: str, *, passthrough: bool = False) -> dict:
+    if type(count) is not int or count <= 0:
+        raise ValueError("Verified Gaussian count must be positive")
+    streamed = count >= STREAMING_THRESHOLD and not passthrough
+    ratios = ["100%"]
+    ratio = 50.0
+    while streamed and len(ratios) < MAX_LOD_LEVELS and int(count * ratio / 100) >= MIN_LOD_GAUSSIANS:
+        ratios.append(f"{ratio:g}%")
+        ratio /= 2
+    chunk_count, chunk_extent = _PROFILES[profile]
+    return {
+        "recipeVersion": "3", "mode": "streamed-sog" if streamed else "regular-sog",
+        "tool": None if passthrough else "splat-transform",
+        "toolVersion": None if passthrough else _TOOL_VERSION,
+        "encoding": "passthrough" if passthrough else "official-sog-v2",
+        "sourceGaussianCount": count,
+        "profile": profile if streamed else "regular",
+        "streamingThreshold": STREAMING_THRESHOLD,
+        "minLodGaussians": MIN_LOD_GAUSSIANS if streamed else None,
+        "maxLodLevels": MAX_LOD_LEVELS if streamed else None,
+        "lodRatios": ratios, "lodOrder": list(range(len(ratios))),
+        "lodChunkCount": chunk_count if streamed else None,
+        "lodChunkExtent": chunk_extent if streamed else None, "lodChunkMin": None,
+        "shIterations": 10 if not passthrough else None,
+        "computeBackend": ("cpu" if gpu == "cpu" else "webgpu") if not passthrough else None,
+    }
 
 
 def resolve_conversion_policy(source: Path, *, profile: str, source_format: str | None,
@@ -140,4 +175,18 @@ def resolve_conversion_policy(source: Path, *, profile: str, source_format: str 
         raise ValueError("不支持的转换格式")
     if gpu != "cpu" and not re.fullmatch(r"[0-9]+", gpu):
         raise ValueError("GPU selector must be cpu or a non-negative adapter index")
-    return ResolvedConversionPolicy(source_format, profile, gpu, _source_recipe(source, profile, gpu))
+    legacy_recipe = _source_recipe(source, profile, gpu)
+    if legacy_recipe.get("mode") == "streamed-passthrough":
+        return ResolvedConversionPolicy(source_format, profile, gpu, legacy_recipe, "streamed-passthrough")
+    if zipfile.is_zipfile(source):
+        from workers.pipeline.sog_container import validate_sog_container
+
+        metadata = validate_sog_container(source)
+    else:
+        metadata = inspect_source(source, source_format, decode=True)
+    count = metadata["numGaussians"]
+    passthrough = metadata.get("format") == "sog"
+    recipe = automatic_recipe(count, profile, gpu, passthrough=passthrough)
+    recipe["sourceShBands"] = metadata.get("shBands")
+    recipe["sourceModel"] = metadata.get("model")
+    return ResolvedConversionPolicy(source_format, profile, gpu, recipe, recipe["mode"], count)

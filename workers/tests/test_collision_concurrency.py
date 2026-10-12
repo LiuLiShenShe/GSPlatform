@@ -518,7 +518,8 @@ def _gaussian_ply_bytes(n: int = 512) -> bytes:
 
 
 @REQUIRES_CLI
-def test_real_cli_collision_build_produces_artifacts(tmp_path, monkeypatch):
+@pytest.mark.parametrize("recipe_version,entry_name", [("2", "lod-meta.json"), ("3", "scene.sog")])
+def test_real_cli_collision_build_produces_artifacts(tmp_path, monkeypatch, recipe_version, entry_name):
     """A REAL splat-transform collision build through the full worker task:
     PLY → streamed-SOG staging → SOG asset → build_collision (real CLI)."""
     import workers.pipeline.convert_scene as convert_mod
@@ -531,17 +532,20 @@ def test_real_cli_collision_build_produces_artifacts(tmp_path, monkeypatch):
     cr = convert_mod.convert_to_streamed_sog(
         src, staging, scene_id=str(uuid.uuid4()), profile="balanced",
         gpu="cpu", source_format="ply",
+        recipe_version=recipe_version,
     )
     assert cr.ok, f"PLY conversion failed: {cr.reason}"
     staging = cr.staging_dir or staging / cr.version_id
-    assert (staging / "lod-meta.json").exists()
+    assert (staging / entry_name).exists()
 
     # 2) Promote the staging into a published SOG asset the worker reads.
     db = SessionLocal()
     try:
         scene = _new_published_scene(db, asset_version=cr.version_id)
         version = scene.current_version
-        sog_key = f"published/{scene.id}/versions/{cr.version_id}/lod-meta.json"
+        version.format = "sog" if recipe_version == "3" else "streamed-sog"
+        version.manifest = cr.manifest
+        sog_key = f"published/{scene.id}/versions/{cr.version_id}/{entry_name}"
         from app.db.models.asset import Asset
         from app.db.models.enums import AssetKind
 
@@ -559,7 +563,7 @@ def test_real_cli_collision_build_produces_artifacts(tmp_path, monkeypatch):
         import shutil
 
         shutil.copytree(staging, dest.parent, dirs_exist_ok=True)
-        assert (dest.parent / "lod-meta.json").exists()
+        assert (dest.parent / entry_name).exists()
         job, coll = _new_job_and_collision(db, scene)
         db.expire_all()
 

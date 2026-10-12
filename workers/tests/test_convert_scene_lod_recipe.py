@@ -37,13 +37,17 @@ from workers.pipeline.convert_scene import (
     _marker_for,
     _reusable_decimation,
     conversion_recipe,
-    convert_to_streamed_sog,
+    convert_to_streamed_sog as convert_automatic_sog,
     version_id_for,
 )
 
 SCENE_UUID = "11111111-2222-3333-4444-555555555555"
 SHA_A = "a" * 64
 SHA_B = "b" * 64
+
+
+def convert_to_streamed_sog(*arguments, **keywords):
+    return convert_automatic_sog(*arguments, recipe_version="2", **keywords)
 
 
 def _node_bin() -> Path:

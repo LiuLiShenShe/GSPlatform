@@ -471,11 +471,9 @@ def build_collision(
         sog_path = storage._path(sog.storage_key)
         if not sog_path.exists():
             raise FileNotFoundError(f"SOG 文件不存在: {sog.storage_key}")
-        # §C: the SOG entry is lod-meta.json (the streamed index).  Anything
-        # else is not the publish-service SOG we must build collision from.
-        if sog_path.name != "lod-meta.json":
+        if sog_path.name not in ("lod-meta.json", "scene.sog"):
             raise FileNotFoundError(
-                f"SOG 资产不是流式索引 (lod-meta.json): {sog.storage_key}"
+                f"SOG 资产入口不受支持: {sog.storage_key}"
             )
         if not (sog_path.parent / "manifest.json").exists():
             raise FileNotFoundError(f"SOG 版本目录不完整: {sog_path.parent}")

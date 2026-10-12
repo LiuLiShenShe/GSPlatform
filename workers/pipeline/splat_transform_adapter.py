@@ -131,3 +131,45 @@ def execution_record(command: list[str], output: str) -> dict:
         "exitCode": 0,
         "observedDevice": observation,
     }
+
+
+def inspect_source(source: Path, source_format: str | None = None, *, decode: bool = False) -> dict:
+    extension = {"ply": ".ply", "splat": ".splat", "sog": ".sog", "zip": ".sog"}.get(
+        source_format, source.suffix
+    )
+    if extension not in {".ply", ".splat", ".sog", ".spz", ".ksplat", ".gz"}:
+        raise ValueError("Unsupported official inspection input")
+    with tempfile.TemporaryDirectory(prefix="gs-splat-inspect-") as directory:
+        workdir = Path(directory)
+        input_path = workdir / f"input{extension}"
+        try:
+            os.link(source, input_path)
+        except OSError:
+            shutil.copyfile(source, input_path)
+        arguments = [str(CLI_PATH), "-g", "cpu", str(input_path), "--info", "json"]
+        if decode:
+            arguments.extend(["--stats", "json"])
+        arguments.extend(["null", "--no-tty", "--max-workers", "0"])
+        output = run_cli_command(arguments, cwd=workdir, timeout=300)
+        result = None
+        for start, character in enumerate(output):
+            if character != "{":
+                continue
+            try:
+                metadata, _ = json.JSONDecoder().raw_decode(output[start:])
+            except json.JSONDecodeError:
+                continue
+            if (isinstance(metadata, dict) and "numGaussians" in metadata
+                    and "gaussian" in metadata and "format" in metadata):
+                count = metadata.get("numGaussians")
+                if metadata.get("gaussian") is not True or type(count) is not int or count <= 0:
+                    raise ValueError("Official tool did not identify valid Gaussians")
+                result = {key: value for key, value in metadata.items() if key != "stats"}
+                if decode and "stats" in metadata:
+                    for lod in metadata["stats"]:
+                        statistics = lod.get("data", {})
+                        if any(statistics.get("nanCount", [])) or any(statistics.get("infCount", [])):
+                            raise ValueError("Gaussian source contains non-finite values")
+        if result is not None:
+            return result
+    raise ValueError("Official tool returned no structural metadata")

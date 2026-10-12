@@ -62,7 +62,7 @@ COLLISION_SERVE_BASE = "/api/v1/scenes/{slug}/collision"
 
 # Default on-disk filenames for single-file published versions, by version
 # format. Used only as a last-resort fallback (no manifest assetUrl, no SOG
-# asset row) — DB publishes are streamed (lod-meta).
+# asset row).
 _SINGLE_FILE_DEFAULTS = {
     "sog": "scene.sog",
     "ply": "scene.ply",

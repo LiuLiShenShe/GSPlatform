@@ -1,4 +1,4 @@
-"""Pipeline — streamed-SOG conversion (Phase 06).
+"""Pipeline — official regular/streamed SOG conversion into immutable staging.
 
 Converts an uploaded source asset into a streamed-SOG **staging tree**:
 
@@ -264,6 +264,8 @@ def _write_metadata(
     stage_records: dict | None = None,
     max_workers: int | None = None,
     executions: list[dict] | None = None,
+    regular: bool = False,
+    official_inspection: dict | None = None,
 ) -> dict:
     """Write manifest.json / build-info.json / checksums.sha256 into staging.
 
@@ -271,7 +273,8 @@ def _write_metadata(
     profile/chunk/gpu regardless of the real command line, so the report
     contradicted the artifact it described.
     """
-    counts = _read_counts(staging / "lod-meta.json")
+    counts = [source_gaussian_count] if regular else _read_counts(staging / "lod-meta.json")
+    entry_name = "scene.sog" if regular else "lod-meta.json"
     poster_url = f"versions/{ver}/poster.webp" if has_poster else None
     gaussian_total = sum(counts) if counts else 0
 
@@ -279,12 +282,12 @@ def _write_metadata(
         "schemaVersion": 1,
         "sceneId": scene_id,
         "assetVersion": ver,
-        "format": "streamed-sog",
+        "format": "sog" if regular else "streamed-sog",
         "sourceSha256": source_sha256,
         "conversionRecipeVersion": recipe.get("recipeVersion"),
         "conversionRecipe": recipe,
-        "stream": {
-            "entryUrl": f"versions/{ver}/lod-meta.json",
+        "content" if regular else "stream": {
+            "entryUrl": f"versions/{ver}/{entry_name}",
             "byteLength": entry_bytes,
             "sha256": entry_sha256,
             "transport": "range",
@@ -296,6 +299,8 @@ def _write_metadata(
         else None,
         "camera": {"position": [0, 1.2, 3.5], "target": [0, 0.8, 0], "fov": 55},
     }
+    if regular:
+        manifest["assetUrl"] = f"versions/{ver}/{entry_name}"
     (staging / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -321,6 +326,8 @@ def _write_metadata(
                 "chunkMin": recipe.get("lodChunkMin"),
                 "gpuDevice": gpu if recipe.get("tool") else None,
                 "cliExecutions": executions,
+                "officialInspection": official_inspection,
+                "outputSha256": entry_sha256,
                 "maxWorkers": max_workers,
                 "stageDurations": stage_durations,
                 "stages": stage_records or {},
@@ -479,6 +486,46 @@ def _convert_to_streamed_sog(
         shutil.copy2(source_path, raw_input)
     stage_end("COPYING", copying)
 
+    if recipe.get("mode") == "regular-sog":
+        entry = staging_dir / "scene.sog"
+        encoding = stage_begin("ENCODING")
+        try:
+            if recipe.get("encoding") == "passthrough":
+                shutil.copyfile(raw_input, entry)
+            else:
+                invoke([str(_NODE_BIN), "-g", gpu, str(raw_input), str(entry),
+                        "--sh-iterations", str(recipe["shIterations"]),
+                        "--no-tty", "--max-workers", "0"], cwd=workdir)
+            from workers.pipeline.sog_container import validate_sog_container
+
+            inspection = validate_sog_container(entry)
+            if inspection["numGaussians"] != recipe["sourceGaussianCount"]:
+                raise ValueError("Regular SOG did not preserve all source Gaussians")
+            if inspection.get("shBands") != recipe.get("sourceShBands"):
+                raise ValueError("Regular SOG did not preserve source SH bands")
+            stage_end("ENCODING", encoding)
+            entry_bytes = entry.stat().st_size
+            manifest = _write_metadata(
+                staging_dir, scene_id=scene_id, ver=ver, source_name=source_path.name,
+                source_sha256=source_sha256, source_gaussian_count=inspection["numGaussians"],
+                entry_bytes=entry_bytes, entry_sha256=_sha256_of(entry), has_poster=False,
+                recipe=recipe, gpu=gpu, stage_durations=stage_durations,
+                total_duration=time.monotonic() - started, stage_records=stage_records,
+                max_workers=0 if recipe.get("tool") else None, executions=executions,
+                regular=True, official_inspection=inspection,
+            )
+            from workers.pipeline.artifact_validator import validate_artifact_tree
+
+            validate_artifact_tree(staging_dir)
+        except Exception as exc:
+            stage_end("ENCODING", encoding, "FAILED")
+            shutil.rmtree(staging_dir, ignore_errors=True)
+            return ConvertResult(False, source_sha256=source_sha256,
+                                 reason=f"Regular SOG 验证/转换失败: {exc}", recipe=recipe)
+        shutil.rmtree(workdir, ignore_errors=True)
+        return ConvertResult(True, ver, entry_bytes, source_sha256, manifest,
+                             recipe=recipe, stage_durations=stage_durations, staging_dir=staging_dir)
+
     # ── detect already-streamed source (zip containing lod-meta.json) ────────
     try:
         from workers.pipeline.validate_scene import safe_unpack_zip
@@ -540,10 +587,6 @@ def _convert_to_streamed_sog(
     #   LOD 0 = the ORIGINAL, validated source PLY (no decimation; the old code
     #           spent a full 100% decimation pass to produce a byte-identical
     #           copy plus an extra 3.2 GB of disk traffic for a 13M scene).
-    #   LOD 1 = source decimated to 30%
-    #   LOD 2 = source decimated to 10%
-    # The old order (10%→LOD0, 30%→LOD1, 100%→LOD2) was exactly backwards.
-    lod1, lod2 = workdir / "lod1.ply", workdir / "lod2.ply"
     # The pinned CLI lives in node_modules; a pre-built streamed-zip passthrough
     # (returned above) never needs it, but any real conversion does. Check here,
     # not at the top of the function, so passthrough stays CLI-free.
@@ -559,10 +602,8 @@ def _convert_to_streamed_sog(
     # re-running (see _reusable_decimation for the exact checks).
     t0 = time.monotonic()
     try:
-        decimate_jobs = [
-            (lod1, _LOD_RATIOS[0]),
-            (lod2, _LOD_RATIOS[1]),
-        ]
+        decimate_jobs = [(workdir / f"lod{level}.ply", ratio)
+                         for level, ratio in enumerate(recipe["lodRatios"][1:], start=1)]
         # splat-transform 3.3.3 requires every lod-meta.json LOD input to be a
         # PLY ("local PLY input(s)"), so a .splat/.spz/... source cannot be
         # tagged directly as LOD 0 and must first be re-encoded to PLY.  For a
@@ -602,8 +643,8 @@ def _convert_to_streamed_sog(
                     recipe_key=recipe_key,
                 )
             stage_durations["recode_to_ply"] = round(time.monotonic() - t0, 3)
-        for target, ratio in decimate_jobs:
-            name = "DECIMATE_LOD1" if target == lod1 else "DECIMATE_LOD2"
+        for level, (target, ratio) in enumerate(decimate_jobs, start=1):
+            name = f"DECIMATE_LOD{level}"
             beginning = stage_begin(name)
             if _reusable_decimation(
                 target,
@@ -654,20 +695,15 @@ def _convert_to_streamed_sog(
     entry = staging_dir / "lod-meta.json"
     stack_start = stage_begin("STACK")
     try:
+        inputs = [lod0, *[target for target, ratio in decimate_jobs]]
+        tagged_inputs = [argument for level, target in enumerate(inputs)
+                         for argument in (str(target), "--tag-lod", str(level))]
         invoke(
             [
                 str(_NODE_BIN),
                 "-g",
                 gpu,
-                str(lod0),
-                "--tag-lod",
-                "0",
-                str(lod1),
-                "--tag-lod",
-                "1",
-                str(lod2),
-                "--tag-lod",
-                "2",
+                *tagged_inputs,
                 str(entry),
                 "--lod-chunk-count",
                 str(chunk_count),
@@ -773,17 +809,29 @@ def convert_to_streamed_sog(
     gpu: str | None = None,
     source_format: str | None = None,
     on_stage: Callable | None = None,
+    recipe_version: str = "3",
 ) -> ConvertResult:
-    """Convert under an exclusive source/recipe lock; preserve valid intermediate files."""
+    """Automatic SOG policy under an exclusive lock; recipe v2 remains an explicit legacy path."""
     gpu = gpu if gpu is not None else os.environ.get("GS_CONVERT_GPU", _DEFAULT_GPU)
+    if recipe_version not in ("2", "3"):
+        return ConvertResult(False, reason="Unsupported conversion recipe version")
     try:
-        policy = resolve_conversion_policy(
-            source_path, profile=profile, source_format=source_format, gpu=gpu
-        )
-    except ValueError as exc:
+        if recipe_version == "2":
+            if profile not in _PROFILES or (source_format is not None and source_format not in _FORMAT_TO_EXT):
+                raise ValueError("不支持的转换 profile/format")
+            import re
+
+            if gpu != "cpu" and not re.fullmatch(r"[0-9]+", gpu):
+                raise ValueError("Invalid GPU selector")
+            recipe = _source_recipe(source_path, profile, gpu)
+        else:
+            policy = resolve_conversion_policy(
+                source_path, profile=profile, source_format=source_format, gpu=gpu
+            )
+            recipe = policy.recipe
+    except (ValueError, RuntimeError, OSError) as exc:
         return ConvertResult(False, reason=str(exc))
     source_sha256 = _sha256_of(source_path)
-    recipe = policy.recipe
     version = version_id_for(source_sha256, recipe)
     lock_dir = staging_dir.parent / ".conversion-locks"
     lock_dir.mkdir(parents=True, exist_ok=True)

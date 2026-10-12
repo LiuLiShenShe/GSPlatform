@@ -3,9 +3,76 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from workers.pipeline.validate_scene import _sha256_of
+
+
+def _validate_regular(version_dir: Path, manifest: dict) -> dict:
+    from workers.pipeline.conversion_policy import version_id_for
+    from workers.pipeline.sog_container import validate_sog_container
+
+    entry_url = f"versions/{manifest.get('assetVersion')}/scene.sog"
+    content = manifest.get("content", {})
+    if manifest.get("assetUrl") != entry_url or content.get("entryUrl") != entry_url:
+        raise ValueError("Regular SOG entryUrl disagrees with version identity")
+    entry = (version_dir / "scene.sog").resolve()
+    root = version_dir.resolve()
+    if not entry.is_relative_to(root) or not entry.is_file() or entry.stat().st_size <= 0:
+        raise ValueError("Regular SOG entry missing or outside version")
+    inspection = validate_sog_container(entry)
+    counts = [inspection["numGaussians"]]
+    digest = _sha256_of(entry)
+    if (content.get("counts") != counts or content.get("byteLength") != entry.stat().st_size
+            or content.get("sha256") != digest):
+        raise ValueError("Regular SOG content integrity mismatch")
+    source_sha = manifest.get("sourceSha256", "")
+    recipe = manifest.get("conversionRecipe", {})
+    if (not re.fullmatch(r"[0-9a-f]{64}", source_sha)
+            or recipe.get("recipeVersion") != "3" or recipe.get("mode") != "regular-sog"
+            or manifest.get("conversionRecipeVersion") != "3"
+            or recipe.get("sourceGaussianCount") != counts[0]
+            or recipe.get("sourceShBands") != inspection.get("shBands")
+            or version_id_for(source_sha, recipe) != manifest.get("assetVersion")):
+        raise ValueError("Regular SOG source/recipe identity mismatch")
+    build_path = root / "build-info.json"
+    checksum_path = root / "checksums.sha256"
+    if not build_path.is_file() or not checksum_path.is_file():
+        raise ValueError("Regular SOG requires BuildInfo and Checksums")
+    build = json.loads(build_path.read_text())
+    if (build.get("sourceSha256") != source_sha or build.get("sourceGaussianCount") != counts[0]
+            or build.get("conversionRecipe") != recipe or build.get("lodCounts") != counts
+            or build.get("outputSha256") != digest or build.get("officialInspection") != inspection):
+        raise ValueError("Regular SOG BuildInfo mismatch")
+    executions = build.get("cliExecutions") or []
+    if recipe.get("encoding") == "passthrough":
+        if executions or digest != source_sha:
+            raise ValueError("SOG passthrough changed source bytes")
+    else:
+        commands = [record.get("arguments", []) for record in executions]
+        encoding = [command for command in commands if "scene.sog" in command]
+        if len(encoding) != 1 or any(record.get("exitCode") != 0 for record in executions):
+            raise ValueError("Regular SOG requires successful encoding evidence")
+        command = encoding[0]
+        if ("--sh-iterations" not in command
+                or command[command.index("--sh-iterations") + 1] != str(recipe.get("shIterations"))
+                or any(option in command for option in ("--decimate", "--filter-harmonics",
+                                                         "--scale", "--translate", "--rotate"))):
+            raise ValueError("Regular SOG command disagrees with recipe")
+    checked = set()
+    for line in checksum_path.read_text().splitlines():
+        expected, relative = line.split("  ", 1)
+        target = (root / relative).resolve()
+        if not target.is_relative_to(root) or not target.is_file() or _sha256_of(target) != expected:
+            raise ValueError("Regular SOG checksum mismatch")
+        checked.add(relative)
+    actual = {path.relative_to(root).as_posix() for path in root.rglob("*")
+              if path.is_file() and path != checksum_path}
+    if checked != actual:
+        raise ValueError("Regular SOG Checksums do not cover all artifacts")
+    return {"entry_url": entry_url, "entry_bytes": entry.stat().st_size,
+            "manifest": manifest, "counts": counts}
 
 
 def validate_artifact_tree(version_dir: Path) -> dict:
@@ -19,6 +86,10 @@ def validate_artifact_tree(version_dir: Path) -> dict:
     on any missing/corrupt asset.
     """
     manifest_path = version_dir / "manifest.json"
+    root = version_dir.resolve()
+    for artifact in version_dir.rglob("*"):
+        if not artifact.resolve().is_relative_to(root):
+            raise ValueError("Artifact escapes immutable version directory")
     if not manifest_path.exists():
         raise ValueError(f"manifest.json 缺失: {version_dir}")
 
@@ -31,6 +102,8 @@ def validate_artifact_tree(version_dir: Path) -> dict:
         raise ValueError(
             f"不支持的 manifest schemaVersion: {manifest.get('schemaVersion')}"
         )
+    if manifest.get("format") == "sog":
+        return _validate_regular(version_dir, manifest)
     if manifest.get("format") != "streamed-sog":
         raise ValueError(f"不支持的 format: {manifest.get('format')}")
 
@@ -166,6 +239,11 @@ def validate_artifact_tree(version_dir: Path) -> dict:
         if recipe.get("lodRatios") == ["100%", "30%", "10%"]:
             if len(counts) != 3 or counts[0] != build_info.get("sourceGaussianCount"):
                 raise ValueError("LOD0 未保留完整源 Gaussian")
+        if recipe.get("mode") == "streamed-sog" and recipe.get("recipeVersion") == "3":
+            if (len(counts) != len(recipe.get("lodRatios", []))
+                    or counts[0] != build_info.get("sourceGaussianCount")
+                    or counts[0] != recipe.get("sourceGaussianCount")):
+                raise ValueError("Recipe v3 LOD hierarchy disagrees with source")
 
     return {
         "entry_url": entry_url,

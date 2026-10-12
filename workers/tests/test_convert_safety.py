@@ -127,7 +127,7 @@ def test_timeout_and_gpu_env_configuration(monkeypatch, tmp_path):
 
     monkeypatch.setattr(convert_scene, "_convert_to_streamed_sog", fake)
     convert_scene.convert_to_streamed_sog(
-        source, tmp_path / ".staging", scene_id="test"
+        source, tmp_path / ".staging", scene_id="test", recipe_version="2",
     )
     assert seen == ["1"]
 
@@ -178,7 +178,7 @@ def test_valid_published_recipe_is_reused_without_reencoding(tmp_path, monkeypat
         ),
     )
     result = convert_scene.convert_to_streamed_sog(
-        source, tmp_path / ".staging", scene_id="test"
+        source, tmp_path / ".staging", scene_id="test", recipe_version="2",
     )
     assert result.ok
     assert result.staging_dir == published
@@ -200,7 +200,7 @@ def test_same_recipe_lock_cannot_delete_running_artifacts(tmp_path):
     lock_dir.mkdir()
     with (lock_dir / f"{version}.lock").open("a+b") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        result = convert_scene.convert_to_streamed_sog(source, root, scene_id="test")
+        result = convert_scene.convert_to_streamed_sog(source, root, scene_id="test", recipe_version="2")
     assert not result.ok
     assert artifact.read_bytes() == b"preserve"
 

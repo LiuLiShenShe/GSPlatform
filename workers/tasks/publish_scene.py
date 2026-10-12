@@ -208,7 +208,8 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         if not cr.ok:
             raise ValueError(f"转换失败: {cr.reason}")
         if edit is not None:
-            export_count = (cr.manifest or {}).get("stream", {}).get("counts", [0])[0]
+            export_count = ((cr.manifest or {}).get("content") or
+                            (cr.manifest or {}).get("stream") or {}).get("counts", [0])[0]
             if not 0 < export_count <= edit.source_counts[edit.selected_lod or 0]:
                 raise ValueError("导出 Gaussian 数量超过会话声明的来源 LOD")
 
@@ -285,8 +286,10 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             version_id=ver,
             manifest=cr.manifest or {},
             entry_bytes=cr.entry_bytes,
-            entry_url=f"versions/{ver}/lod-meta.json",
-            counts=(cr.manifest or {}).get("stream", {}).get("counts", [0, 0, 0]),
+            entry_url=((cr.manifest or {}).get("content") or
+                       (cr.manifest or {}).get("stream") or {})["entryUrl"],
+            counts=((cr.manifest or {}).get("content") or
+                    (cr.manifest or {}).get("stream") or {}).get("counts", []),
             source_sha256=cr.source_sha256,
             edit_session_id=edit.id if edit else None,
         )

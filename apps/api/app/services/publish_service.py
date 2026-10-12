@@ -158,6 +158,13 @@ class PublishService:
         ).first()
         if scene is None:
             raise NotFoundError("场景不存在")
+        if manifest.get("format") == "sog":
+            content = manifest.get("content") or {}
+            expected_entry = f"versions/{version_id}/scene.sog"
+            if (manifest.get("assetUrl") != expected_entry or entry_url != expected_entry
+                    or content.get("entryUrl") != expected_entry or content.get("counts") != counts
+                    or content.get("byteLength") != entry_bytes or not counts or counts[0] <= 0):
+                raise ConflictError("普通 SOG 发布入口与验证后的版本不一致")
         edit = self.check_edit_publication(scene, edit_session_id) if edit_session_id else None
 
         existing = (
@@ -175,6 +182,8 @@ class PublishService:
         if existing is not None:
             if existing.sha256 != source_sha256 or existing.manifest != manifest:
                 raise ConflictError("版本身份与已发布资产内容不一致")
+            if manifest.get("format") == "sog" and existing.format != "sog":
+                raise ConflictError("不可变版本格式与已有记录不一致")
             if edit and edit.status == "COMPLETED":
                 if edit.result_sha256 != existing.sha256:
                     raise ConflictError("导出校验和与发布结果不符")
@@ -198,7 +207,7 @@ class PublishService:
         version = SceneVersion(
             scene_id=scene.id,
             asset_version=version_id,
-            format="streamed-sog",
+            format="sog" if manifest.get("format") == "sog" else "streamed-sog",
             size_bytes=entry_bytes,
             sha256=source_sha256,
             manifest=manifest,
@@ -310,9 +319,12 @@ class PublishService:
             Asset.version_id == version_pk
         ).all()
         existing_kinds = {asset.kind for asset in existing_assets}
+        regular = manifest.get("format") == "sog"
+        entry_name = "scene.sog" if regular else "lod-meta.json"
+        content = manifest.get("content" if regular else "stream") or {}
         for asset in existing_assets:
             if asset.kind == AssetKind.SOG.value:
-                asset.sha256 = (manifest.get("stream") or {}).get("sha256", "")
+                asset.sha256 = content.get("sha256", "")
                 asset.metadata_ = {
                     "counts": counts,
                     "lodLevels": len(counts),
@@ -339,10 +351,10 @@ class PublishService:
                     scene_id=scene.id,
                     version_id=version_pk,
                     kind=AssetKind.SOG.value,
-                    storage_key=f"{version_dir_key}/lod-meta.json",
-                    mime_type="application/json",
+                    storage_key=f"{version_dir_key}/{entry_name}",
+                    mime_type="application/octet-stream" if regular else "application/json",
                     byte_size=entry_bytes,
-                    sha256=(manifest.get("stream") or {}).get("sha256", ""),
+                    sha256=content.get("sha256", ""),
                     metadata_={
                         "counts": counts,
                         "lodLevels": len(counts),

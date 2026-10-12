@@ -24,7 +24,11 @@ from pathlib import Path
 
 import pytest
 
-from workers.pipeline.convert_scene import convert_to_streamed_sog
+from workers.pipeline.convert_scene import convert_to_streamed_sog as convert_automatic_sog
+
+
+def convert_to_streamed_sog(*arguments, **keywords):
+    return convert_automatic_sog(*arguments, recipe_version="2", **keywords)
 
 SCENE_UUID = "11111111-2222-3333-4444-555555555555"
 

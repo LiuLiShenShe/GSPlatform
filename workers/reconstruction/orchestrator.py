@@ -416,7 +416,6 @@ def _rebuild_convert_state(ctx: JobContext) -> None:
             staged = nested[0].parent
             ctx.streamed_dir = staged
             manifest_path = nested[0]
-    lod_meta_path = staged / "lod-meta.json"
     build_info_path = staged / "build-info.json"
     if not manifest_path.is_file():
         return
@@ -424,7 +423,10 @@ def _rebuild_convert_state(ctx: JobContext) -> None:
     import types
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    entry_bytes = lod_meta_path.stat().st_size if lod_meta_path.is_file() else 0
+    from workers.pipeline.artifact_validator import validate_artifact_tree
+
+    verified = validate_artifact_tree(staged)
+    entry_bytes = verified["entry_bytes"]
     source_sha256 = ""
     if build_info_path.is_file():
         try:
@@ -954,8 +956,10 @@ def _stage_publishing(ctx: JobContext) -> None:
             version_id=ctx.version_id,
             manifest=cr.manifest or {},
             entry_bytes=cr.entry_bytes,
-            entry_url=f"versions/{ctx.version_id}/lod-meta.json",
-            counts=(cr.manifest or {}).get("stream", {}).get("counts", [0, 0, 0]),
+            entry_url=((cr.manifest or {}).get("content") or
+                       (cr.manifest or {}).get("stream") or {})["entryUrl"],
+            counts=((cr.manifest or {}).get("content") or
+                    (cr.manifest or {}).get("stream") or {}).get("counts", []),
             source_sha256=cr.source_sha256,
         )
     except Exception as exc:  # noqa: BLE001 — surface a stable publish error

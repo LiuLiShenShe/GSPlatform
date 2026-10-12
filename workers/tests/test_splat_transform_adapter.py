@@ -70,11 +70,13 @@ def test_missing_or_wrong_cli_fails(tmp_path):
 @pytest.mark.parametrize("profile,expected", [
     ("balanced", (64, 32)), ("eco", (512, 32)), ("quality", (64, 16)),
 ])
-def test_resolved_policy_has_no_arbitrary_cli_input(tmp_path, profile, expected):
+def test_resolved_policy_has_no_arbitrary_cli_input(tmp_path, monkeypatch, profile, expected):
     source = tmp_path / "source.ply"
     source.write_bytes(b"ply")
+    monkeypatch.setattr("workers.pipeline.conversion_policy.inspect_source", lambda *args, **kwargs:
+                        {"gaussian": True, "numGaussians": 1_000_000, "shBands": 0})
     policy = resolve_conversion_policy(source, profile=profile, source_format="ply", gpu="cpu")
-    assert policy.recipe == conversion_recipe(profile, *expected)
+    assert (policy.recipe["lodChunkCount"], policy.recipe["lodChunkExtent"]) == expected
     assert policy.output_format == "streamed-sog"
     with pytest.raises(ValueError):
         resolve_conversion_policy(source, profile=profile, source_format="ply", gpu="--help")
@@ -126,8 +128,12 @@ def test_real_single_sog_and_real_streamed_zip_passthrough(tmp_path):
     result = convert_to_streamed_sog(sog, tmp_path / "staging", scene_id="sog-test",
                                      source_format="sog", gpu="cpu")
     assert result.ok, result.reason
-    assert verify_published_version(result.staging_dir)["counts"] == [256, 77, 26]
+    assert verify_published_version(result.staging_dir)["counts"] == [256]
+    assert (result.staging_dir / "scene.sog").read_bytes() == sog.read_bytes()
     assert result.staging_dir is not None
+    result = convert_to_streamed_sog(source, tmp_path / "legacy", scene_id="stream-test",
+                                     source_format="ply", gpu="cpu", recipe_version="2")
+    assert result.ok, result.reason
     bundle = tmp_path / "streamed.zip"
     with zipfile.ZipFile(bundle, "w") as archive:
         for path in result.staging_dir.rglob("*"):

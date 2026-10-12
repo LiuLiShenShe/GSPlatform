@@ -75,7 +75,8 @@ class EditorSessionService:
         scene = self.owner_scene(slug, identity)
         version = self.session.get(SceneVersion, scene.current_version_id)
         spatial = self.session.get(SceneSpatialState, scene.id)
-        counts = (version.manifest or {}).get("stream", {}).get("counts", []) if version else []
+        manifest = (version.manifest or {}) if version else {}
+        counts = (manifest.get("content") or manifest.get("stream") or {}).get("counts", [])
         return EditSourceOut(
             sceneId=scene.id, sceneTitle=scene.title, currentVersionId=scene.current_version_id,
             assetVersion=version.asset_version if version else None,
@@ -97,7 +98,8 @@ class EditorSessionService:
             raise ConflictError("此版本没有受支持的持久化 PLY/SOG 编辑来源")
         build = self.build_identity()
         streamed = version.format == "streamed-sog"
-        counts = (version.manifest or {}).get("stream", {}).get("counts", [])
+        manifest = version.manifest or {}
+        counts = (manifest.get("content") or manifest.get("stream") or {}).get("counts", [])
         if not counts:
             counts = [scene.splat_count or 0]
         if not all(isinstance(count, int) and count > 0 for count in counts):
