@@ -53,13 +53,16 @@ test('Formal XR diagnostics initializes WebGL2 and loads real SOG', async ({ pag
     const path = new URL(response.url()).pathname;
     if (path.includes(`/api/v1/scenes/${scene}/`)) {
       assets.push({ path, status: response.status() });
-      if (response.status() >= 400) failures.push(`${response.status()} ${path}`);
+      const missingOptionalPoster = response.status() === 404 && path.endsWith('/assets/poster.webp');
+      if (response.status() >= 400 && !missingOptionalPoster) failures.push(`${response.status()} ${path}`);
     }
   });
   await page.goto(`/xr/diagnostics/${scene}`);
   await expect(page.getByTestId('diag-state-loaded')).toHaveText('true', { timeout: 180_000 });
-  expect(Number(await page.getByTestId('diag-gsplats').textContent())).toBeGreaterThan(0);
-  await expect(page.getByTestId('diag-renderer')).toHaveText('webgl');
+  await expect.poll(async () => Number(await page.getByTestId('diag-gsplats').textContent()), {
+    timeout: 180_000,
+  }).toBeGreaterThan(0);
+  await expect(page.getByTestId('diag-renderer')).toHaveText('webgl2');
   await expect(page.getByTestId('diag-secure-context')).toHaveText('true');
   await expect(page.getByTestId('diag-scene-state')).not.toContainText('[manifest]');
   expect(await page.evaluate(() => {
@@ -84,16 +87,18 @@ test('Anonymous formal XR streamed SOG Viewer loads without manifest fallback', 
     const path = new URL(response.url()).pathname;
     if (path.includes(`/api/v1/scenes/${scene}/`)) {
       assets.push({ path, status: response.status() });
-      if (response.status() >= 400) failures.push(`${response.status()} ${path}`);
+      const missingOptionalPoster = response.status() === 404 && path.endsWith('/assets/poster.webp');
+      if (response.status() >= 400 && !missingOptionalPoster) failures.push(`${response.status()} ${path}`);
     }
   });
   await page.goto(`/xr/${scene}`);
   await expect.poll(async () => {
     const text = await page.getByTestId('ov-xr-diagnostics').textContent();
-    return JSON.parse(text ?? '{}').loaded;
+    const diagnostics = JSON.parse(text ?? '{}');
+    return diagnostics.loaded === true && diagnostics.gsplats > 0;
   }, { timeout: 180_000 }).toBe(true);
   const diagnostics = JSON.parse(await page.getByTestId('ov-xr-diagnostics').textContent() ?? '{}');
-  expect(diagnostics.renderer).toBe('webgl');
+  expect(diagnostics.renderer).toBe('webgl2');
   expect(diagnostics.gsplats).toBeGreaterThan(0);
   expect(diagnostics.isManifestFallback).toBe(false);
   expect(diagnostics.contentUrl).toContain(`/api/v1/scenes/${scene}/assets/versions/`);

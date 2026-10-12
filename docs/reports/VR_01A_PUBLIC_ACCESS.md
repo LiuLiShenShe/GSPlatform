@@ -148,24 +148,36 @@ full API suite. No SceneAccessPolicy rule is loosened.
 
 All tests use dedicated test databases/storage, never the shared production DB.
 
-| Gate | Initial result / follow-up |
+| Gate | Actual result |
 | --- | --- |
 | Backend Ruff | exit 0 |
 | Backend Mypy | initial stale incremental-cache error; `--no-incremental` succeeds; standard rerun exit 0, 94 source files |
 | Backend Pytest | exit 0; 555 tests |
 | New backend targeted suite | exit 0; 36 tests |
 | Workers Pytest | exit 0; 124 passed / 1 skipped |
-| Web Typecheck / Lint / Build | initial exits 0; final rerun recorded below |
-| Web Vitest | initial 268 passed; reconstruction default test increases final count |
+| Web Typecheck / Lint / Build | final exits 0 / 0 / 0 |
+| Web Vitest | exit 0; 28 files / 269 tests passed |
 | Live Private-scene Playwright | exit 0, 1 test, before Owner publication |
-| Live anonymous formal XR Playwright | pending final post-deploy checkpoint |
-| Clean checkout release-source gate | pending committed-source checkpoint |
+| Live anonymous formal XR Playwright | exit 0; 3 tests passed; persisted JSON report has 0 skips / failures |
+| Clean checkout release-source gate | exit 0, including fresh reconstruction runtime and web build, from source commit 5d7d81b |
 
 The initial Mypy cache classified local worker modules as untyped installed
 packages; a non-incremental run then the exact standard command both passed.
 No unrelated worker typing patch or relaxed Mypy settings was made.
-Workers' optional integration skip reason and exact final clean-gate exits are
-recorded after the last checkpoint, not concealed as a full hardware PASS.
+Installed-worker skip: the Git-history probe checks `.git` in the workers command
+working directory, where it is absent. In the clean git-archive gate, Workers are
+106 passed / 19 skipped: real splat-transform CLI conversion cases lack
+node_modules at the worker stage, and Git-history probes lack `.git`. The archive
+script installs web dependencies only later. These are actual existing skip
+conditions, not unexecuted tests reported as PASS. Local real conversion tests
+run on their small fixtures; no historical 13M conversion is triggered.
+
+The clean-source script also reports torch 2.14.0+cu126 / gsplat 1.5.3 imports,
+trainer `--help`, CUDA availability (two RTX A6000 devices), and real eight-splat
+CUDA rasterization (66 lit pixels) PASS. It is only a runtime dependency gate,
+not a scene reconstruction or collision build. Clean web build exits 0; existing
+large-bundle and optional dependency build-script warnings are recorded in the
+log, not fixed out of scope.
 
 ## Software load versus PICO hardware
 
@@ -175,6 +187,21 @@ runtime 200, authorized real versioned payload requests, no 401/403 assets, load
 state, WebGL2, positive frame Gaussian count and no local-manifest fallback.
 These software gates do not claim immersive-vr hardware support in headless
 Chromium. `/xr/test` is not a substitute for the formal uploaded scene.
+
+Persisted post-deploy browser evidence (`public-playwright.json`,
+`formal-descriptor.json`, `xr-diagnostics.json`, `anonymous-xr-viewer.json`) shows
+loaded=true, renderer=webgl2, frame.gsplats=179 (initial streamed coarse LOD),
+format=lod-meta, isManifestFallback=false, error=null. Both diagnostic/formal
+routes request genuine versioned SOG metadata and WebP payloads with 200; no
+required resource error or 401/403 occurs. The context has no gs_session cookie.
+Headless immersiveVrSupported=false is expected and is not a PICO result.
+
+Known unrelated non-blocker: optional `/assets/poster.webp` returns 404, matching
+the existing missing cover. The SOG Viewer loads anyway. The test records that
+one missing optional cover, but does not tolerate its 401/403 or any failed
+versioned content request. No poster, Gaussian or manifest file was changed to
+hide it. Initial E2E assertions were corrected from `webgl` to the actual
+`webgl2` diagnostic, and now wait for frame Gaussian count separately from loaded.
 
 After deployment, obtain the current URL with `./scripts/gsplatform-vr.sh urls`;
 Quick Tunnel names can change. PICO Neo3 retest instructions:
@@ -206,6 +233,64 @@ tests and the official URLs in the linked research report. Bocha returned quota
 
 ## Final acceptance update
 
-Pending: exact committed source, managed deployment/HTTPS, anonymous browser,
-clean archive verification, final regression exits and normal push. No final PASS
-is claimed in this interim document until those checkpoints are complete.
+Source/application commit: `5d7d81b7bf6d57028085de3d5d1e1b0f4eebfd02`.
+All eight managed runtime process receipts carry that exact build; API PID
+4061183, dedicated DB identity and defaultUploadVisibility PUBLIC are verified
+from its actual process environment. Later closure changes are report/E2E only;
+the deployed application source has no diff. `gsplatform-vr.sh down` and `up`
+both exit 0. Before shutdown, DB active jobs and worker active/reserved lists are
+empty. After restart there are exactly three managed worker nodes with matching
+PID receipts; no competing consumers or duplicate Worker. Shared PostgreSQL,
+Redis, Editor and unrelated services are explicitly left untouched.
+
+Runtime environment evidence is `deploy-before.json` / `deploy-after.json`.
+The 13M reference scene `u-06924576399e` retains its PUBLIC/PUBLISHED state,
+Version `01c63c7c-8eb5-498e-bcc0-77215e92ca12` and assetVersion `da7bf4207044`;
+its immutable files remain borrowed through read-only mounts, not rewritten.
+
+Post-deployment real HTTPS login confirms secure/HttpOnly/session and secure
+CSRF-cookie behavior. Eight zero-byte declaration sessions exercise PUBLISH and
+RECONSTRUCT with omitted / PRIVATE / PUBLIC / UNLISTED visibility; PostgreSQL
+shows correct values. All are cancelled through the Owner API, never completed.
+No publish/reconstruct/collision Job is added; original successful PUBLISH count
+is still 1. `post-deploy.json` records those real default/explicit-choice checks.
+The asset/read-only snapshot verification rerun after deployment exits 0.
+
+**HTTPS changed during safe restart.** The old residence-criterion address is
+historical. The new Quick Tunnel is verified on 2026-10-12 and stored in the
+private runtime.env and https-url.txt:
+
+```text
+https://comparison-bald-broad-birthday.trycloudflare.com
+https://comparison-bald-broad-birthday.trycloudflare.com/xr/u-a68b94d84538
+https://comparison-bald-broad-birthday.trycloudflare.com/xr/diagnostics/u-a68b94d84538
+```
+
+The live browser suite deliberately uses a separate no-webServer config so it
+hits the real staging API/database, not intercepted HTTP or local fixture
+manifests. Re-run only the public cases now; the private denial was genuinely
+tested before the scene became public, not simulated after publication:
+
+```bash
+GS_VR01A_BASE_URL=https://comparison-bald-broad-birthday.trycloudflare.com \
+GS_VR01A_PUBLIC_SCENE=u-a68b94d84538 \
+pnpm --filter @gsplatform/web exec playwright test \
+  -c playwright.vr01a.config.ts --grep 'Anonymous|Formal XR diagnostics'
+```
+
+Clean committed-source command used (with isolated clean.env sourced):
+
+```bash
+./deploy/scripts/verify_release_source.sh \
+  --from-commit 5d7d81b7bf6d57028085de3d5d1e1b0f4eebfd02 --with-web-build
+```
+
+Git closure uses only explicit task file staging and a normal `git push origin
+main`; no deleted user document is staged. The final HEAD and confirmed remote
+receipt are reported in the handoff, distinct from the deployed application
+commit and external database receipts.
+
+**VR-01A: PASS — PUBLIC XR SCENE READY FOR PICO RETEST**
+
+This is software/public-access acceptance, not new PICO certification. Work stops
+after normal Git push and waits for the user's real formal-scene PICO retest.
