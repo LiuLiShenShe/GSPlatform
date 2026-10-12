@@ -184,3 +184,31 @@ def test_regular_immutable_retry_never_reencodes(tmp_path, monkeypatch):
     retried = convert_to_streamed_sog(source, tmp_path / ".staging", scene_id="retry")
     assert retried.ok and retried.staging_dir == published
     assert (published / "scene.sog").read_bytes() == original
+
+
+@pytest.mark.skipif(not _NODE_BIN.exists(), reason="Pinned CLI requires installed node_modules")
+def test_real_legacy_sog_passthrough_keeps_container_bytes(tmp_path):
+    source = tmp_path / "source.ply"
+    source.write_bytes(_gaussian_ply_bytes(64))
+    encoded = convert_to_streamed_sog(source, tmp_path / "encoded", scene_id="legacy")
+    assert encoded.ok, encoded.reason
+    legacy = tmp_path / "legacy.sog"
+    with zipfile.ZipFile(encoded.staging_dir / "scene.sog") as modern:
+        metadata = json.loads(modern.read("meta.json"))
+        metadata.pop("version")
+        metadata.pop("count")
+        metadata["means"]["shape"] = [64, 3]
+        metadata["scales"].update({"shape": [64, 3], "mins": [-4, -4, -4], "maxs": [-2, -2, -2]})
+        metadata["sh0"].update({"shape": [64, 4], "mins": [0, 0, 0, -4], "maxs": [1, 1, 1, 4]})
+        metadata["quats"]["shape"] = [64, 4]
+        with zipfile.ZipFile(legacy, "w") as archive:
+            archive.writestr("meta.json", json.dumps(metadata))
+            for name in modern.namelist():
+                if name != "meta.json":
+                    archive.writestr(name, modern.read(name))
+    assert inspect_source(legacy, decode=True)["numGaussians"] == 64
+    assert validate_sog_container(legacy)["numGaussians"] == 64
+    published = convert_to_streamed_sog(legacy, tmp_path / "passed", scene_id="legacy", source_format="sog")
+    assert published.ok, published.reason
+    assert (published.staging_dir / "scene.sog").read_bytes() == legacy.read_bytes()
+    assert validate_artifact_tree(published.staging_dir)["counts"] == [64]

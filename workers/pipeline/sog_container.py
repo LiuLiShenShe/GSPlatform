@@ -31,8 +31,15 @@ def validate_sog_container(source: Path) -> dict:
             if not 0 < metadata_entry.file_size <= 16 * 1024 * 1024:
                 raise ValueError("Invalid SOG metadata size")
             metadata = json.loads(archive.read("meta.json"))
-            count = metadata.get("count")
-            if metadata.get("version") not in (1, 2) or type(count) is not int or count <= 0:
+            version = metadata.get("version")
+            if version is None:
+                shape = metadata.get("means", {}).get("shape")
+                if not isinstance(shape, list) or len(shape) != 2 or shape[1] != 3:
+                    raise ValueError("Invalid legacy SOG means shape")
+                count = shape[0]
+            else:
+                count = metadata.get("count")
+            if version not in (None, 2) or type(count) is not int or count <= 0:
                 raise ValueError("Invalid SOG version/count")
             referenced = {"meta.json"}
             for layer, minimum in (("means", 2), ("scales", 1), ("quats", 1), ("sh0", 1)):
