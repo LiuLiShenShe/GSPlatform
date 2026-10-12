@@ -153,3 +153,34 @@ def test_real_sh1_is_not_removed_from_regular_sog(tmp_path):
     result = convert_to_streamed_sog(source, tmp_path / "staging", scene_id="sh1")
     assert result.ok, result.reason
     assert validate_sog_container(result.staging_dir / "scene.sog")["shBands"] == 1
+
+
+@pytest.mark.skipif(not _NODE_BIN.exists(), reason="Pinned CLI requires installed node_modules")
+def test_real_splat_input_uses_regular_sog(tmp_path):
+    source = tmp_path / "input.splat"
+    rows = [struct.pack("<6f8B", index * 0.01, 0, 0, 0.03, 0.03, 0.03,
+                        210, 160, 120, 220, 255, 128, 128, 128) for index in range(64)]
+    source.write_bytes(b"".join(rows))
+    result = convert_to_streamed_sog(source, tmp_path / "staging", scene_id="splat", source_format="splat")
+    assert result.ok, result.reason
+    assert result.manifest["format"] == "sog"
+    assert validate_artifact_tree(result.staging_dir)["counts"] == [64]
+
+
+@pytest.mark.skipif(not _NODE_BIN.exists(), reason="Pinned CLI requires installed node_modules")
+def test_regular_immutable_retry_never_reencodes(tmp_path, monkeypatch):
+    import workers.pipeline.convert_scene as converter
+
+    source = tmp_path / "input.ply"
+    source.write_bytes(_gaussian_ply_bytes(64))
+    result = convert_to_streamed_sog(source, tmp_path / ".staging", scene_id="retry")
+    assert result.ok, result.reason
+    published = tmp_path / "versions" / result.version_id
+    published.parent.mkdir()
+    result.staging_dir.rename(published)
+    original = (published / "scene.sog").read_bytes()
+    monkeypatch.setattr(converter, "_convert_to_streamed_sog",
+                        lambda *args, **kwargs: pytest.fail("Immutable retry must not encode again"))
+    retried = convert_to_streamed_sog(source, tmp_path / ".staging", scene_id="retry")
+    assert retried.ok and retried.staging_dir == published
+    assert (published / "scene.sog").read_bytes() == original

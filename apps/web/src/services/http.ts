@@ -50,9 +50,12 @@ httpClient.interceptors.response.use(
   (error) => {
     const currentPath = window.location.pathname;
     const isXrRoute = currentPath === '/xr' || currentPath.startsWith('/xr/');
+    const optionalSessionProbe = axios.isAxiosError(error)
+      && error.config?.url === '/auth/me' && error.config?.method?.toLowerCase() === 'get';
     if (
       axios.isAxiosError(error) &&
       error.response?.status === 401 &&
+      !optionalSessionProbe &&
       !isXrRoute &&
       currentPath !== '/login'
     ) {

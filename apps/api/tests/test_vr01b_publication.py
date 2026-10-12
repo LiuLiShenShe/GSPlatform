@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import update
 
 from app.core.config import settings
 from app.db.models.asset import Asset
@@ -41,12 +42,16 @@ def test_regular_runtime_keeps_anonymous_access_policy(
 
     from app.main import app
 
-    public_scene.visibility = visibility
-    db.flush()
+    db.execute(update(type(public_scene)).where(type(public_scene).id == public_scene.id)
+               .values(visibility=visibility))
+    db.commit()
     version = db.get(SceneVersion, public_scene.current_version_id)
-    version.format = "sog"
-    version.manifest = {"format":"sog", "assetUrl":f"versions/{version.asset_version}/scene.sog",
-                        "content":{"counts":[1788]}}
+    db.execute(update(SceneVersion).where(SceneVersion.id == version.id).values(
+        format="sog", manifest={
+            "format":"sog", "assetUrl":f"versions/{version.asset_version}/scene.sog",
+            "content":{"counts":[1788]},
+        },
+    ))
     db.commit()
     monkeypatch.setattr(settings, "dev_identity_enabled", False)
     with TestClient(app) as client:
