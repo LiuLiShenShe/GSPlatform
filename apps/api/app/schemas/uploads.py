@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import get_settings
 from app.schemas.scene_processing import ConversionProfile, SceneType
 
 
@@ -25,7 +26,10 @@ class CreateUploadRequest(BaseModel):
     # Scene metadata captured before upload begins (Phase 06 wireframe).
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=5000)
-    visibility: str = Field(default="PRIVATE", pattern=r"^(PRIVATE|UNLISTED|PUBLIC)$")
+    visibility: str = Field(
+        default_factory=lambda: get_settings().default_upload_visibility,
+        pattern=r"^(PRIVATE|UNLISTED|PUBLIC)$",
+    )
     category: str = Field(
         default="experiment",
         pattern=r"^(urban|architecture|interior|nature|portrait|experiment)$",

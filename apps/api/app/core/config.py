@@ -8,6 +8,7 @@ deployment system and never committed.
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -98,6 +99,7 @@ class Settings(BaseSettings):
     upload_chunk_max_bytes: int = 64 * 1024 * 1024       # 64 MB per chunk
     upload_expiry_hours: int = 24                         # session TTL
     max_concurrent_uploads_per_user: int = 5
+    default_upload_visibility: Literal["PUBLIC", "PRIVATE", "UNLISTED"] = "PRIVATE"
     allowed_upload_formats: list[str] = ["ply", "sog", "splat", "zip"]
     allowed_upload_mime_types: list[str] = [
         "model/ply",

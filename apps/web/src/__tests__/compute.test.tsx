@@ -147,10 +147,28 @@ describe('免费计算页（ComputePage）', () => {
         uploadIds: ['up-1'],
         profile: 'draft',
         sceneTitle: 'test',
+        visibility: 'PUBLIC',
       }),
     );
     // 轮询 GET /jobs/{id} 返回 RUNNING + FEATURES 阶段，页面展示中文阶段名
     expect(await screen.findByText('特征提取')).toBeInTheDocument();
+  });
+
+  it('重建输出默认公开，素材仍私有；明确选择私有后保持私有', async () => {
+    renderApp({ route: '/compute' });
+    await addVideoFile();
+    expect(mocks.createUploadSession).toHaveBeenCalledWith(
+      expect.objectContaining({ purpose: 'RECONSTRUCT', visibility: 'PRIVATE' }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /下一步：参数确认/ }));
+    expect(screen.getByText('公开场景可被任何获得地址的人查看。')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('combobox', { name: '可见性' }));
+    await userEvent.click(screen.getByText('私有', { selector: '.ant-select-item-option-content' }));
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: /提交计算/ }));
+    expect(mocks.submitReconstruction).toHaveBeenCalledWith(
+      expect.objectContaining({ visibility: 'PRIVATE' }),
+    );
   });
 
   it('能力探测受限时展示警告但仍允许继续', async () => {

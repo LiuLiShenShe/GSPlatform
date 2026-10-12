@@ -320,7 +320,7 @@ export default function UploadPage() {
           <Form.Item name="category" label="分类" rules={[{ required: true, message: '请选择分类' }]}>
             <Select placeholder="选择分类" aria-label="分类" options={CATEGORY_OPTIONS} />
           </Form.Item>
-          <Form.Item name="visibility" label="可见性" initialValue="PUBLIC" rules={[{ required: true, message: '请选择可见性' }]}>
+          <Form.Item name="visibility" label="可见性" initialValue="PUBLIC" extra="公开场景可被任何获得地址的人查看。" rules={[{ required: true, message: '请选择可见性' }]}>
             <Radio.Group aria-label="可见性">
               <Radio value="PUBLIC">公开</Radio>
               <Radio value="PRIVATE">私有</Radio>

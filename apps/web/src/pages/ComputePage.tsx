@@ -132,7 +132,7 @@ export default function ComputePage() {
   const [capabilityProblems, setCapabilityProblems] = useState<string[]>([]);
   const [sceneTitle, setSceneTitle] = useState(() => `重建场景 ${new Date().toLocaleString()}`);
   const [description, setDescription] = useState('');
-  const [visibility, setVisibility] = useState('PRIVATE');
+  const [visibility, setVisibility] = useState('PUBLIC');
   const [rightsChecked, setRightsChecked] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<ComputeJob | null>(null);
@@ -658,6 +658,8 @@ export default function ComputePage() {
                 aria-label="可见性"
               />
             </label>
+
+            <Typography.Text type="secondary">公开场景可被任何获得地址的人查看。</Typography.Text>
 
             <Checkbox
               checked={rightsChecked}

@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.core.config import get_settings
+
 # ---- capabilities & profiles ------------------------------------------------ #
 
 class ComputeCapabilitiesOut(BaseModel):
@@ -45,7 +47,10 @@ class CreateReconstructionRequest(BaseModel):
     profile: str = Field(default="draft", min_length=1, max_length=30)
     sceneTitle: str = Field(min_length=1, max_length=200, alias="sceneTitle")
     description: str | None = Field(default=None, max_length=5000)
-    visibility: str = Field(default="PRIVATE", pattern=r"^(PRIVATE|UNLISTED|PUBLIC)$")
+    visibility: str = Field(
+        default_factory=lambda: get_settings().default_upload_visibility,
+        pattern=r"^(PRIVATE|UNLISTED|PUBLIC)$",
+    )
 
 
 class ReconstructionJobOut(BaseModel):

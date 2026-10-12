@@ -54,6 +54,17 @@ describe('上传作品页（UploadPage）', () => {
     localStorage.clear();
   });
 
+  it('默认公开并提示可访问范围，仍可明确选择私有', async () => {
+    renderApp({ route: '/upload' });
+    expect(screen.getByRole('radio', { name: '公开' })).toBeChecked();
+    expect(screen.getByText('公开场景可被任何获得地址的人查看。')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: '私有' }));
+    expect(screen.getByRole('radio', { name: '私有' })).toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+    const draft = JSON.parse(localStorage.getItem('gsplatform.upload.draft') ?? '{}');
+    expect(draft.visibility).toBe('PRIVATE');
+  });
+
   it('表单字段校验：空提交时显示必填错误', async () => {
     renderApp({ route: '/upload' });
     const form = document.querySelector('form')!;
