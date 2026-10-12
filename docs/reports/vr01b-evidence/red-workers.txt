@@ -1,0 +1,166 @@
+FFFFFF..                                                                 [100%]
+=================================== FAILURES ===================================
+________________ test_real_small_source_keeps_full_regular_sog _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-768/test_real_small_source_keeps_f0')
+
+    @pytest.mark.skipif(not _NODE_BIN.exists(), reason="Pinned CLI requires installed node_modules")
+    def test_real_small_source_keeps_full_regular_sog(tmp_path):
+        source = tmp_path / "source.ply"
+        source.write_bytes(_gaussian_ply_bytes(1788))
+        result = convert_to_streamed_sog(source, tmp_path / "staging", scene_id="test")
+        assert result.ok, result.reason
+>       assert result.manifest["format"] == "sog"
+E       AssertionError: assert 'streamed-sog' == 'sog'
+E
+E         - sog
+E         + streamed-sog
+
+workers/tests/test_vr01b_sog_policy.py:22: AssertionError
+______________________ test_regular_manifest_is_supported ______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-768/test_regular_manifest_is_suppo0')
+
+    def test_regular_manifest_is_supported(tmp_path):
+        fixture = Path("/home/test/.local/state/gsplatform-vr00-20261011/vr01b/regular/scene.sog")
+        if not fixture.is_file():
+            pytest.skip("Baseline real CLI artifact is external diagnostic evidence")
+        shutil.copyfile(fixture, tmp_path / "scene.sog")
+        manifest = {"schemaVersion": 1, "format": "sog", "assetVersion": "123456abcdef",
+                    "assetUrl": "versions/123456abcdef/scene.sog",
+                    "content": {"entryUrl": "versions/123456abcdef/scene.sog", "counts": [1788],
+                                "byteLength": fixture.stat().st_size,
+                                "sha256": hashlib.sha256(fixture.read_bytes()).hexdigest()}}
+        (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+>       assert validate_artifact_tree(tmp_path)["counts"] == [1788]
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+workers/tests/test_vr01b_sog_policy.py:40:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+version_dir = PosixPath('/tmp/pytest-of-test/pytest-768/test_regular_manifest_is_suppo0')
+
+    def validate_artifact_tree(version_dir: Path) -> dict:
+        """Verify a fully-assembled version directory is publish-safe.
+
+        ``version_dir`` is either an isolated staging tree or an immutable version.
+        Verify the supplied tree itself, never a sibling version referenced by a
+        scene-root-relative manifest URL.
+
+        Returns a dict with keys used by the publisher. Raises ``ValueError``
+        on any missing/corrupt asset.
+        """
+        manifest_path = version_dir / "manifest.json"
+        if not manifest_path.exists():
+            raise ValueError(f"manifest.json 缺失: {version_dir}")
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"manifest.json 不是合法 JSON: {exc}") from exc
+
+        if manifest.get("schemaVersion") != 1:
+            raise ValueError(
+                f"不支持的 manifest schemaVersion: {manifest.get('schemaVersion')}"
+            )
+        if manifest.get("format") != "streamed-sog":
+>           raise ValueError(f"不支持的 format: {manifest.get('format')}")
+E           ValueError: 不支持的 format: sog
+
+workers/pipeline/artifact_validator.py:35: ValueError
+____________ test_verified_count_policy_boundary[1788-regular-sog] _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-768/test_verified_count_policy_bou0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c02e7ef1090>
+count = 1788, mode = 'regular-sog'
+
+    @pytest.mark.parametrize("count,mode", [(1788,"regular-sog"), (60000,"regular-sog"),
+        (300000,"regular-sog"), (999999,"regular-sog"), (1000000,"streamed-sog"),
+        (1000001,"streamed-sog")])
+    def test_verified_count_policy_boundary(tmp_path, monkeypatch, count, mode):
+        source = tmp_path / "source.ply"
+        source.write_bytes(_gaussian_ply_bytes(1))
+        monkeypatch.setattr("workers.pipeline.conversion_policy.inspect_source", lambda *args, **kwargs:
+                            {"gaussian": True, "numGaussians": count, "shBands": 0}, raising=False)
+        policy = resolve_conversion_policy(source, profile="balanced", source_format="ply", gpu="cpu")
+>       assert policy.output_format == mode
+E       AssertionError: assert 'streamed-sog' == 'regular-sog'
+E
+E         - regular-sog
+E         + streamed-sog
+
+workers/tests/test_vr01b_sog_policy.py:52: AssertionError
+____________ test_verified_count_policy_boundary[60000-regular-sog] ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-768/test_verified_count_policy_bou1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c02e7546610>
+count = 60000, mode = 'regular-sog'
+
+    @pytest.mark.parametrize("count,mode", [(1788,"regular-sog"), (60000,"regular-sog"),
+        (300000,"regular-sog"), (999999,"regular-sog"), (1000000,"streamed-sog"),
+        (1000001,"streamed-sog")])
+    def test_verified_count_policy_boundary(tmp_path, monkeypatch, count, mode):
+        source = tmp_path / "source.ply"
+        source.write_bytes(_gaussian_ply_bytes(1))
+        monkeypatch.setattr("workers.pipeline.conversion_policy.inspect_source", lambda *args, **kwargs:
+                            {"gaussian": True, "numGaussians": count, "shBands": 0}, raising=False)
+        policy = resolve_conversion_policy(source, profile="balanced", source_format="ply", gpu="cpu")
+>       assert policy.output_format == mode
+E       AssertionError: assert 'streamed-sog' == 'regular-sog'
+E
+E         - regular-sog
+E         + streamed-sog
+
+workers/tests/test_vr01b_sog_policy.py:52: AssertionError
+___________ test_verified_count_policy_boundary[300000-regular-sog] ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-768/test_verified_count_policy_bou2')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c02e7e7ded0>
+count = 300000, mode = 'regular-sog'
+
+    @pytest.mark.parametrize("count,mode", [(1788,"regular-sog"), (60000,"regular-sog"),
+        (300000,"regular-sog"), (999999,"regular-sog"), (1000000,"streamed-sog"),
+        (1000001,"streamed-sog")])
+    def test_verified_count_policy_boundary(tmp_path, monkeypatch, count, mode):
+        source = tmp_path / "source.ply"
+        source.write_bytes(_gaussian_ply_bytes(1))
+        monkeypatch.setattr("workers.pipeline.conversion_policy.inspect_source", lambda *args, **kwargs:
+                            {"gaussian": True, "numGaussians": count, "shBands": 0}, raising=False)
+        policy = resolve_conversion_policy(source, profile="balanced", source_format="ply", gpu="cpu")
+>       assert policy.output_format == mode
+E       AssertionError: assert 'streamed-sog' == 'regular-sog'
+E
+E         - regular-sog
+E         + streamed-sog
+
+workers/tests/test_vr01b_sog_policy.py:52: AssertionError
+___________ test_verified_count_policy_boundary[999999-regular-sog] ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-768/test_verified_count_policy_bou3')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c02e7ee1b10>
+count = 999999, mode = 'regular-sog'
+
+    @pytest.mark.parametrize("count,mode", [(1788,"regular-sog"), (60000,"regular-sog"),
+        (300000,"regular-sog"), (999999,"regular-sog"), (1000000,"streamed-sog"),
+        (1000001,"streamed-sog")])
+    def test_verified_count_policy_boundary(tmp_path, monkeypatch, count, mode):
+        source = tmp_path / "source.ply"
+        source.write_bytes(_gaussian_ply_bytes(1))
+        monkeypatch.setattr("workers.pipeline.conversion_policy.inspect_source", lambda *args, **kwargs:
+                            {"gaussian": True, "numGaussians": count, "shBands": 0}, raising=False)
+        policy = resolve_conversion_policy(source, profile="balanced", source_format="ply", gpu="cpu")
+>       assert policy.output_format == mode
+E       AssertionError: assert 'streamed-sog' == 'regular-sog'
+E
+E         - regular-sog
+E         + streamed-sog
+
+workers/tests/test_vr01b_sog_policy.py:52: AssertionError
+=========================== short test summary info ============================
+FAILED workers/tests/test_vr01b_sog_policy.py::test_real_small_source_keeps_full_regular_sog
+FAILED workers/tests/test_vr01b_sog_policy.py::test_regular_manifest_is_supported
+FAILED workers/tests/test_vr01b_sog_policy.py::test_verified_count_policy_boundary[1788-regular-sog]
+FAILED workers/tests/test_vr01b_sog_policy.py::test_verified_count_policy_boundary[60000-regular-sog]
+FAILED workers/tests/test_vr01b_sog_policy.py::test_verified_count_policy_boundary[300000-regular-sog]
+FAILED workers/tests/test_vr01b_sog_policy.py::test_verified_count_policy_boundary[999999-regular-sog]
+6 failed, 2 passed in 3.56s

@@ -1,0 +1,1602 @@
+COMMIT=fa4ef0b420e17e69792df8a3636b41246480df8b
+WORKDIR=/tmp/gsplatform-vr01b-web-XKZb7S
+Scope: all 3 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +606
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 606, reused 606, downloaded 0, added 561
+Progress: resolved 606, reused 606, downloaded 0, added 606, done
+
+devDependencies:
++ playwright 1.63.0
+
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: @parcel/watcher@2.6.0, esbuild@0.25.12,             │
+│   esbuild@0.28.2, unrs-resolver@1.12.2, webgpu@0.4.0.                        │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Done in 2.2s using pnpm v10.33.0
+
+> gsplatform@0.0.0 typecheck /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm run typecheck:web
+
+
+> gsplatform@0.0.0 typecheck:web /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm --filter @gsplatform/web typecheck
+
+
+> @gsplatform/web@0.1.0 typecheck /tmp/gsplatform-vr01b-web-XKZb7S/apps/web
+> tsc -b --noEmit
+
+
+> gsplatform@0.0.0 lint /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm run lint:web
+
+
+> gsplatform@0.0.0 lint:web /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm --filter @gsplatform/web lint
+
+
+> @gsplatform/web@0.1.0 lint /tmp/gsplatform-vr01b-web-XKZb7S/apps/web
+> oxlint src
+
+
+> gsplatform@0.0.0 test /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm run test:web
+
+
+> gsplatform@0.0.0 test:web /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm --filter @gsplatform/web test
+
+
+> @gsplatform/web@0.1.0 test /tmp/gsplatform-vr01b-web-XKZb7S/apps/web
+> vitest run
+
+
+ RUN  v3.2.7 /tmp/gsplatform-vr01b-web-XKZb7S/apps/web
+
+ ✓ src/__tests__/scene-scale.test.ts (7 tests) 6ms
+ ✓ src/__tests__/no-legacy-viewer-references.test.ts (3 tests) 12ms
+ ✓ src/__tests__/dev-scene-allowlist.test.ts (8 tests) 7ms
+ ✓ src/__tests__/background-audio-controller.test.ts (6 tests) 8ms
+ ✓ src/__tests__/dev-scene-asset-policy.test.ts (15 tests) 9ms
+ ✓ src/__tests__/super-splat-ui-compatibility.test.ts (5 tests) 32ms
+ ✓ src/__tests__/descriptor-resolver.test.ts (5 tests) 19ms
+ ✓ src/__tests__/initial-camera-policy.test.ts (6 tests) 4ms
+ ✓ src/__tests__/optional-session.test.ts (5 tests) 6ms
+ ✓ src/__tests__/panorama-viewer.test.tsx (5 tests) 55ms
+ ✓ src/__tests__/scene-runtime.test.ts (10 tests) 24ms
+ ✓ src/__tests__/annotation-media-overlay.test.tsx (8 tests) 201ms
+ ✓ src/__tests__/super-splat-runtime.test.ts (57 tests) 82ms
+ ✓ src/__tests__/scene-transform-adapter.test.ts (15 tests) 12ms
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 物理参数不可配置：无 spinbutton、无保存参数，且以 <del> 标注不支持（§9）
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 物理参数不可配置：无 spinbutton、无保存参数，且以 <del> 标注不支持（§9）
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 未标定 → 明确确认非物理测试后构建，不发送无效物理参数
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+ ✓ src/__tests__/official-viewer-toolbar.test.tsx (6 tests) 961ms
+   ✓ Walk button (SSV-07 §3 / §4) > walkAllowed 且尺度正常 → 可点击；点击调用 toggleWalk  439ms
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 未标定 → 明确确认非物理测试后构建，不发送无效物理参数
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 未标定 → 明确确认非物理测试后构建，不发送无效物理参数
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 未标定 → 明确确认非物理测试后构建，不发送无效物理参数
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 未标定 → 明确确认非物理测试后构建，不发送无效物理参数
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 已创建资产 → 启用碰撞 Switch 存在（真实能力）且无物理参数可调 UI
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+stdout | src/__tests__/routes.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/states.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/compute.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/editor.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 已创建资产 → 启用碰撞 Switch 存在（真实能力）且无物理参数可调 UI
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stdout | src/__tests__/upload-polling.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/layout.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/home-search.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/upload.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/xr-pages.test.tsx > SSV-04 /xr/test — 官方 runtime 诊断 > Test 1: navigator.xr 不存在 → 诊断 false，页面不 crash
+[xr] diagnostics {
+  secureContext: true,
+  navigatorXR: false,
+  userAgent: 'Mozilla/5.0 (linux) AppleWebKit/537.36 (KHTML, like Gecko) jsdom/30.0.1',
+  protocol: 'http:',
+  origin: 'http://localhost:3000',
+  topLevel: true,
+  immersiveVrSupported: false,
+  immersiveArSupported: false
+}
+
+stdout | src/__tests__/works.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/home-grid.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 显示权威策略、尺度和失败独立性；确认后允许手动重建
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 显示权威策略、尺度和失败独立性；确认后允许手动重建
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 显示权威策略、尺度和失败独立性；确认后允许手动重建
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 显示权威策略、尺度和失败独立性；确认后允许手动重建
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 显示权威策略、尺度和失败独立性；确认后允许手动重建
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 只读用户不能手动构建或确认尺度
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 只读用户不能手动构建或确认尺度
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/scene-viewer-error.test.tsx > SSV-03: 官方 Viewer 错误与重试 > 描述获取失败时显示错误面板与错误详情
+[viewer] boot failed Error: 网络异常：无法连接运行时服务
+    at /tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/__tests__/scene-viewer-error.test.tsx:50:43
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 策略读取失败时禁止构建，而不是假定默认允许
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > 无平台侧边栏，渲染官方挂载区且无 iframe
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/collision-panel.test.tsx > CollisionPanel（FIX-03 §9/§10） > 策略读取失败时禁止构建，而不是假定默认允许
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/collision-panel.test.tsx (6 tests) 3352ms
+   ✓ CollisionPanel（FIX-03 §9/§10） > 物理参数不可配置：无 spinbutton、无保存参数，且以 <del> 标注不支持（§9）  842ms
+   ✓ CollisionPanel（FIX-03 §9/§10） > 未标定 → 明确确认非物理测试后构建，不发送无效物理参数  845ms
+   ✓ CollisionPanel（FIX-03 §9/§10） > 已创建资产 → 启用碰撞 Switch 存在（真实能力）且无物理参数可调 UI  401ms
+   ✓ CollisionPanel（FIX-03 §9/§10） > 显示权威策略、尺度和失败独立性；确认后允许手动重建  665ms
+   ✓ CollisionPanel（FIX-03 §9/§10） > 策略读取失败时禁止构建，而不是假定默认允许  319ms
+stderr | src/__tests__/layout.test.tsx > 平台布局与导航 > 桌面端渲染固定 224px 侧边栏
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/upload.test.tsx > ProcessingStatus（三段真实服务端状态） > publish SUCCEEDED 且 sceneId 存在时给出查看/编辑/作品导航
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/states.test.tsx > 首页与作品页加载 / 错误 / 空状态 > 首页错误状态可重试并恢复
+加载场景失败: Error: 网络异常
+    at /tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/__tests__/states.test.tsx:29:43
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+stderr | src/__tests__/upload.test.tsx > ProcessingStatus（三段真实服务端状态） > collision 未生成（null）时如实显示，而非编造进度
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/scene-viewer-error.test.tsx > SSV-03: 官方 Viewer 错误与重试 > 点击重试重新拉取描述
+[viewer] boot failed Error: boom
+    at /tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/__tests__/scene-viewer-error.test.tsx:61:43
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > 加载期显示 onProgress 真实进度
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > 加载期显示 onProgress 真实进度
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 未选文件时「下一步」按钮不可用
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > ready 后 Frame / Reset 转发官方方法
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/scene-viewer-error.test.tsx > SSV-03: 官方 Viewer 错误与重试 > 点击重试重新拉取描述
+[viewer] boot failed Error: boom
+    at /tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/__tests__/scene-viewer-error.test.tsx:61:43
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+stderr | src/__tests__/layout.test.tsx > 平台布局与导航 > 窄屏隐藏固定侧边栏，菜单按钮打开抽屉导航
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+
+ ✓ src/__tests__/scene-viewer-error.test.tsx (2 tests) 2189ms
+   ✓ SSV-03: 官方 Viewer 错误与重试 > 描述获取失败时显示错误面板与错误详情  1311ms
+   ✓ SSV-03: 官方 Viewer 错误与重试 > 点击重试重新拉取描述  870ms
+stderr | src/__tests__/xr-pages.test.tsx > SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据） > /xr/:sceneId 与 /scene/:sceneId 用同一 descriptor → 同一 contentUrl 与 settings
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > ready 后 Frame / Reset 转发官方方法
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > ready 后 Frame / Reset 转发官方方法
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > ready 后 Frame / Reset 转发官方方法
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/layout.test.tsx > 平台布局与导航 > 窄屏隐藏固定侧边栏，菜单按钮打开抽屉导航
+加载场景失败: AxiosError: Network Error
+    at XMLHttpRequest.handleError (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/axios@1.20.0/node_modules/axios/lib/adapters/xhr.js:170:21)
+    at XMLHttpRequest.invokeTheCallbackFunction (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/generated/idl/EventHandlerNonNull.js:14:28)
+    at XMLHttpRequest.<anonymous> (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/helpers/create-event-accessor.js:57:32)
+    at innerInvokeEventListeners (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:360:16)
+    at invokeEventListeners (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:296:3)
+    at XMLHttpRequestImpl._dispatch (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:243:9)
+    at fireAnEvent (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/helpers/events.js:18:36)
+    at requestErrorSteps (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:153:3)
+    at dispatchError (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:127:3)
+    at /tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:748:13
+    at Axios.request (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/axios@1.20.0/node_modules/axios/lib/core/Axios.js:48:43)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at fetchSceneList (/tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/services/sceneApi.ts:116:20) {
+  isAxiosError: true,
+  code: 'ERR_NETWORK',
+  config: [Object: null prototype] {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false,
+      legacyInterceptorReqResOrdering: true,
+      advertiseZstdAcceptEncoding: false,
+      validateStatusUndefinedResolves: true
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 15000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json'
+    },
+    baseURL: 'http://localhost:8001/api/v1',
+    withCredentials: true,
+    signal: AbortSignal {},
+    params: { limit: '100' },
+    method: 'get',
+    url: '/scenes',
+    allowAbsoluteUrls: true,
+    data: undefined
+  },
+  request: XMLHttpRequest {},
+  event: ProgressEvent { isTrusted: [Getter] }
+}
+
+stderr | src/__tests__/xr-pages.test.tsx > SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据） > /xr/:sceneId 与 /scene/:sceneId 用同一 descriptor → 同一 contentUrl 与 settings
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/home-grid.test.tsx > 首页 SceneCard 与交互 > 360px 窄屏降为 1 列
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/xr-pages.test.tsx > SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据） > /xr/:sceneId 场景加载完成后自动 frameScene，Enter VR 由官方 canStartVR 驱动
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/xr-pages.test.tsx > SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据） > FIX-04 §2: /xr/:sceneId 是正式产品页（极简 UI，工程诊断表不显示）
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/xr-pages.test.tsx > SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据） > FIX-04 §2: 诊断读数经视觉隐藏 span 暴露（e2e 取证契约保留，不可见）
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/states.test.tsx > 首页与作品页加载 / 错误 / 空状态 > 我的作品页错误状态可重试并恢复
+加载我的作品失败: Error: 网络异常
+    at /tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/__tests__/states.test.tsx:46:42
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+    at runTest (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runSuite (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/@vitest+runner@3.2.7/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Fullscreen 调用官方 requestFullscreen
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Fullscreen 调用官方 requestFullscreen
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Fullscreen 调用官方 requestFullscreen
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+ ✓ src/__tests__/editor.test.tsx (6 tests) 2133ms
+   ✓ Official editor orchestration, not Gaussian algorithms > authorizes before opening and discloses popup fallback and manual export  1158ms
+   ✓ Official editor orchestration, not Gaussian algorithms > requires explicit Streamed LOD acknowledgement and count disclosure  489ms
+   ✓ Official editor orchestration, not Gaussian algorithms > only published completion exposes Viewer link and stale bindings notice  330ms
+stderr | src/__tests__/home-grid.test.tsx > 首页 SceneCard 与交互 > 768px 显示 3 列
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/routes.test.tsx > 五个核心路由与 404 页面 > /compute 免费计算页（三步流程）
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Performance 按钮写入官方 state.performanceMode
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/layout.test.tsx > 平台布局与导航 > 窄屏隐藏固定侧边栏，菜单按钮打开抽屉导航
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Performance 按钮写入官方 state.performanceMode
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Performance 按钮写入官方 state.performanceMode
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > Publish 成功且碰撞非必需：显示完成与按需生成，不无限轮询
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > Publish 成功且碰撞非必需：显示完成与按需生成，不无限轮询
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/__tests__/xr-pages.test.tsx > FIX-XR-01 — 异步加载 → READY 状态机（真实异步 mock，非立即 loaded） > 正式页 /xr/:sceneId：异步加载后 ready，Enter VR 可点击
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+ ✓ src/__tests__/xr-pages.test.tsx (21 tests) 3364ms
+   ✓ SSV-04 /xr/test — 官方 runtime 诊断 > Test 1: navigator.xr 不存在 → 诊断 false，页面不 crash  323ms
+   ✓ SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数据） > /xr/:sceneId 与 /scene/:sceneId 用同一 descriptor → 同一 contentUrl 与 settings  782ms
+stderr | src/__tests__/routes.test.tsx > 五个核心路由与 404 页面 > /upload 上传作品页
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/__tests__/states.test.tsx (5 tests) 3113ms
+   ✓ 首页与作品页加载 / 错误 / 空状态 > 首页显示加载中状态  849ms
+   ✓ 首页与作品页加载 / 错误 / 空状态 > 首页错误状态可重试并恢复  892ms
+   ✓ 首页与作品页加载 / 错误 / 空状态 > 我的作品页错误状态可重试并恢复  907ms
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Annotations 按钮切换官方 state.showAnnotations
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > Publish 成功且碰撞非必需：显示完成与按需生成，不无限轮询
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload.test.tsx > 上传作品页（UploadPage） > 默认公开并提示可访问范围，仍可明确选择私有
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Annotations 按钮切换官方 state.showAnnotations
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Annotations 按钮切换官方 state.showAnnotations
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/layout.test.tsx > 平台布局与导航 > 侧边栏从首页可跳转到我的作品
+加载我的作品失败: AxiosError: Network Error
+    at XMLHttpRequest.handleError (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/axios@1.20.0/node_modules/axios/lib/adapters/xhr.js:170:21)
+    at XMLHttpRequest.invokeTheCallbackFunction (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/generated/idl/EventHandlerNonNull.js:14:28)
+    at XMLHttpRequest.<anonymous> (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/helpers/create-event-accessor.js:57:32)
+    at innerInvokeEventListeners (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:360:16)
+    at invokeEventListeners (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:296:3)
+    at XMLHttpRequestImpl._dispatch (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/events/EventTarget-impl.js:243:9)
+    at fireAnEvent (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/helpers/events.js:18:36)
+    at requestErrorSteps (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:153:3)
+    at dispatchError (/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:127:3)
+    at /tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/jsdom@30.0.1/node_modules/jsdom/lib/jsdom/living/xhr/XMLHttpRequest-impl.js:748:13
+    at Axios.request (file:///tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/axios@1.20.0/node_modules/axios/lib/core/Axios.js:48:43)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at fetchMyWorks (/tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/services/worksApi.ts:107:20) {
+  isAxiosError: true,
+  code: 'ERR_NETWORK',
+  config: [Object: null prototype] {
+    transitional: {
+      silentJSONParsing: true,
+      forcedJSONParsing: true,
+      clarifyTimeoutError: false,
+      legacyInterceptorReqResOrdering: true,
+      advertiseZstdAcceptEncoding: false,
+      validateStatusUndefinedResolves: true
+    },
+    adapter: [ 'xhr', 'http', 'fetch' ],
+    transformRequest: [ [Function: transformRequest] ],
+    transformResponse: [ [Function: transformResponse] ],
+    timeout: 15000,
+    xsrfCookieName: 'XSRF-TOKEN',
+    xsrfHeaderName: 'X-XSRF-TOKEN',
+    maxContentLength: -1,
+    maxBodyLength: -1,
+    env: { FormData: [Function], Blob: [class Blob] },
+    validateStatus: [Function: validateStatus],
+    headers: Object [AxiosHeaders] {
+      Accept: 'application/json, text/plain, */*',
+      'Content-Type': 'application/json'
+    },
+    baseURL: 'http://localhost:8001/api/v1',
+    withCredentials: true,
+    signal: AbortSignal {},
+    params: { limit: '100', sort: 'updated' },
+    method: 'get',
+    url: '/me/scenes',
+    allowAbsoluteUrls: true,
+    data: undefined
+  },
+  request: XMLHttpRequest {},
+  event: ProgressEvent { isTrusted: [Getter] }
+}
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Orbit/Fly 分段写入官方 state.cameraMode
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to OfficialDesktopViewer inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Orbit/Fly 分段写入官方 state.cameraMode
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/layout.test.tsx > 平台布局与导航 > 未接入的侧边栏入口处于禁用状态且说明阶段
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/__tests__/layout.test.tsx (4 tests) 3561ms
+   ✓ 平台布局与导航 > 桌面端渲染固定 224px 侧边栏  974ms
+   ✓ 平台布局与导航 > 窄屏隐藏固定侧边栏，菜单按钮打开抽屉导航  1724ms
+   ✓ 平台布局与导航 > 侧边栏从首页可跳转到我的作品  634ms
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Orbit/Fly 分段写入官方 state.cameraMode
+Not implemented: HTMLMediaElement's play() method
+
+ ✓ src/__tests__/routes.test.tsx (7 tests) 3508ms
+   ✓ 五个核心路由与 404 页面 > 首页 / 可直接访问  1089ms
+   ✓ 五个核心路由与 404 页面 > /works 我的作品页  826ms
+   ✓ 五个核心路由与 404 页面 > /compute 免费计算页（三步流程）  369ms
+   ✓ 五个核心路由与 404 页面 > /upload 上传作品页  501ms
+   ✓ 五个核心路由与 404 页面 > /scene/:sceneId 使用官方 SuperSplat 挂载区且无平台侧边栏  387ms
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > Orbit/Fly 分段写入官方 state.cameraMode
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > sceneId 切换时销毁旧 runtime 并创建新 runtime
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+stderr | src/__tests__/home-grid.test.tsx > 首页 SceneCard 与交互 > 键盘 Enter 可打开场景卡片
+[viewer] boot failed RuntimeApiError: 网络错误，请稍后重试
+    at getSceneRuntime (/tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/scene-runtime/runtimeApi.ts:76:13)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at resolveSceneRuntimeDescriptor (/tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/scene-runtime/descriptorResolver.ts:59:26)
+    at boot (/tmp/gsplatform-vr01b-web-XKZb7S/apps/web/src/features/viewer-official/useSuperSplatDesktop.ts:171:52) {
+  kind: 'NETWORK',
+  status: null
+}
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+ ✓ src/__tests__/home-search.test.tsx (5 tests) 4155ms
+   ✓ 首页搜索 > 输入关键词后按 Enter 提交并过滤结果  1884ms
+   ✓ 首页搜索 > URL 查询参数 q 存在时首页按关键词预过滤  444ms
+   ✓ 首页搜索 > 点击「清空搜索条件」恢复完整列表  717ms
+   ✓ 首页搜索 > 分类按钮切换后内容改变（城市分类）  871ms
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload.test.tsx > 上传作品页（UploadPage） > 「校验并发布」按钮可用
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/works.test.tsx > 我的作品页 > 编辑按钮打开编辑弹窗（Phase 08 真实编辑）
+Not implemented: Window's getComputedStyle() method: with pseudo-elements
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > 离开 Viewer 路由时销毁官方 runtime（无 context 泄漏）
+Not implemented: HTMLMediaElement's play() method
+
+stderr | src/__tests__/viewer.test.tsx > SSV-03: Official SuperSplat desktop viewer > 离开 Viewer 路由时销毁官方 runtime（无 context 泄漏）
+Not implemented: HTMLMediaElement's pause() method
+Not implemented: HTMLMediaElement's load() method
+
+ ✓ src/__tests__/viewer.test.tsx (9 tests) 5918ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > 无平台侧边栏，渲染官方挂载区且无 iframe  1185ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > 加载期显示 onProgress 真实进度  540ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > ready 后 Frame / Reset 转发官方方法  579ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > Fullscreen 调用官方 requestFullscreen  461ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > Performance 按钮写入官方 state.performanceMode  413ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > Annotations 按钮切换官方 state.showAnnotations  384ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > Orbit/Fly 分段写入官方 state.cameraMode  626ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > sceneId 切换时销毁旧 runtime 并创建新 runtime  473ms
+   ✓ SSV-03: Official SuperSplat desktop viewer > 离开 Viewer 路由时销毁官方 runtime（无 context 泄漏）  1254ms
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > collision FAILED：场景仍可浏览，碰撞显示失败
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > collision FAILED：场景仍可浏览，碰撞显示失败
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > collision FAILED：场景仍可浏览，碰撞显示失败
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload-polling.test.tsx > UploadPage 真实轮询时序（§E6） > collision FAILED：场景仍可浏览，碰撞显示失败
+Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/home-grid.test.tsx (6 tests) 5564ms
+   ✓ 首页 SceneCard 与交互 > 1600px 视口严格 5 列，卡片数量正确  1385ms
+   ✓ 首页 SceneCard 与交互 > 360px 窄屏降为 1 列  460ms
+   ✓ 首页 SceneCard 与交互 > 768px 显示 3 列  434ms
+   ✓ 首页 SceneCard 与交互 > 点击场景卡片可打开对应场景  1129ms
+   ✓ 首页 SceneCard 与交互 > 键盘 Enter 可打开场景卡片  811ms
+   ✓ 首页 SceneCard 与交互 > 未登录点击收藏：不跳转场景页，提示登录并跳转登录页  1342ms
+stderr | src/__tests__/upload.test.tsx > 上传作品页（UploadPage） > 保存草稿写入 localStorage 并显示成功提示
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/upload-polling.test.tsx (21 tests) 5596ms
+   ✓ UploadPage 真实轮询时序（§E6） > Publish 成功且碰撞非必需：显示完成与按需生成，不无限轮询  2823ms
+   ✓ UploadPage 真实轮询时序（§E6） > publish SUCCEEDED→collision null→QUEUED→RUNNING→SUCCEEDED 一路观察，查看场景可用  1470ms
+   ✓ UploadPage 真实轮询时序（§E6） > collision FAILED：场景仍可浏览，碰撞显示失败  1182ms
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/upload.test.tsx > 上传作品页（UploadPage） > 保存草稿后显示恢复入口
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/upload.test.tsx (8 tests) 7593ms
+   ✓ ProcessingStatus（三段真实服务端状态） > publish SUCCEEDED 且 sceneId 存在时给出查看/编辑/作品导航  790ms
+   ✓ 上传作品页（UploadPage） > 默认公开并提示可访问范围，仍可明确选择私有  1920ms
+   ✓ 上传作品页（UploadPage） > 表单字段校验：空提交时显示必填错误  665ms
+   ✓ 上传作品页（UploadPage） > 「校验并发布」按钮可用  745ms
+   ✓ 上传作品页（UploadPage） > 保存草稿写入 localStorage 并显示成功提示  1279ms
+   ✓ 上传作品页（UploadPage） > 保存草稿后显示恢复入口  1614ms
+   ✓ 上传作品页（UploadPage） > 替换文件时释放旧文件的 Object URL  376ms
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 刷新前的 beforeunload 提醒在有未保存输入时触发
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 刷新前的 beforeunload 提醒在有未保存输入时触发
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/compute.test.tsx (8 tests) 8077ms
+   ✓ 免费计算页（ComputePage） > 未选文件时「下一步」按钮不可用  1489ms
+   ✓ 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤  1216ms
+   ✓ 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示  935ms
+   ✓ 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）  934ms
+   ✓ 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段  1086ms
+   ✓ 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有  1493ms
+   ✓ 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续  638ms
+ ✓ src/__tests__/works.test.tsx (5 tests) 8832ms
+   ✓ 我的作品页 > 加载后显示作品总数与 Tabs  2151ms
+   ✓ 我的作品页 > 点击「草稿」Tab 仅显示草稿作品  1038ms
+   ✓ 我的作品页 > 编辑按钮打开编辑弹窗（Phase 08 真实编辑）  1526ms
+   ✓ 我的作品页 > 删除按钮触发二次确认弹窗  3264ms
+   ✓ 我的作品页 > 空状态与恢复操作  846ms
+
+ Test Files  29 passed (29)
+      Tests  274 passed (274)
+   Start at  15:15:56
+   Duration  16.24s (transform 7.33s, setup 6.26s, collect 76.68s, tests 68.39s, environment 31.56s, prepare 3.26s)
+
+
+> gsplatform@0.0.0 build /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm run build:web
+
+
+> gsplatform@0.0.0 build:web /tmp/gsplatform-vr01b-web-XKZb7S
+> pnpm --filter @gsplatform/web build
+
+
+> @gsplatform/web@0.1.0 build /tmp/gsplatform-vr01b-web-XKZb7S/apps/web
+> tsc -b && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/framework/parsers/draco-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/scene/gsplat-unified/gsplat-unified-sort-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/tmp/gsplatform-vr01b-web-XKZb7S/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/scene/gsplat/gsplat-sort-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+✓ 4471 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.46 kB │ gzip:     0.30 kB
+dist/assets/index-T012L1T4.css     38.33 kB │ gzip:     6.79 kB
+dist/assets/index-OQ6aixEO.js   4,021.69 kB │ gzip: 1,137.47 kB │ map: 13,921.01 kB
+
+✓ built in 5.27s
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

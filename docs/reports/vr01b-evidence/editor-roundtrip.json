@@ -1,0 +1,32 @@
+{
+  "slug": "u-3b48959f67fd",
+  "importedCount": 1788,
+  "exportBytes": 100488,
+  "exportSha256": "282015f4c82a52f781227abe9848f428ac310da011cce6c2debb2c5d57de5144",
+  "edit": {
+    "id": "e2f552d5-1db3-423c-a481-d63eef219f36",
+    "sceneId": "e96a78d9-5f33-4328-a954-b6b726b3d572",
+    "sceneSlug": "u-3b48959f67fd",
+    "sceneTitle": "VR-01B real source PRIVATE",
+    "sourceVersionId": "bf3ffb16-1bb2-43d0-be93-c19cdbf2c99a",
+    "sourceAssetVersion": "21c371259407",
+    "sourceKind": "FULL_RESOLUTION_SOURCE",
+    "sourceCounts": [
+      1788
+    ],
+    "selectedLod": null,
+    "editorUpstreamCommit": "f2a1b4975b4766e0ee0c95e63c2737dc2ecb6e5b",
+    "editorBuildIdentity": "e994c6c327c5e4d3898d25c0ff649ecf3d1cd16efc625faecb9a904a7db188ab",
+    "status": "COMPLETED",
+    "createdAt": "2026-10-12T05:24:48.816758Z",
+    "expiresAt": "2026-10-12T09:24:48.816758Z",
+    "editorUrl": "/gaussian-editor/?load=%2Fapi%2Fv1%2Fscenes%2Fu-3b48959f67fd%2Fedit-sessions%2Fe2f552d5-1db3-423c-a481-d63eef219f36%2Fsource%2Fversions%2F21c371259407%2Fscene.sog",
+    "sourceUrl": "/api/v1/scenes/u-3b48959f67fd/edit-sessions/e2f552d5-1db3-423c-a481-d63eef219f36/source/versions/21c371259407/scene.sog",
+    "uploadId": "45016494-7dfc-46bd-80c4-1e207f53e963",
+    "resultVersionId": "afc81533-69b6-4ab0-b8f5-2442a4e7cd38",
+    "resultCounts": null,
+    "errorCode": null,
+    "progress": 100,
+    "stage": "SUCCEEDED"
+  }
+}

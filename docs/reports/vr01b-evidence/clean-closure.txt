@@ -1,0 +1,72 @@
+verify_release_source.sh — clean checkout from tracked HEAD
+  commit:   HEAD
+  repo:     /fj/GSPlatform
+================================================================================
+workdir: /tmp/gsplatform-verify-GLIktc
+✓ archived HEAD
+
+[1] Source integrity
+  ✓ tracked file present: apps/api/app/storage/__init__.py
+  ✓ tracked file present: apps/api/app/storage/base.py
+  ✓ tracked file present: apps/api/app/storage/local_disk.py
+  ✓ tracked file present: apps/api/app/storage/paths.py
+  ✓ tracked file present: apps/api/pyproject.toml
+  ✓ tracked file present: workers/celery_app.py
+
+[2] Fresh venv + pip install -e apps/api[dev]
+✓ deps installed (dev extra for lint/type/test gate)
+
+[3] Import closure (API + storage + workers)
+IMPORT_OK
+
+[4] ruff
+All checks passed!
+
+[5] mypy
+Success: no issues found in 94 source files
+
+[6] backend pytest
+........................................................................ [ 12%]
+.........................................sss............................ [ 25%]
+.s................................................ssss.................. [ 38%]
+........................................................................ [ 51%]
+........................................................................ [ 64%]
+........................................................................ [ 77%]
+........................................................................ [ 90%]
+......................................................                   [100%]
+=============================== warnings summary ===============================
+.venv/lib/python3.13/site-packages/fastapi/testclient.py:1
+  /tmp/gsplatform-verify-GLIktc/apps/api/.venv/lib/python3.13/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_assistant.py: 1 warning
+tests/test_auth.py: 1 warning
+tests/test_editor_sessions.py: 1 warning
+tests/test_fix_upload011_security.py: 1 warning
+tests/test_scene_processing.py: 10 warnings
+tests/test_scene_runtime.py: 2 warnings
+tests/test_uploads.py: 1 warning
+  /tmp/gsplatform-verify-GLIktc/apps/api/.venv/lib/python3.13/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+
+[7] workers pytest
+......................ss..........s...........sss..ssss.ss.....s.ss...ss [ 47%]
+.........................s.......ss...................ss...........sssss [ 94%]
+s...sssss                                                                [100%]
+120 passed, 33 skipped in 57.97s
+
+[8] reconstruction runtime (fresh venv)
+verify_reconstruction_runtime.py
+  repo: /tmp/gsplatform-verify-GLIktc
+  contract: torch==2.14.0+cu126 gsplat==1.5.3
+PASS: torch import + version — torch 2.14.0+cu126
+PASS: gsplat import + version — gsplat 1.5.3
+PASS: trainer entry --help — python -m workers.reconstruction.train_gsplat_script --help exit 0
+PASS: CUDA availability — CUDA available, 2 device(s): NVIDIA RTX A6000
+PASS: gsplat CUDA rasterization — gsplat CUDA rasterization OK (106 lit pixels, 8 splats)
+RESULT: PASS — reconstruction runtime verified
+
+================================================================================
+RESULT: PASS — clean checkout → fresh deps → imports → lint/type/tests all green

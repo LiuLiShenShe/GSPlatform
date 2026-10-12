@@ -1,0 +1,201 @@
+{
+  "base": "https://instructor-feof-nylon-tournaments.trycloudflare.com",
+  "sourceSha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+  "sourceBytes": 100488,
+  "scenes": {
+    "PUBLIC": {
+      "uploadId": "75f49ba3-3976-4242-9376-55de6d03bb60",
+      "slug": "u-9be04c2a9fac",
+      "status": {
+        "uploadId": "75f49ba3-3976-4242-9376-55de6d03bb60",
+        "status": "SUCCEEDED",
+        "offset": 100488,
+        "totalSize": 100488,
+        "chunkMaxBytes": 67108864,
+        "expiresAt": "2026-10-13T05:12:15.036126Z",
+        "format": "ply",
+        "mimeType": "application/octet-stream",
+        "purpose": "PUBLISH",
+        "ownerId": "8b65607e-e602-494c-ab4e-828fa51ce4c6",
+        "sha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+        "sceneId": "a8d9c2ee-1c6f-4f16-99ee-9dec58a01cdf",
+        "sceneSlug": "u-9be04c2a9fac",
+        "publishJobId": "eb1c72be-4c0e-4580-9bb3-e52c9fb207e1",
+        "publishStatus": "SUCCEEDED",
+        "collisionJobId": null,
+        "collisionStatus": null,
+        "collisionRequired": false,
+        "collisionPolicyReason": "POLICY_MANUAL_ONLY"
+      },
+      "runtime": {
+        "schemaVersion": 1,
+        "scene": {
+          "id": "u-9be04c2a9fac",
+          "name": "VR-01B real source PUBLIC",
+          "posterUrl": "/api/v1/scenes/u-9be04c2a9fac/assets/poster.webp"
+        },
+        "content": {
+          "url": "/api/v1/scenes/u-9be04c2a9fac/assets/versions/21c371259407/scene.sog",
+          "format": "sog"
+        },
+        "presentation": {
+          "worldTransform": {
+            "position": null,
+            "rotation": null,
+            "scale": null
+          },
+          "initialCamera": {
+            "position": null,
+            "target": null,
+            "fov": null
+          },
+          "background": {
+            "type": "color",
+            "color": null,
+            "url": null
+          },
+          "tonemapping": "aces",
+          "highPrecisionRendering": false,
+          "postEffects": null
+        },
+        "viewpoints": [],
+        "annotations": [],
+        "backgroundAudio": null,
+        "collision": null
+      },
+      "anonymousRuntime": 200,
+      "anonymousAsset": 200,
+      "range": {
+        "status": 206,
+        "contentRange": "bytes 0-31/36760"
+      },
+      "processing": {
+        "sceneType": "UNSPECIFIED",
+        "conversionProfile": "balanced",
+        "collisionPolicy": "MANUAL_ONLY",
+        "calibration": {
+          "state": "UNVERIFIED",
+          "recordedState": "UNVERIFIED",
+          "metersPerSceneUnit": null,
+          "referenceMethod": null,
+          "referenceValue": null,
+          "sourceVersion": null,
+          "transformIdentity": null,
+          "evidence": null,
+          "stale": false,
+          "physicalWalkAllowed": false
+        },
+        "createdAt": "2026-10-12T05:12:15.512363Z",
+        "updatedAt": "2026-10-12T05:12:15.512363Z",
+        "collisionDecision": {
+          "shouldBuild": false,
+          "triggerMode": "AUTO",
+          "sceneType": "UNSPECIFIED",
+          "calibrationState": "UNVERIFIED",
+          "sourceVersion": "21c371259407",
+          "reasonCode": "POLICY_MANUAL_ONLY",
+          "resourceEstimate": null,
+          "physicalScaleVerified": false
+        }
+      },
+      "elapsedSeconds": 9.309
+    },
+    "PRIVATE": {
+      "uploadId": "cbd7e83f-ebd0-40d3-ae8d-5b0bc3c2f917",
+      "slug": "u-3b48959f67fd",
+      "status": {
+        "uploadId": "cbd7e83f-ebd0-40d3-ae8d-5b0bc3c2f917",
+        "status": "SUCCEEDED",
+        "offset": 100488,
+        "totalSize": 100488,
+        "chunkMaxBytes": 67108864,
+        "expiresAt": "2026-10-13T05:12:24.321218Z",
+        "format": "ply",
+        "mimeType": "application/octet-stream",
+        "purpose": "PUBLISH",
+        "ownerId": "8b65607e-e602-494c-ab4e-828fa51ce4c6",
+        "sha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+        "sceneId": "e96a78d9-5f33-4328-a954-b6b726b3d572",
+        "sceneSlug": "u-3b48959f67fd",
+        "publishJobId": "14cff898-ffc2-49ae-a642-ff5cfcafd7cf",
+        "publishStatus": "SUCCEEDED",
+        "collisionJobId": null,
+        "collisionStatus": null,
+        "collisionRequired": false,
+        "collisionPolicyReason": "POLICY_MANUAL_ONLY"
+      },
+      "runtime": {
+        "schemaVersion": 1,
+        "scene": {
+          "id": "u-3b48959f67fd",
+          "name": "VR-01B real source PRIVATE",
+          "posterUrl": "/api/v1/scenes/u-3b48959f67fd/assets/poster.webp"
+        },
+        "content": {
+          "url": "/api/v1/scenes/u-3b48959f67fd/assets/versions/21c371259407/scene.sog",
+          "format": "sog"
+        },
+        "presentation": {
+          "worldTransform": {
+            "position": null,
+            "rotation": null,
+            "scale": null
+          },
+          "initialCamera": {
+            "position": null,
+            "target": null,
+            "fov": null
+          },
+          "background": {
+            "type": "color",
+            "color": null,
+            "url": null
+          },
+          "tonemapping": "aces",
+          "highPrecisionRendering": false,
+          "postEffects": null
+        },
+        "viewpoints": [],
+        "annotations": [],
+        "backgroundAudio": null,
+        "collision": null
+      },
+      "anonymousRuntime": 401,
+      "anonymousAsset": 401,
+      "range": {
+        "status": 206,
+        "contentRange": "bytes 0-31/36760"
+      },
+      "processing": {
+        "sceneType": "UNSPECIFIED",
+        "conversionProfile": "balanced",
+        "collisionPolicy": "MANUAL_ONLY",
+        "calibration": {
+          "state": "UNVERIFIED",
+          "recordedState": "UNVERIFIED",
+          "metersPerSceneUnit": null,
+          "referenceMethod": null,
+          "referenceValue": null,
+          "sourceVersion": null,
+          "transformIdentity": null,
+          "evidence": null,
+          "stale": false,
+          "physicalWalkAllowed": false
+        },
+        "createdAt": "2026-10-12T05:12:24.750444Z",
+        "updatedAt": "2026-10-12T05:12:24.750444Z",
+        "collisionDecision": {
+          "shouldBuild": false,
+          "triggerMode": "AUTO",
+          "sceneType": "UNSPECIFIED",
+          "calibrationState": "UNVERIFIED",
+          "sourceVersion": "21c371259407",
+          "reasonCode": "POLICY_MANUAL_ONLY",
+          "resourceEstimate": null,
+          "physicalScaleVerified": false
+        }
+      },
+      "elapsedSeconds": 9.172
+    }
+  }
+}

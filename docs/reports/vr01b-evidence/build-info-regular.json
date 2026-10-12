@@ -1,0 +1,106 @@
+{
+  "tool": "splat-transform",
+  "toolVersion": "3.3.3",
+  "sourceFile": "upload.bin",
+  "sourceSha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+  "sourceGaussianCount": 1788,
+  "gaussianTotal": 1788,
+  "conversionRecipeVersion": "3",
+  "conversionRecipe": {
+    "recipeVersion": "3",
+    "mode": "regular-sog",
+    "tool": "splat-transform",
+    "toolVersion": "3.3.3",
+    "encoding": "official-sog-v2",
+    "sourceGaussianCount": 1788,
+    "profile": "regular",
+    "streamingThreshold": 1000000,
+    "minLodGaussians": null,
+    "maxLodLevels": null,
+    "lodRatios": [
+      "100%"
+    ],
+    "lodOrder": [
+      0
+    ],
+    "lodChunkCount": null,
+    "lodChunkExtent": null,
+    "lodChunkMin": null,
+    "shIterations": 10,
+    "computeBackend": "cpu",
+    "sourceShBands": 0,
+    "sourceModel": "default"
+  },
+  "profile": "regular",
+  "lodRatios": [
+    "100%"
+  ],
+  "lodLevels": 1,
+  "lodCounts": [
+    1788
+  ],
+  "lodChunkCount": null,
+  "lodChunkExtent": null,
+  "chunkCountTarget": null,
+  "chunkExtent": null,
+  "chunkMin": null,
+  "gpuDevice": "cpu",
+  "cliExecutions": [
+    {
+      "arguments": [
+        "-g",
+        "cpu",
+        "raw-input.ply",
+        "scene.sog",
+        "--sh-iterations",
+        "10",
+        "--no-tty",
+        "--max-workers",
+        "0"
+      ],
+      "exitCode": 0,
+      "observedDevice": {
+        "backend": "cpu",
+        "adapter": null
+      }
+    }
+  ],
+  "officialInspection": {
+    "format": "sog",
+    "gaussian": true,
+    "numGaussians": 1788,
+    "numLods": 1,
+    "lodCounts": [
+      1788
+    ],
+    "shBands": 0,
+    "model": "default",
+    "layers": [
+      "position",
+      "geometric",
+      "color"
+    ],
+    "extraColumns": []
+  },
+  "outputSha256": "a9b7b5ef5ac4c882434a3cf6b16a976963bca18ec46953684dce2a304ceead18",
+  "maxWorkers": 0,
+  "stageDurations": {
+    "COPYING": 0.0,
+    "ENCODING": 3.126
+  },
+  "stages": {
+    "COPYING": {
+      "startedAt": "2026-10-12T05:17:22.774211+00:00",
+      "finishedAt": "2026-10-12T05:17:22.898740+00:00",
+      "elapsedSeconds": 0.0,
+      "status": "SUCCEEDED"
+    },
+    "ENCODING": {
+      "startedAt": "2026-10-12T05:17:22.900271+00:00",
+      "finishedAt": "2026-10-12T05:17:26.157087+00:00",
+      "elapsedSeconds": 3.126,
+      "status": "SUCCEEDED"
+    }
+  },
+  "totalDuration": 3.385
+}

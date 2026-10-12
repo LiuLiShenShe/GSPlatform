@@ -1,0 +1,8 @@
+{
+  "splat-transform CLI \u4e0d\u5728\u672c checkout\uff08node_modules \u672a\u968f git archive \u5206\u53d1\uff09": 16,
+  "Baseline Git history is absent from clean archive": 1,
+  "Pinned CLI absent in clean source archive": 1,
+  "Git history absent from clean archive": 1,
+  "Official CLI absent from archive": 1,
+  "Pinned CLI requires installed node_modules": 13
+}

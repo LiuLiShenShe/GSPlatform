@@ -1,0 +1,16 @@
+{
+  "database": "gsplatform_vr00_workers_20261011",
+  "baseline": "88fb7adf16a8078b72b3956c135e5f7b7e0757b7",
+  "manifestFormat": "sog",
+  "manifestEntry": "versions/regular12345/scene.sog",
+  "versionFormat": "streamed-sog",
+  "assetStorageKey": "published/3e1cc12a-c318-4ae5-84f9-8f60b4214e90/versions/regular12345/lod-meta.json",
+  "runtime": {
+    "url": "/api/v1/scenes/vr01b-red-2927a7b1-90a7-44cf-9fbf-ac913babb4ef/assets/versions/regular12345/lod-meta.json",
+    "format": "lod-meta"
+  },
+  "versionFormatCorrect": false,
+  "assetEntryCorrect": false,
+  "runtimeEntryCorrect": false,
+  "transaction": "rolled back test-only fixture"
+}

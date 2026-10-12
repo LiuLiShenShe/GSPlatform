@@ -1,0 +1,30 @@
+{
+  "publishedSha256": "a9b7b5ef5ac4c882434a3cf6b16a976963bca18ec46953684dce2a304ceead18",
+  "probeSha256": "109d38035475f4d4a6b0809c58e22c8d06a31ff2b43478232eaac6a2c3c1ef6c",
+  "sameInternalResources": {
+    "means_l.webp": true,
+    "means_u.webp": true,
+    "quats.webp": true,
+    "scales.webp": true,
+    "sh0.webp": true,
+    "meta.json": true
+  },
+  "zipTimestamps": {
+    "published": [
+      2026,
+      10,
+      12,
+      13,
+      17,
+      22
+    ],
+    "probe": [
+      2026,
+      10,
+      12,
+      12,
+      24,
+      38
+    ]
+  }
+}

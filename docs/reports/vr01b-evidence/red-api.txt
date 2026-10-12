@@ -1,0 +1,30 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__________ test_regular_publication_registers_real_entry_and_runtime ___________
+
+db = <sqlalchemy.orm.session.Session object at 0x7c45e1b931d0>
+public_scene = <Scene id=aaee374b-88d7-4f13-8753-59a8b2d80818 slug='scene-455151db' status=PUBLISHED>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7c45e1b93090>
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-769/test_regular_publication_regis0')
+
+    def test_regular_publication_registers_real_entry_and_runtime(db, public_scene, monkeypatch, tmp_path):
+        monkeypatch.setattr("app.services.publish_service.get_repo_root", lambda: tmp_path)
+        manifest = {"schemaVersion": 1, "format": "sog", "assetVersion": "regular12345",
+                    "assetUrl": "versions/regular12345/scene.sog",
+                    "content": {"entryUrl": "versions/regular12345/scene.sog", "counts": [1788],
+                                "byteLength": 100, "sha256": "b" * 64}}
+        storage = LocalDiskStorage(settings.storage_root)
+        version = PublishService(db, storage).commit_version(scene_id=public_scene.id,
+            version_id="regular12345", manifest=manifest, entry_bytes=100,
+            entry_url=manifest["assetUrl"], counts=[1788], source_sha256="a" * 64)
+        db.commit()
+        asset = db.query(Asset).filter(Asset.version_id == version.id, Asset.kind == "SOG").one()
+>       assert version.format == "sog"
+E       AssertionError: assert 'streamed-sog' == 'sog'
+E
+E         - sog
+E         + streamed-sog
+
+tests/test_vr01b_publication.py:22: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_vr01b_publication.py::test_regular_publication_registers_real_entry_and_runtime

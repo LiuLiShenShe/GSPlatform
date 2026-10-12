@@ -1,0 +1,144 @@
+{
+  "purpose": "Authorized same-source format migration via existing edit upload/CAS; not claimed as a genuine Editor export",
+  "sourceSha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+  "before": {
+    "id": "u-a68b94d84538",
+    "title": "VR-00 real Gaussian smoke",
+    "description": null,
+    "author": {
+      "id": "u-a68b94d84538",
+      "name": "VR-00 isolated vr00-owner-256593-20261011"
+    },
+    "category": "experiment",
+    "visibility": "PUBLIC",
+    "status": "PUBLISHED",
+    "splatCount": 1788,
+    "sizeMB": 0.1,
+    "views": 0,
+    "likes": 0,
+    "posterUrl": "/api/v1/scenes/u-a68b94d84538/assets/poster.webp",
+    "manifestUrl": "/api/v1/scenes/u-a68b94d84538/assets/current/manifest.json",
+    "publishedAt": "2026-10-11T14:39:16.631482Z",
+    "isFavorited": false,
+    "favoriteCount": null,
+    "shareCount": null,
+    "createdAt": "2026-10-11T14:39:05.937694Z",
+    "updatedAt": "2026-10-12T02:36:11.668533Z"
+  },
+  "sourceBefore": {
+    "sceneId": "5f10e536-e86b-44f7-bdec-5e3a667eebc7",
+    "sceneTitle": "VR-00 real Gaussian smoke",
+    "currentVersionId": "68cb9e7b-11a5-44d8-9070-e146b9e55aba",
+    "assetVersion": "c10c127b4574",
+    "format": "streamed-sog",
+    "counts": [
+      1788,
+      536,
+      179
+    ],
+    "editorEnabled": true,
+    "maxGaussians": 5000000,
+    "spatialState": null
+  },
+  "edit": {
+    "id": "4b893f56-9670-44ec-ad47-999025e893d1",
+    "sceneId": "5f10e536-e86b-44f7-bdec-5e3a667eebc7",
+    "sceneSlug": "u-a68b94d84538",
+    "sceneTitle": "VR-00 real Gaussian smoke",
+    "sourceVersionId": "68cb9e7b-11a5-44d8-9070-e146b9e55aba",
+    "sourceAssetVersion": "c10c127b4574",
+    "sourceKind": "SELECTED_STREAMED_LOD",
+    "sourceCounts": [
+      1788,
+      536,
+      179
+    ],
+    "selectedLod": 0,
+    "editorUpstreamCommit": "f2a1b4975b4766e0ee0c95e63c2737dc2ecb6e5b",
+    "editorBuildIdentity": "e994c6c327c5e4d3898d25c0ff649ecf3d1cd16efc625faecb9a904a7db188ab",
+    "status": "COMPLETED",
+    "createdAt": "2026-10-12T05:16:01.822501Z",
+    "expiresAt": "2026-10-12T09:16:01.822501Z",
+    "editorUrl": "/gaussian-editor/?load=%2Fapi%2Fv1%2Fscenes%2Fu-a68b94d84538%2Fedit-sessions%2F4b893f56-9670-44ec-ad47-999025e893d1%2Fsource%2Fversions%2Fc10c127b4574%2Flod-meta.json",
+    "sourceUrl": "/api/v1/scenes/u-a68b94d84538/edit-sessions/4b893f56-9670-44ec-ad47-999025e893d1/source/versions/c10c127b4574/lod-meta.json",
+    "uploadId": "2a5a5337-5d24-4acf-84ed-b63c4c1d9931",
+    "resultVersionId": "ef369c74-a9ea-4459-af88-4d8148a85ace",
+    "resultCounts": null,
+    "errorCode": null,
+    "progress": 100,
+    "stage": "SUCCEEDED"
+  },
+  "after": {
+    "id": "u-a68b94d84538",
+    "title": "VR-00 real Gaussian smoke",
+    "description": null,
+    "author": {
+      "id": "u-a68b94d84538",
+      "name": "VR-00 isolated vr00-owner-256593-20261011"
+    },
+    "category": "experiment",
+    "visibility": "PUBLIC",
+    "status": "PUBLISHED",
+    "splatCount": 1788,
+    "sizeMB": 0.1,
+    "views": 0,
+    "likes": 0,
+    "posterUrl": "/api/v1/scenes/u-a68b94d84538/assets/poster.webp",
+    "manifestUrl": "/api/v1/scenes/u-a68b94d84538/assets/current/manifest.json",
+    "publishedAt": "2026-10-12T05:17:27.575312Z",
+    "isFavorited": false,
+    "favoriteCount": null,
+    "shareCount": null,
+    "createdAt": "2026-10-11T14:39:05.937694Z",
+    "updatedAt": "2026-10-12T05:17:27.575312Z"
+  },
+  "sourceAfter": {
+    "sceneId": "5f10e536-e86b-44f7-bdec-5e3a667eebc7",
+    "sceneTitle": "VR-00 real Gaussian smoke",
+    "currentVersionId": "ef369c74-a9ea-4459-af88-4d8148a85ace",
+    "assetVersion": "21c371259407",
+    "format": "sog",
+    "counts": [
+      1788
+    ],
+    "editorEnabled": true,
+    "maxGaussians": 5000000,
+    "spatialState": "STALE"
+  },
+  "runtime": {
+    "schemaVersion": 1,
+    "scene": {
+      "id": "u-a68b94d84538",
+      "name": "VR-00 real Gaussian smoke",
+      "posterUrl": "/api/v1/scenes/u-a68b94d84538/assets/poster.webp"
+    },
+    "content": {
+      "url": "/api/v1/scenes/u-a68b94d84538/assets/versions/21c371259407/scene.sog",
+      "format": "sog"
+    },
+    "presentation": {
+      "worldTransform": {
+        "position": null,
+        "rotation": null,
+        "scale": null
+      },
+      "initialCamera": {
+        "position": null,
+        "target": null,
+        "fov": null
+      },
+      "background": {
+        "type": "color",
+        "color": null,
+        "url": null
+      },
+      "tonemapping": "aces",
+      "highPrecisionRendering": false,
+      "postEffects": null
+    },
+    "viewpoints": [],
+    "annotations": [],
+    "backgroundAudio": null,
+    "collision": null
+  }
+}

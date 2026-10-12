@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "sceneId": "5f10e536-e86b-44f7-bdec-5e3a667eebc7",
+  "assetVersion": "21c371259407",
+  "format": "sog",
+  "sourceSha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+  "conversionRecipeVersion": "3",
+  "conversionRecipe": {
+    "recipeVersion": "3",
+    "mode": "regular-sog",
+    "tool": "splat-transform",
+    "toolVersion": "3.3.3",
+    "encoding": "official-sog-v2",
+    "sourceGaussianCount": 1788,
+    "profile": "regular",
+    "streamingThreshold": 1000000,
+    "minLodGaussians": null,
+    "maxLodLevels": null,
+    "lodRatios": [
+      "100%"
+    ],
+    "lodOrder": [
+      0
+    ],
+    "lodChunkCount": null,
+    "lodChunkExtent": null,
+    "lodChunkMin": null,
+    "shIterations": 10,
+    "computeBackend": "cpu",
+    "sourceShBands": 0,
+    "sourceModel": "default"
+  },
+  "content": {
+    "entryUrl": "versions/21c371259407/scene.sog",
+    "byteLength": 36760,
+    "sha256": "a9b7b5ef5ac4c882434a3cf6b16a976963bca18ec46953684dce2a304ceead18",
+    "transport": "range",
+    "lodLevels": 1,
+    "counts": [
+      1788
+    ]
+  },
+  "poster": null,
+  "camera": {
+    "position": [
+      0,
+      1.2,
+      3.5
+    ],
+    "target": [
+      0,
+      0.8,
+      0
+    ],
+    "fov": 55
+  },
+  "assetUrl": "versions/21c371259407/scene.sog"
+}

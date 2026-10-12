@@ -1,0 +1,11 @@
+{
+    "format": "sog",
+    "gaussian": true,
+    "numGaussians": 1788,
+    "numLods": 1,
+    "lodCounts": [1788],
+    "shBands": 0,
+    "model": "default",
+    "layers": ["position", "geometric", "color"],
+    "extraColumns": []
+}

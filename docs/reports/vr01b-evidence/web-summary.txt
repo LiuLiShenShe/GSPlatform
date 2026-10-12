@@ -1,0 +1,44 @@
+Final application: fa4ef0b420e17e69792df8a3636b41246480df8b
+Actual logs: /home/test/.local/state/gsplatform-vr00-20261011/vr01b
+
+pnpm typecheck EXIT=0
+pnpm lint EXIT=0
+
+   ✓ 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续  427ms
+
+ Test Files  29 passed (29)
+      Tests  274 passed (274)
+   Start at  14:56:17
+   Duration  11.88s (transform 7.44s, setup 6.83s, collect 75.37s, tests 38.33s, environment 34.60s, prepare 4.11s)
+
+
+
+> gsplatform@0.0.0 build /fj/GSPlatform
+> pnpm run build:web
+
+
+> gsplatform@0.0.0 build:web /fj/GSPlatform
+> pnpm --filter @gsplatform/web build
+
+
+> @gsplatform/web@0.1.0 build /fj/GSPlatform/apps/web
+> tsc -b && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/fj/GSPlatform/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/framework/parsers/draco-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/fj/GSPlatform/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/scene/gsplat/gsplat-sort-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/fj/GSPlatform/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/scene/gsplat-unified/gsplat-unified-sort-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+✓ 4471 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.46 kB │ gzip:     0.30 kB
+dist/assets/index-T012L1T4.css     38.33 kB │ gzip:     6.79 kB
+dist/assets/index-ecQzC64P.js   4,021.77 kB │ gzip: 1,137.48 kB │ map: 13,921.06 kB
+
+✓ built in 14.60s
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

@@ -1,0 +1,1629 @@
+{
+  "baseURL": "https://personality-marijuana-standard-machines.trycloudflare.com",
+  "routes": {
+    "sog-scene": {
+      "slug": "u-2b08ce941569",
+      "samples": [
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.524,
+            "verticalExtent": 2.992
+          },
+          "camera": {
+            "position": [
+              4.8168,
+              2.8543,
+              16.1481
+            ],
+            "target": [
+              -0.3862,
+              0.2528,
+              10.9451
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.148,
+                -1.243,
+                7.567
+              ],
+              "max": [
+                3.376,
+                1.749,
+                14.323
+              ]
+            }
+          }
+        }
+      ],
+      "failures": []
+    },
+    "sog-xr": {
+      "slug": "u-2b08ce941569",
+      "samples": [
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.7792,
+              2.8477,
+              16.022
+            ],
+            "target": [
+              -0.3412,
+              0.2797,
+              10.8861
+            ],
+            "fov": 85
+          }
+        }
+      ],
+      "failures": []
+    },
+    "zip-scene": {
+      "slug": "u-90c5a107f65e",
+      "samples": [
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        },
+        {
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "loaded": true,
+          "progress": 100,
+          "cameraMode": "orbit",
+          "performanceMode": false,
+          "showAnnotations": true,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "hasCollision": false,
+          "collisionFormat": null,
+          "sceneScale": {
+            "status": "ok",
+            "horizontalExtent": 7.615,
+            "verticalExtent": 3.049
+          },
+          "camera": {
+            "position": [
+              4.8747,
+              2.9135,
+              16.2037
+            ],
+            "target": [
+              -0.4096,
+              0.2713,
+              10.9194
+            ],
+            "fov": 85
+          },
+          "worldTransform": {
+            "position": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0,
+              "z": 0
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "isIdentity": true,
+            "boundsAfter": {
+              "min": [
+                -4.217,
+                -1.253,
+                7.476
+              ],
+              "max": [
+                3.398,
+                1.796,
+                14.363
+              ]
+            }
+          }
+        }
+      ],
+      "failures": []
+    },
+    "zip-xr": {
+      "slug": "u-90c5a107f65e",
+      "samples": [
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        },
+        {
+          "status": "ready",
+          "loaded": true,
+          "canStartVR": false,
+          "canStartAR": false,
+          "xrMode": null,
+          "renderer": "webgl2",
+          "gsplats": 1788,
+          "progress": 100,
+          "hasCollision": false,
+          "walkAllowed": false,
+          "effectiveWalkAllowed": false,
+          "collisionStale": false,
+          "secureContext": true,
+          "navigatorXR": true,
+          "immersiveVrSupported": false,
+          "contentUrl": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta",
+          "isManifestFallback": false,
+          "error": null,
+          "camera": {
+            "position": [
+              4.8581,
+              2.9104,
+              16.1484
+            ],
+            "target": [
+              -0.3899,
+              0.283,
+              10.8937
+            ],
+            "fov": 85
+          }
+        }
+      ],
+      "failures": []
+    }
+  }
+}

@@ -1,0 +1,259 @@
+{
+  "samples": [
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "gsplats": 1788,
+      "progress": 100,
+      "performanceMode": false,
+      "camera": [
+        4.494999885559082,
+        2.842400074005127,
+        14.941800117492676
+      ],
+      "lodRange": [
+        [
+          0,
+          1000
+        ]
+      ]
+    },
+    {
+      "afterMovement": true,
+      "gsplats": 1788,
+      "camera": [
+        -0.7412608861923218,
+        0.1377212256193161,
+        9.532559394836426
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "url": "/old/lod-meta.json",
+      "status": 200
+    },
+    {
+      "url": "/old/2_0/meta.json",
+      "status": 200
+    },
+    {
+      "url": "/old/2_0/means_u.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/2_0/sh0.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/2_0/quats.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/2_0/means_l.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/2_0/scales.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/0_0/meta.json",
+      "status": 200
+    },
+    {
+      "url": "/old/0_0/means_l.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/0_0/means_u.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/0_0/sh0.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/0_0/scales.webp",
+      "status": 200
+    },
+    {
+      "url": "/old/0_0/quats.webp",
+      "status": 200
+    }
+  ]
+}

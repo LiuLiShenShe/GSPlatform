@@ -1,0 +1,314 @@
+{
+  "original": {
+    "settings": {
+      "version": 2,
+      "tonemapping": "aces",
+      "highPrecisionRendering": false,
+      "background": {
+        "color": [
+          0.05,
+          0.05,
+          0.05
+        ]
+      },
+      "postEffectSettings": {
+        "sharpness": {
+          "enabled": false,
+          "amount": 0
+        },
+        "bloom": {
+          "enabled": false,
+          "intensity": 0.1,
+          "blurLevel": 2
+        },
+        "grading": {
+          "enabled": false,
+          "brightness": 1,
+          "contrast": 1,
+          "saturation": 1,
+          "tint": [
+            1,
+            1,
+            1
+          ]
+        },
+        "vignette": {
+          "enabled": false,
+          "intensity": 0.5,
+          "inner": 0.3,
+          "outer": 0.75,
+          "curvature": 1
+        },
+        "fringing": {
+          "enabled": false,
+          "intensity": 0.5
+        }
+      },
+      "animTracks": [],
+      "cameras": [
+        {
+          "initial": {
+            "position": [
+              4.495,
+              2.8424,
+              14.9418
+            ],
+            "target": [
+              0.0149,
+              0.5283,
+              10.3137
+            ],
+            "fov": 85
+          }
+        }
+      ],
+      "annotations": [],
+      "startMode": "default"
+    },
+    "state": {
+      "loaded": true,
+      "performanceMode": false
+    },
+    "gsplats": 1788,
+    "camera": [
+      4.494999885559082,
+      2.842400074005127,
+      14.941800117492676
+    ],
+    "device": "webgl2"
+  },
+  "old-lod0": {
+    "settings": {
+      "version": 2,
+      "tonemapping": "aces",
+      "highPrecisionRendering": false,
+      "background": {
+        "color": [
+          0.05,
+          0.05,
+          0.05
+        ]
+      },
+      "postEffectSettings": {
+        "sharpness": {
+          "enabled": false,
+          "amount": 0
+        },
+        "bloom": {
+          "enabled": false,
+          "intensity": 0.1,
+          "blurLevel": 2
+        },
+        "grading": {
+          "enabled": false,
+          "brightness": 1,
+          "contrast": 1,
+          "saturation": 1,
+          "tint": [
+            1,
+            1,
+            1
+          ]
+        },
+        "vignette": {
+          "enabled": false,
+          "intensity": 0.5,
+          "inner": 0.3,
+          "outer": 0.75,
+          "curvature": 1
+        },
+        "fringing": {
+          "enabled": false,
+          "intensity": 0.5
+        }
+      },
+      "animTracks": [],
+      "cameras": [
+        {
+          "initial": {
+            "position": [
+              4.495,
+              2.8424,
+              14.9418
+            ],
+            "target": [
+              0.0149,
+              0.5283,
+              10.3137
+            ],
+            "fov": 85
+          }
+        }
+      ],
+      "annotations": [],
+      "startMode": "default"
+    },
+    "state": {
+      "loaded": true,
+      "performanceMode": false
+    },
+    "gsplats": 1788,
+    "camera": [
+      4.494999885559082,
+      2.842400074005127,
+      14.941800117492676
+    ],
+    "device": "webgl2"
+  },
+  "old-lod2": {
+    "settings": {
+      "version": 2,
+      "tonemapping": "aces",
+      "highPrecisionRendering": false,
+      "background": {
+        "color": [
+          0.05,
+          0.05,
+          0.05
+        ]
+      },
+      "postEffectSettings": {
+        "sharpness": {
+          "enabled": false,
+          "amount": 0
+        },
+        "bloom": {
+          "enabled": false,
+          "intensity": 0.1,
+          "blurLevel": 2
+        },
+        "grading": {
+          "enabled": false,
+          "brightness": 1,
+          "contrast": 1,
+          "saturation": 1,
+          "tint": [
+            1,
+            1,
+            1
+          ]
+        },
+        "vignette": {
+          "enabled": false,
+          "intensity": 0.5,
+          "inner": 0.3,
+          "outer": 0.75,
+          "curvature": 1
+        },
+        "fringing": {
+          "enabled": false,
+          "intensity": 0.5
+        }
+      },
+      "animTracks": [],
+      "cameras": [
+        {
+          "initial": {
+            "position": [
+              4.495,
+              2.8424,
+              14.9418
+            ],
+            "target": [
+              0.0149,
+              0.5283,
+              10.3137
+            ],
+            "fov": 85
+          }
+        }
+      ],
+      "annotations": [],
+      "startMode": "default"
+    },
+    "state": {
+      "loaded": true,
+      "performanceMode": false
+    },
+    "gsplats": 179,
+    "camera": [
+      4.494999885559082,
+      2.842400074005127,
+      14.941800117492676
+    ],
+    "device": "webgl2"
+  },
+  "regular": {
+    "settings": {
+      "version": 2,
+      "tonemapping": "aces",
+      "highPrecisionRendering": false,
+      "background": {
+        "color": [
+          0.05,
+          0.05,
+          0.05
+        ]
+      },
+      "postEffectSettings": {
+        "sharpness": {
+          "enabled": false,
+          "amount": 0
+        },
+        "bloom": {
+          "enabled": false,
+          "intensity": 0.1,
+          "blurLevel": 2
+        },
+        "grading": {
+          "enabled": false,
+          "brightness": 1,
+          "contrast": 1,
+          "saturation": 1,
+          "tint": [
+            1,
+            1,
+            1
+          ]
+        },
+        "vignette": {
+          "enabled": false,
+          "intensity": 0.5,
+          "inner": 0.3,
+          "outer": 0.75,
+          "curvature": 1
+        },
+        "fringing": {
+          "enabled": false,
+          "intensity": 0.5
+        }
+      },
+      "animTracks": [],
+      "cameras": [
+        {
+          "initial": {
+            "position": [
+              4.495,
+              2.8424,
+              14.9418
+            ],
+            "target": [
+              0.0149,
+              0.5283,
+              10.3137
+            ],
+            "fov": 85
+          }
+        }
+      ],
+      "annotations": [],
+      "startMode": "default"
+    },
+    "state": {
+      "loaded": true,
+      "performanceMode": false
+    },
+    "gsplats": 1788,
+    "camera": [
+      4.494999885559082,
+      2.842400074005127,
+      14.941800117492676
+    ],
+    "device": "webgl2"
+  }
+}

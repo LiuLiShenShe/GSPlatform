@@ -1,0 +1,70 @@
+{
+  "purpose": "Explicit internal fixture to verify actual four-level encoder; production count threshold is tested separately",
+  "sourceSha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+  "assetVersion": "89985d1552ed",
+  "path": "/home/test/.local/state/gsplatform-vr00-20261011/vr01b/real-streamed-cli/89985d1552ed",
+  "counts": [
+    1788,
+    894,
+    447,
+    224
+  ],
+  "officialInfo": {
+    "format": "lod",
+    "gaussian": true,
+    "numGaussians": 1788,
+    "numLods": 4,
+    "lodCounts": [
+      1788,
+      894,
+      447,
+      224
+    ],
+    "shBands": 0,
+    "model": "default",
+    "layers": [
+      "position",
+      "geometric",
+      "color"
+    ],
+    "extraColumns": []
+  },
+  "conversionSeconds": 9.913,
+  "cliExecutions": [
+    {
+      "arguments": [
+        "-g",
+        "cpu",
+        "raw-input.ply",
+        "--tag-lod",
+        "0",
+        "lod1.ply",
+        "--tag-lod",
+        "1",
+        "lod2.ply",
+        "--tag-lod",
+        "2",
+        "lod3.ply",
+        "--tag-lod",
+        "3",
+        "lod-meta.json",
+        "--lod-chunk-count",
+        "64",
+        "--lod-chunk-extent",
+        "32",
+        "--sh-iterations",
+        "10",
+        "--overwrite",
+        "--no-tty",
+        "--max-workers",
+        "0"
+      ],
+      "exitCode": 0,
+      "observedDevice": {
+        "backend": "cpu",
+        "adapter": null
+      }
+    }
+  ],
+  "validationAndInspectionSeconds": 10.478
+}

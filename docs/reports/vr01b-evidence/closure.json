@@ -1,0 +1,278 @@
+{
+  "timestamp": "2026-10-12T15:02:59.003855+08:00",
+  "baseURL": "https://referral-tips-unlike-wants.trycloudflare.com",
+  "database": {
+    "name": "gsplatform_vr00_20261011",
+    "role": "gsplatform_vr00_20261011",
+    "host": "172.19.0.10/32",
+    "superuser": false,
+    "isolatedDatabaseOwners": [
+      [
+        "gsplatform_vr00_20261011",
+        "gsplatform_vr00_20261011"
+      ],
+      [
+        "gsplatform_vr00_clean_20261011",
+        "gsplatform_vr00_20261011"
+      ],
+      [
+        "gsplatform_vr00_tests_20261011",
+        "gsplatform_vr00_20261011"
+      ],
+      [
+        "gsplatform_vr00_workers_20261011",
+        "gsplatform_vr00_20261011"
+      ]
+    ]
+  },
+  "scenes": [
+    {
+      "slug": "u-06924576399e",
+      "current_version_id": "01c63c7c-8eb5-498e-bcc0-77215e92ca12",
+      "status": "PUBLISHED",
+      "visibility": "PUBLIC",
+      "asset_version": "da7bf4207044",
+      "format": "streamed-sog",
+      "sha256": "8e49f56ba29208eebcef4cba6c2d74d5ee7be50e45c27482533fd04ff108e764",
+      "entry": "versions/da7bf4207044/lod-meta.json",
+      "recipeVersion": "2",
+      "recipeMode": null,
+      "counts": [
+        13090324,
+        3927097,
+        1309032
+      ]
+    },
+    {
+      "slug": "u-2b08ce941569",
+      "current_version_id": "504ecbf6-0109-4c3b-aa93-b380eb2286a8",
+      "status": "PUBLISHED",
+      "visibility": "PUBLIC",
+      "asset_version": "ade42bbf1302",
+      "format": "sog",
+      "sha256": "109d38035475f4d4a6b0809c58e22c8d06a31ff2b43478232eaac6a2c3c1ef6c",
+      "entry": "versions/ade42bbf1302/scene.sog",
+      "recipeVersion": "3",
+      "recipeMode": "regular-sog",
+      "counts": [
+        1788
+      ]
+    },
+    {
+      "slug": "u-3b48959f67fd",
+      "current_version_id": "afc81533-69b6-4ab0-b8f5-2442a4e7cd38",
+      "status": "PUBLISHED",
+      "visibility": "PRIVATE",
+      "asset_version": "3d2fb2b33822",
+      "format": "sog",
+      "sha256": "282015f4c82a52f781227abe9848f428ac310da011cce6c2debb2c5d57de5144",
+      "entry": "versions/3d2fb2b33822/scene.sog",
+      "recipeVersion": "3",
+      "recipeMode": "regular-sog",
+      "counts": [
+        1788
+      ]
+    },
+    {
+      "slug": "u-90c5a107f65e",
+      "current_version_id": "9e06f1d5-9a06-4271-80a1-3310baaa3697",
+      "status": "PUBLISHED",
+      "visibility": "PUBLIC",
+      "asset_version": "b98021ea426c",
+      "format": "streamed-sog",
+      "sha256": "1ca6bee4fca268af08041a7e2c7fcaca0a2f9efb911b63d3f5e7d78da65eb260",
+      "entry": "versions/b98021ea426c/lod-meta.json",
+      "recipeVersion": "2",
+      "recipeMode": "streamed-passthrough",
+      "counts": [
+        1788,
+        536,
+        179
+      ]
+    },
+    {
+      "slug": "u-9be04c2a9fac",
+      "current_version_id": "a55553b4-62c0-43c1-9a1e-b49878228c52",
+      "status": "PUBLISHED",
+      "visibility": "PUBLIC",
+      "asset_version": "21c371259407",
+      "format": "sog",
+      "sha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+      "entry": "versions/21c371259407/scene.sog",
+      "recipeVersion": "3",
+      "recipeMode": "regular-sog",
+      "counts": [
+        1788
+      ]
+    },
+    {
+      "slug": "u-a68b94d84538",
+      "current_version_id": "ef369c74-a9ea-4459-af88-4d8148a85ace",
+      "status": "PUBLISHED",
+      "visibility": "PUBLIC",
+      "asset_version": "21c371259407",
+      "format": "sog",
+      "sha256": "b2cc7bb1594d33ffe496481f5c992ffca83b1d14b259839da3389b7224663db3",
+      "entry": "versions/21c371259407/scene.sog",
+      "recipeVersion": "3",
+      "recipeMode": "regular-sog",
+      "counts": [
+        1788
+      ]
+    }
+  ],
+  "jobs": [
+    [
+      "PUBLISH",
+      "SUCCEEDED",
+      7
+    ]
+  ],
+  "processes": [
+    {
+      "service": "api",
+      "pid": 1271806,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "web",
+      "pid": 1273043,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "publish",
+      "pid": 1272182,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "cpu",
+      "pid": 1272375,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "gpu",
+      "pid": 1272529,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "maintenance",
+      "pid": 1272754,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "proxy",
+      "pid": 1273433,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    },
+    {
+      "service": "tunnel",
+      "pid": 1273583,
+      "build": "fa4ef0b420e17e69792df8a3636b41246480df8b"
+    }
+  ],
+  "history": {
+    "old-small": {
+      "files": 22,
+      "allBytesUnchanged": true
+    },
+    "history13m": {
+      "files": 2076,
+      "allBytesUnchanged": true
+    }
+  },
+  "anonymous": {
+    "sessionProbe": 401,
+    "scene": 200,
+    "runtime": 200,
+    "descriptor": {
+      "schemaVersion": 1,
+      "scene": {
+        "id": "u-a68b94d84538",
+        "name": "VR-00 real Gaussian smoke",
+        "posterUrl": "/api/v1/scenes/u-a68b94d84538/assets/poster.webp"
+      },
+      "content": {
+        "url": "/api/v1/scenes/u-a68b94d84538/assets/versions/21c371259407/scene.sog",
+        "format": "sog"
+      },
+      "presentation": {
+        "worldTransform": {
+          "position": null,
+          "rotation": null,
+          "scale": null
+        },
+        "initialCamera": {
+          "position": null,
+          "target": null,
+          "fov": null
+        },
+        "background": {
+          "type": "color",
+          "color": null,
+          "url": null
+        },
+        "tonemapping": "aces",
+        "highPrecisionRendering": false,
+        "postEffects": null
+      },
+      "viewpoints": [],
+      "annotations": [],
+      "backgroundAudio": null,
+      "collision": null
+    },
+    "asset": 200,
+    "assetBytes": 36760,
+    "assetSha256": "a9b7b5ef5ac4c882434a3cf6b16a976963bca18ec46953684dce2a304ceead18",
+    "range": 206,
+    "contentRange": "bytes 0-31/36760",
+    "privateRuntime": 401
+  },
+  "containers": [
+    {
+      "name": "/gsplatform-vr00-nginx-20261011",
+      "state": "running",
+      "mounts": [
+        {
+          "source": "/home/test/.local/state/gsplatform-vr00-20261011/logs",
+          "destination": "/logs",
+          "readWrite": true
+        },
+        {
+          "source": "/home/test/gsplatform-data/published",
+          "destination": "/home/test/gsplatform-data/published",
+          "readWrite": false
+        },
+        {
+          "source": "/home/test/.local/state/gsplatform-vr00-20261011/nginx.conf",
+          "destination": "/etc/nginx/nginx.conf",
+          "readWrite": false
+        },
+        {
+          "source": "/home/test/.local/state/gsplatform-vr00-20261011",
+          "destination": "/home/test/.local/state/gsplatform-vr00-20261011",
+          "readWrite": false
+        }
+      ],
+      "ports": {}
+    },
+    {
+      "name": "/gsplatform-vr00-redis-20261011",
+      "state": "running",
+      "mounts": [
+        {
+          "source": "/var/lib/docker/volumes/gsplatform-vr00-redis-20261011/_data",
+          "destination": "/data",
+          "readWrite": true
+        }
+      ],
+      "ports": {
+        "6379/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "16384"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,139 @@
+{
+  "base": "https://personality-marijuana-standard-machines.trycloudflare.com",
+  "scenes": {
+    "sog": {
+      "slug": "u-2b08ce941569",
+      "uploadId": "5098f2d2-07f4-43ef-a8f3-e76e501a6ae2",
+      "sourceSha256": "109d38035475f4d4a6b0809c58e22c8d06a31ff2b43478232eaac6a2c3c1ef6c",
+      "sourceBytes": 36760,
+      "status": {
+        "uploadId": "5098f2d2-07f4-43ef-a8f3-e76e501a6ae2",
+        "status": "SUCCEEDED",
+        "offset": 36760,
+        "totalSize": 36760,
+        "chunkMaxBytes": 67108864,
+        "expiresAt": "2026-10-13T06:15:00.418106Z",
+        "format": "sog",
+        "mimeType": "application/octet-stream",
+        "purpose": "PUBLISH",
+        "ownerId": "8b65607e-e602-494c-ab4e-828fa51ce4c6",
+        "sha256": "109d38035475f4d4a6b0809c58e22c8d06a31ff2b43478232eaac6a2c3c1ef6c",
+        "sceneId": "4088e6c4-fb65-4f20-88e8-70aa9e3f1b55",
+        "sceneSlug": "u-2b08ce941569",
+        "publishJobId": "ea9d1549-e41f-4387-8a84-e56f8fe3d05a",
+        "publishStatus": "SUCCEEDED",
+        "collisionJobId": null,
+        "collisionStatus": null,
+        "collisionRequired": false,
+        "collisionPolicyReason": "POLICY_MANUAL_ONLY"
+      },
+      "runtime": {
+        "schemaVersion": 1,
+        "scene": {
+          "id": "u-2b08ce941569",
+          "name": "VR-01B official prebuilt sog",
+          "posterUrl": "/api/v1/scenes/u-2b08ce941569/assets/poster.webp"
+        },
+        "content": {
+          "url": "/api/v1/scenes/u-2b08ce941569/assets/versions/ade42bbf1302/scene.sog",
+          "format": "sog"
+        },
+        "presentation": {
+          "worldTransform": {
+            "position": null,
+            "rotation": null,
+            "scale": null
+          },
+          "initialCamera": {
+            "position": null,
+            "target": null,
+            "fov": null
+          },
+          "background": {
+            "type": "color",
+            "color": null,
+            "url": null
+          },
+          "tonemapping": "aces",
+          "highPrecisionRendering": false,
+          "postEffects": null
+        },
+        "viewpoints": [],
+        "annotations": [],
+        "backgroundAudio": null,
+        "collision": null
+      },
+      "anonymousRuntime": 200,
+      "anonymousEntry": 200,
+      "entryBytesIdentical": true,
+      "elapsedSeconds": 6.954
+    },
+    "zip": {
+      "slug": "u-90c5a107f65e",
+      "uploadId": "04156158-5b26-4f61-b139-904c7aded7ff",
+      "sourceSha256": "1ca6bee4fca268af08041a7e2c7fcaca0a2f9efb911b63d3f5e7d78da65eb260",
+      "sourceBytes": 55179,
+      "status": {
+        "uploadId": "04156158-5b26-4f61-b139-904c7aded7ff",
+        "status": "SUCCEEDED",
+        "offset": 55179,
+        "totalSize": 55179,
+        "chunkMaxBytes": 67108864,
+        "expiresAt": "2026-10-13T06:15:07.152039Z",
+        "format": "zip",
+        "mimeType": "application/octet-stream",
+        "purpose": "PUBLISH",
+        "ownerId": "8b65607e-e602-494c-ab4e-828fa51ce4c6",
+        "sha256": "1ca6bee4fca268af08041a7e2c7fcaca0a2f9efb911b63d3f5e7d78da65eb260",
+        "sceneId": "aeaef22e-4688-4486-b254-5979336192b1",
+        "sceneSlug": "u-90c5a107f65e",
+        "publishJobId": "e95ffa36-8458-4b37-bcd0-f3722e60d52f",
+        "publishStatus": "SUCCEEDED",
+        "collisionJobId": null,
+        "collisionStatus": null,
+        "collisionRequired": false,
+        "collisionPolicyReason": "POLICY_MANUAL_ONLY"
+      },
+      "runtime": {
+        "schemaVersion": 1,
+        "scene": {
+          "id": "u-90c5a107f65e",
+          "name": "VR-01B official prebuilt zip",
+          "posterUrl": "/api/v1/scenes/u-90c5a107f65e/assets/poster.webp"
+        },
+        "content": {
+          "url": "/api/v1/scenes/u-90c5a107f65e/assets/versions/b98021ea426c/lod-meta.json",
+          "format": "lod-meta"
+        },
+        "presentation": {
+          "worldTransform": {
+            "position": null,
+            "rotation": null,
+            "scale": null
+          },
+          "initialCamera": {
+            "position": null,
+            "target": null,
+            "fov": null
+          },
+          "background": {
+            "type": "color",
+            "color": null,
+            "url": null
+          },
+          "tonemapping": "aces",
+          "highPrecisionRendering": false,
+          "postEffects": null
+        },
+        "viewpoints": [],
+        "annotations": [],
+        "backgroundAudio": null,
+        "collision": null
+      },
+      "anonymousRuntime": 200,
+      "anonymousEntry": 200,
+      "entryBytesIdentical": true,
+      "elapsedSeconds": 5.525
+    }
+  }
+}
