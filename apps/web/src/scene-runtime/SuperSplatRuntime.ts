@@ -20,6 +20,7 @@ import {
 // 官方 viewer 样式（.sse-viewer 根容器 100%×100%、canvas 绝对定位填充）。
 // 不导入则官方根容器无尺寸，画布停留在默认 300×150，场景只在左上角一小块显示。
 import '@playcanvas/supersplat-viewer/viewer.css';
+import { Vec3, type Entity, type EventHandler } from 'playcanvas';
 import {
   CAMERA_FOV_RANGE,
   DEFAULT_CAMERA_FOV,
@@ -111,6 +112,7 @@ export interface SuperSplatRuntimeOptions {
    * 字段，注入会生成多余 hotspot）。
    */
   viewpoints?: RuntimeViewpoint[];
+  xrInitialCamera?: CameraPose | null;
 }
 
 /** 选中官方 annotation 中带 GSPlatform extras 协议的引用（SSV-06 §二）。 */
@@ -162,6 +164,10 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   private readonly handle: ViewerHandle;
   private readonly unsubscribers: Set<() => void> = new Set();
   private destroyed = false;
+  private readonly xrInitialCamera: CameraPose | null;
+  private cancelXRSpawn: (() => void) | null = null;
+  private vrStarting = false;
+  private xrSpawnStatus: 'not-authored' | 'not-entered' | 'pending' | 'applied' | 'unavailable' = 'not-authored';
 
   /** 已保存视角（仅导航数据；不注入官方 annotations）。 */
   private readonly viewpoints: RuntimeViewpoint[];
@@ -196,9 +202,12 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     const options = viewerOptions as CreateViewerOptions & {
       worldTransform?: RuntimeWorldTransform | null;
       viewpoints?: RuntimeViewpoint[];
+      xrInitialCamera?: CameraPose | null;
     };
     this.activeTransform = SceneTransformAdapter.fromWorldTransform(options.worldTransform);
     this.viewpoints = options.viewpoints ?? [];
+    this.xrInitialCamera = options.xrInitialCamera ?? null;
+    if (this.xrInitialCamera) this.xrSpawnStatus = 'not-entered';
   }
 
   // ------------------------------------------------------------------ #
@@ -225,6 +234,7 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     if (this.destroyed) {
       return;
     }
+    this.cancelXRSpawn?.();
     this.destroyed = true;
     // 先摘掉本层订阅，再销毁 handle（handle.destroy 本身也清理官方内部 listener）。
     for (const unsubscribe of this.unsubscribers) {
@@ -252,6 +262,28 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
 
   get performanceMode(): boolean {
     return this.requiredState().performanceMode;
+  }
+
+  getPerformanceMode(): boolean {
+    return this.requiredState().performanceMode;
+  }
+
+  setPerformanceMode(enabled: boolean, options: { persist?: boolean } = {}): void {
+    const state = this.requiredState();
+    let preference: string | null | undefined;
+    if (options.persist === false) {
+      try { preference = localStorage.getItem('performanceMode'); } catch { preference = undefined; }
+    }
+    try {
+      state.performanceMode = enabled;
+    } finally {
+      if (preference !== undefined) {
+        try {
+          if (preference === null) localStorage.removeItem('performanceMode');
+          else localStorage.setItem('performanceMode', preference);
+        } catch { preference = undefined; }
+      }
+    }
   }
 
   get walkAllowed(): boolean {
@@ -330,8 +362,102 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   }
 
   /** 从用户手势启动 immersive-vr 会话（需要 canStartVR）。 */
-  startVR(): Promise<void> {
-    return this.requireLive().startXR('vr');
+  async startVR(): Promise<void> {
+    const handle = this.requireLive();
+    if (this.vrStarting || handle.app.xr?.active) return handle.startXR('vr');
+    this.vrStarting = true;
+    if (!handle.app.xr?.active) this.prepareXRSpawn();
+    try {
+      await handle.startXR('vr');
+    } catch (error) {
+      this.cancelXRSpawn?.();
+      throw error;
+    } finally {
+      this.vrStarting = false;
+    }
+  }
+
+  getXRState(): object {
+    const xr = this.requireLive().app.xr;
+    const camera = xr?.camera;
+    const parent = camera?.parent;
+    const vector = (value: { x: number; y: number; z: number } | undefined) =>
+      value ? [value.x, value.y, value.z] : 'unavailable';
+    return {
+      active: xr?.active ?? false,
+      referenceSpace: xr?.spaceType ?? 'unavailable',
+      rigPosition: vector(parent?.getPosition()),
+      rigEuler: vector(parent?.getEulerAngles()),
+      headLocalPosition: vector(camera?.getLocalPosition()),
+      headWorldPosition: vector(camera?.getPosition()),
+      spawnStatus: this.xrSpawnStatus,
+    };
+  }
+
+  getSingleFileGaussianCount(): number | null {
+    const component = this.requireLive().app.root.findComponents('gsplat')[0] as
+      { resource?: { numSplats?: number } } | undefined;
+    const count = component?.resource?.numSplats;
+    return typeof count === 'number' && Number.isSafeInteger(count) && count >= 0 ? count : null;
+  }
+
+  onPerformanceModeChanged(callback: (enabled: boolean) => void): () => void {
+    return this.subscribe('performanceMode', callback);
+  }
+
+  onEngineEvent(event: 'frameupdate' | 'frameend', callback: (duration?: number) => void): () => void {
+    return this.subscribeEngine(this.requireLive().app, event, callback);
+  }
+
+  private subscribeEngine(target: EventHandler, event: string, callback: Parameters<EventHandler['on']>[1]): () => void {
+    target.on(event, callback);
+    const unsubscribe = () => target.off(event, callback);
+    this.unsubscribers.add(unsubscribe);
+    return () => {
+      this.unsubscribers.delete(unsubscribe);
+      unsubscribe();
+    };
+  }
+
+  private prepareXRSpawn(): void {
+    this.cancelXRSpawn?.();
+    const pose = this.xrInitialCamera;
+    if (!pose) return;
+    const xr = this.app.xr;
+    if (!xr) {
+      this.xrSpawnStatus = 'unavailable';
+      return;
+    }
+    this.xrSpawnStatus = 'pending';
+    const cleanup: (() => void)[] = [];
+    const cancel = () => {
+      cleanup.forEach(unsubscribe => unsubscribe());
+      if (this.xrSpawnStatus === 'pending') this.xrSpawnStatus = 'unavailable';
+      this.cancelXRSpawn = null;
+    };
+    this.cancelXRSpawn = cancel;
+    cleanup.push(this.subscribeEngine(xr, 'end', cancel));
+    cleanup.push(this.subscribeEngine(xr, 'update', () => {
+      try {
+        const camera = xr.camera;
+        const rig = camera?.parent as Entity | null;
+        if (xr.type !== 'immersive-vr' || !camera || !rig) return;
+        const local = camera.getLocalPosition();
+        if (![...pose.position, ...pose.target, local.x, local.y, local.z].every(Number.isFinite)) return;
+        const directionX = pose.target[0] - pose.position[0];
+        const directionZ = pose.target[2] - pose.position[2];
+        if (Math.hypot(directionX, directionZ) > 1e-6) {
+          const headForward = camera.getLocalRotation().transformVector(Vec3.FORWARD, new Vec3());
+          const headYaw = Math.atan2(-headForward.x, -headForward.z);
+          rig.setEulerAngles(0, (Math.atan2(-directionX, -directionZ) - headYaw) * 180 / Math.PI, 0);
+        }
+        const offset = rig.getRotation().transformVector(local, new Vec3());
+        rig.setPosition(pose.position[0] - offset.x, pose.position[1] - offset.y, pose.position[2] - offset.z);
+        this.xrSpawnStatus = 'applied';
+      } finally {
+        cancel();
+      }
+    }));
   }
 
   /** 从用户手势启动 immersive-ar 会话（需要 canStartAR）。 */
@@ -933,6 +1059,7 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
     // FIX-02 §5-§9 / §10：透传给运行时构造（scene↔runtime 换算 + 视角导航）。
     worldTransform: options.worldTransform ?? null,
     viewpoints: options.viewpoints ?? [],
+    xrInitialCamera: options.xrInitialCamera ?? null,
   } as CreateViewerOptions;
 }
 

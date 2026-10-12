@@ -180,7 +180,7 @@ case "${1:-status}" in
         sed "s@__SCENE_ORIGIN_ROOT__@$GS_SCENE_ORIGIN_ROOT@g" "$ROOT/deploy/nginx/vr00-staging.conf" > "$STATE/nginx.conf"
         start_service proxy "$ROOT" docker run --rm --pull=never --name gsplatform-vr00-nginx-20261011 --label gsplatform.vr00=20261011 --network host --user "$UID:$(id -g)" --mount "type=bind,src=$STATE/nginx.conf,dst=/etc/nginx/nginx.conf,readonly" --mount "type=bind,src=$STATE,dst=$STATE,readonly" --mount "type=bind,src=$STATE/logs,dst=/logs" --mount type=bind,src=/home/test/gsplatform-data/published,dst=/home/test/gsplatform-data/published,readonly nginx:stable-alpine nginx
         if [[ "${GS_VR00_TUNNEL_ENABLED:-false}" == true ]]; then
-            start_service tunnel "$ROOT" cloudflared tunnel --url http://127.0.0.1:5174 --no-autoupdate
+            start_service tunnel "$ROOT" cloudflared tunnel --protocol "${GS_VR00_TUNNEL_PROTOCOL:-auto}" --url http://127.0.0.1:5174 --no-autoupdate
         fi
         curl --fail --silent --show-error http://127.0.0.1:18001/health/ready
         echo

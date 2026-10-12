@@ -62,6 +62,12 @@ def test_refuses_public_identity_bypass(runtime_environment):
     assert "real identity" in result.stderr
 
 
+def test_quick_tunnel_has_official_transport_override():
+    source = LAUNCHER.read_text()
+    assert '--protocol "${GS_VR00_TUNNEL_PROTOCOL:-auto}"' in source
+    assert "--url http://127.0.0.1:5174" in source
+
+
 def test_refuses_readable_secret_file(runtime_environment):
     _, environment_file, environment = runtime_environment
     environment_file.chmod(0o644)

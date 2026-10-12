@@ -106,10 +106,12 @@ export default function SceneAuthoringPage() {
         runtimeRef.current = runtime;
         // 闭包内保留非空引用（TS 收窄在回调里失效）。
         const active = runtime;
-        active.onLoaded((loaded) => {
+        let initialized = false;
+        const syncLoaded = (loaded: boolean) => {
           if (!cancelled) {
             setViewerReady(loaded);
-            if (loaded) {
+            if (loaded && !initialized) {
+              initialized = true;
               // FIX-02 §5：世界变换真正执行（施加到 gsplat 实体；恒等 → no-op）。
               active.applyWorldTransform();
               // FIX-02 §2/§16：与 /scene 同一规则 —— authored Initial Camera 存在
@@ -120,10 +122,12 @@ export default function SceneAuthoringPage() {
                 } catch (frameErr) {
                   console.error('[authoring] frameScene failed', frameErr);
                 }
-              }
+              } else active.resetCamera();
             }
           }
-        });
+        };
+        active.onLoaded(syncLoaded);
+        syncLoaded(active.loaded);
       } catch {
         if (!cancelled) message.error('场景加载失败');
       } finally {

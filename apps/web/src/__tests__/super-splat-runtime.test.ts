@@ -6,6 +6,7 @@
  * buildExperienceSettings 产物经真实 validateSettings(limits) 校验。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Entity, EventHandler, Vec3 } from 'playcanvas';
 
 vi.mock('@playcanvas/supersplat-viewer/viewer', () => ({
   createViewer: vi.fn(),
@@ -117,6 +118,118 @@ function readInjectedAnnotation(handle: ViewerHandle, idx: number): InjectedPose
 
 beforeEach(() => {
   mockedCreateViewer.mockReset();
+});
+
+describe('VR-01C official performance and one-shot XR spawn', () => {
+  it('reads and writes the official state without a second viewer; transient A/B preserves preference', async () => {
+    const handle = makeFakeHandle();
+    Object.defineProperty(handle, 'state', { value: new Proxy(handle.state, {
+      set(target, key, value) {
+        Reflect.set(target, key, value);
+        if (key === 'performanceMode') localStorage.setItem('performanceMode', String(value));
+        return true;
+      },
+    }) });
+    mockedCreateViewer.mockResolvedValue(handle);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    localStorage.setItem('performanceMode', 'false');
+    runtime.setPerformanceMode(true, { persist: false });
+    expect(runtime.getPerformanceMode()).toBe(true);
+    expect(localStorage.getItem('performanceMode')).toBe('false');
+    localStorage.removeItem('performanceMode');
+    runtime.setPerformanceMode(false, { persist: false });
+    expect(localStorage.getItem('performanceMode')).toBeNull();
+    runtime.setPerformanceMode(true);
+    expect(localStorage.getItem('performanceMode')).toBe('true');
+    expect(mockedCreateViewer).toHaveBeenCalledTimes(1);
+    runtime.destroy();
+    expect(() => runtime.setPerformanceMode(false)).toThrow();
+    localStorage.removeItem('performanceMode');
+  });
+
+  it('places the first tracked eye at the authored runtime position, accounts for head yaw, then leaves 6DoF untouched', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    const app = new EventHandler();
+    const handle = makeFakeHandle({ xr, on: app.on.bind(app), off: app.off.bind(app) });
+    mockedCreateViewer.mockResolvedValue(handle);
+    const pose = { position: [10, 4, 20] as [number, number, number], target: [9, 4, 20] as [number, number, number], fov: 60 };
+    const runtime = await SuperSplatRuntime.create(defaultOptions({ mode: 'xr', xrInitialCamera: pose }));
+    for (let entry = 0; entry < 2; entry += 1) {
+      await runtime.startVR();
+      camera.setLocalPosition(0.4, 1.7, -0.2);
+      camera.setLocalEulerAngles(0, 35, 0);
+      xr.fire('update');
+      const eye = camera.getPosition();
+      expect(eye.x).toBeCloseTo(pose.position[0], 5);
+      expect(eye.y).toBeCloseTo(pose.position[1], 5);
+      expect(eye.z).toBeCloseTo(pose.position[2], 5);
+      expect(camera.forward.x).toBeCloseTo(-1, 5);
+      expect(camera.getLocalPosition().y).toBe(1.7);
+      expect(camera.getLocalEulerAngles().y).toBeCloseTo(35, 4);
+      expect(xr.hasEvent('update')).toBe(false);
+      const spawnRig = rig.getPosition().clone();
+      camera.setLocalPosition(0.7, 1.9, -0.1);
+      xr.fire('update');
+      expect(rig.getPosition().equals(spawnRig)).toBe(true);
+      expect(camera.getPosition().equals(new Vec3(...pose.position))).toBe(false);
+      await runtime.endXR();
+    }
+    runtime.destroy();
+    expect(xr.hasEvent('update')).toBe(false);
+    expect(xr.hasEvent('end')).toBe(false);
+  });
+
+  it('keeps no-authored fallback unchanged and removes pending spawn listeners on destroy or failed start', async () => {
+    const xr = Object.assign(new EventHandler(), { active: false });
+    const handle = makeFakeHandle({ xr });
+    mockedCreateViewer.mockResolvedValue(handle);
+    const fallback = await SuperSplatRuntime.create(defaultOptions({ mode: 'xr' }));
+    await fallback.startVR();
+    expect(xr.hasEvent('update')).toBe(false);
+    fallback.destroy();
+    const authored = await SuperSplatRuntime.create(defaultOptions({ mode: 'xr', xrInitialCamera: {
+      position: [1, 2, 3], target: [0, 2, 3], fov: 60,
+    } }));
+    vi.mocked(handle.startXR).mockRejectedValueOnce(new Error('denied'));
+    await expect(authored.startVR()).rejects.toThrow('denied');
+    expect(xr.hasEvent('update')).toBe(false);
+    await authored.startVR();
+    expect(xr.hasEvent('update')).toBe(true);
+    authored.destroy();
+    expect(xr.hasEvent('update')).toBe(false);
+  });
+
+  it('uses the authored scene pose transformed by W for the first tracked XR eye', async () => {
+    const descriptor = structuredClone(runtimeDescriptorFixture);
+    descriptor.presentation.worldTransform = {
+      position: { x: 3, y: 4, z: 5 }, rotation: { x: 0, y: 90, z: 0 }, scale: { x: 2, y: 2, z: 2 },
+    };
+    descriptor.presentation.initialCamera = {
+      position: { x: 1, y: 2, z: 3 }, target: { x: 1, y: 2, z: 2 }, fov: 60,
+    };
+    const settings = buildExperienceSettings(descriptor);
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', camera });
+    mockedCreateViewer.mockResolvedValue(makeFakeHandle({ xr }));
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      mode: 'xr', settings, worldTransform: descriptor.presentation.worldTransform,
+      xrInitialCamera: settings.cameras[0].initial,
+    }));
+    await runtime.startVR();
+    camera.setLocalPosition(0.2, 1.6, -0.3);
+    xr.fire('update');
+    expect(camera.getPosition().x).toBeCloseTo(9);
+    expect(camera.getPosition().y).toBeCloseTo(8);
+    expect(camera.getPosition().z).toBeCloseTo(3);
+    expect(camera.forward.x).toBeCloseTo(-1);
+    expect(camera.getLocalPosition().y).toBe(1.6);
+    runtime.destroy();
+  });
 });
 
 describe('Experience Adapter V1', () => {

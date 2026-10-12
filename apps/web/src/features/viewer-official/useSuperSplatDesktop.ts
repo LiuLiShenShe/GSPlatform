@@ -219,8 +219,17 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
         if (import.meta.env.DEV) {
           (window as unknown as { __gsruntime?: unknown }).__gsruntime = runtime;
         }
+        let initialized = false;
+        const initialize = () => {
+          if (!runtime.loaded || initialized) return;
+          initialized = true;
+          runtime.applyWorldTransform();
+          if (shouldFrameSceneOnLoad(desc)) runtime.frameScene();
+          else runtime.resetCamera();
+        };
         const refresh = () => {
           if (cancelled) return;
+          initialize();
           setRenderer(runtimeRenderer(runtime.app));
           setGsplats(renderedSplatCount(runtime.app));
           setLoaded(runtime.state.loaded);
@@ -243,20 +252,6 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
           runtime.onLoaded((v) => {
             if (cancelled) return;
             setLoaded(v);
-            if (v) {
-              // FIX-02 §5：世界变换真正执行（施加到 gsplat 实体；恒等 → no-op）。
-              runtime.applyWorldTransform();
-              // FIX-02 §2：authored Initial Camera 存在 → 不自动 frameScene，
-              // 直接用 authored 相机（官方 load 已 copy cameras[0].initial）；
-              // 没有 authored 相机 → frameScene() 取景。
-              if (shouldFrameSceneOnLoad(desc)) {
-                try {
-                  runtime.frameScene();
-                } catch (frameErr) {
-                  console.error('[viewer] frameScene failed', frameErr);
-                }
-              }
-            }
             refresh();
           }),
           runtime.onProgress((p) => {
@@ -371,7 +366,7 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
   const togglePerformanceMode = useCallback(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
-    runtime.state.performanceMode = !runtime.state.performanceMode; // writable key
+    runtime.setPerformanceMode(!runtime.getPerformanceMode());
   }, []);
 
   const toggleAnnotationsVisibility = useCallback(() => {

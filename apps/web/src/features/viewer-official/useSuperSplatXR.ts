@@ -32,7 +32,8 @@ import {
   type GsplatformAnnotationRef,
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
-import { shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
+import { hasAuthoredInitialCamera, shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
+import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
@@ -71,6 +72,9 @@ export interface OfficialXRViewerState {
   renderer: string;
   /** 当前帧已渲染 Gaussian 数。 */
   gsplats: number;
+  performanceMode: boolean;
+  setPerformanceMode: (enabled: boolean) => void;
+  performanceRecorder: RuntimePerformanceDiagnostics | null;
   /** 浏览器 WebXR 能力诊断（仅展示，非真相源）。 */
   diagnostics: { secureContext: boolean; navigatorXR: boolean; immersiveVrSupported: boolean; immersiveArSupported: boolean };
   /** 场景运行时描述（null = 尚未解析/失败）。 */
@@ -90,6 +94,7 @@ export interface OfficialXRViewerState {
    * Initial Camera / 世界变换）。经 SuperSplatRuntime 封装读取（页面不碰 app）。
    */
   getCameraPose: () => CameraPose | null;
+  cameraPose: CameraPose | null;
   /** 用户手势内调用：官方 startXR('vr')。 */
   startVR: () => Promise<void>;
   /** 结束当前 XR 会话。 */
@@ -115,7 +120,7 @@ function errorMessage(err: unknown): string {
  *   - SceneRuntimeDescriptorV1：直接用给定描述（/xr/test 的 URL 调试场景）
  *   - null：输入本身不可解析（如 URL 推断格式失败），直接进入 error 且不创建 viewer
  */
-export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null): OfficialXRViewerState {
+export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null, recordPerformance = false): OfficialXRViewerState {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<SuperSplatRuntime | null>(null);
   const unsubsRef = useRef<(() => void)[]>([]);
@@ -134,6 +139,10 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
   const [progress, setProgress] = useState(0);
   const [renderer, setRenderer] = useState('—');
   const [gsplats, setGsplats] = useState(0);
+  const [performanceMode, setPerformanceModeState] = useState(false);
+  const [performanceRecorder, setPerformanceRecorder] = useState<RuntimePerformanceDiagnostics | null>(null);
+  const [cameraPose, setCameraPoseState] = useState<CameraPose | null>(null);
+  const recorderRef = useRef<RuntimePerformanceDiagnostics | null>(null);
   const [diagnostics, setDiagnostics] = useState<OfficialXRViewerState['diagnostics']>({
     secureContext: false,
     navigatorXR: false,
@@ -170,12 +179,19 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     const mount = containerRef.current;
     if (!mount) return;
     let cancelled = false;
+    const recorder = recordPerformance ? new RuntimePerformanceDiagnostics() : null;
+    recorderRef.current = recorder;
+    setPerformanceRecorder(recorder);
+    recorder?.start();
+    const metadataAbort = new AbortController();
+    let metadataTimeout: ReturnType<typeof setTimeout> | undefined;
 
     // 输入不可解析（null）→ 直接 error，不创建 viewer。
     if (inputRef.current === null) {
       setStatus('error');
       setError('无法从 URL 推断 splat 格式');
-      return;
+      recorder?.failure();
+      return () => recorder?.destroy();
     }
 
     const boot = async () => {
@@ -197,6 +213,16 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
             : { descriptor: current, fromManifest: false };
         if (cancelled) return;
         setDescriptor(desc);
+        recorder?.setDescriptor(desc);
+        if (recorder && desc.content.format === 'lod-meta' && desc.content.url) {
+          metadataTimeout = setTimeout(() => metadataAbort.abort(), 15000);
+          void fetch(desc.content.url, { credentials: 'same-origin', cache: 'force-cache', signal: metadataAbort.signal })
+            .then(async response => {
+              if (!response.ok || Number(response.headers.get('content-length')) > 4 * 1024 * 1024) return;
+              const text = await response.text();
+              if (text.length <= 4 * 1024 * 1024 && !cancelled) recorder.setLodCounts(JSON.parse(text).counts);
+            }).catch(() => undefined).finally(() => clearTimeout(metadataTimeout));
+        }
         setIsManifestFallback(fromManifest);
         // FIX-05 §23-§25：碰撞 STALE = 世界变换在构建后改变（描述符已计算）。
         setCollisionStale(desc.collision?.stale ?? false);
@@ -228,18 +254,27 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
           // FIX-02 §5/§16：世界变换与已保存视角在 Desktop/XR 走同一 runtime 逻辑。
           worldTransform: desc.presentation.worldTransform,
           viewpoints: desc.viewpoints,
+          xrInitialCamera: hasAuthoredInitialCamera(desc) ? settings.cameras[0]?.initial ?? null : null,
         });
         if (cancelled) {
           runtime.destroy();
           return;
         }
         runtimeRef.current = runtime;
+        recorder?.attach(runtime);
         // FIX-XR-01: 官方 loaded=true 而页面仍 loading → 收敛 ready。
         // 只从 loading 单向迁移；绝不覆盖 xr-active / xr-ended / error。
         // 依据 = 官方 runtime 实际加载状态（runtime.state.loaded），不是浏览器
         // WebXR 能力（能力仅作诊断展示，不能直接把页面置 ready）。
+        let initialized = false;
         const syncReady = () => {
           if (!runtime.state.loaded) return;
+          if (!initialized) {
+            initialized = true;
+            runtime.applyWorldTransform();
+            if (shouldFrameSceneOnLoad(desc)) runtime.frameScene();
+            else runtime.resetCamera();
+          }
           setStatus((prev) => (prev === 'loading' ? 'ready' : prev));
         };
         const refresh = () => {
@@ -253,6 +288,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
           setXrMode(runtime.state.xrMode);
           setProgress(runtime.state.progress);
           setGsplats(renderedSplatCount(runtime.app));
+          setPerformanceModeState(runtime.getPerformanceMode());
+          setCameraPoseState(runtime.getCameraPose());
           // FIX-XR-01: 轮询兜底 —— 若加载完成事件未被组件接收到（真实设备上
           // 存在事件与 state 竞态），状态轮询观察到 loaded=true 时也收敛 ready。
           syncReady();
@@ -267,14 +304,6 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
               // FIX-02 §16：XR 与 Desktop 同一套规则 —— 世界变换先执行；
               // authored Initial Camera 存在 → 不自动 frameScene；
               // 否则 frameScene()（进入 XR 前的桌面构图 = authored 初始相机）。
-              runtime.applyWorldTransform();
-              if (shouldFrameSceneOnLoad(desc)) {
-                try {
-                  runtime.frameScene();
-                } catch (frameErr) {
-                  console.error('[xr] frameScene failed', frameErr);
-                }
-              }
               // FIX-XR-01: 官方 loaded 事件为真 → loading → ready。
               syncReady();
             }
@@ -312,6 +341,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
         console.error('[xr] boot failed', err);
         setStatus('error');
         setError(errorMessage(err));
+        recorder?.failure();
       }
     };
 
@@ -319,6 +349,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
 
     return () => {
       cancelled = true;
+      metadataAbort.abort();
+      clearTimeout(metadataTimeout);
+      recorder?.destroy();
       if (pollRef.current !== null) {
         window.clearInterval(pollRef.current);
         pollRef.current = null;
@@ -328,7 +361,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
       runtimeRef.current?.destroy();
       runtimeRef.current = null;
     };
-  }, [input, reloadKey]);
+  }, [input, reloadKey, recordPerformance]);
 
   // ------------------------------------------------------------------ #
   // 动作（用户手势内直接 startXR —— 不经 iframe/postMessage/setTimeout）
@@ -364,6 +397,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     const runtime = runtimeRef.current;
     if (!runtime) return;
     try {
+      recorderRef.current?.markXRRequest();
       await runtime.startVR();
       // 之后的真实状态由 onXRModeChanged 驱动（xrMode → 'vr'）；若 startXR resolve
       // 但事件尚未触发（极少数），兜底置 active。
@@ -373,8 +407,16 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
       console.error('[xr] startVR failed', err);
       setError(errorMessage(err));
       setStatus('error');
+      recorderRef.current?.failure();
       throw err;
     }
+  }, []);
+
+  const setPerformanceMode = useCallback((enabled: boolean) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.setPerformanceMode(enabled, { persist: false });
+    setPerformanceModeState(runtime.getPerformanceMode());
   }, []);
 
   const endXR = useCallback(async () => {
@@ -387,6 +429,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
       console.error('[xr] endXR failed', err);
       setError(errorMessage(err));
       setStatus('error');
+      recorderRef.current?.failure();
       throw err;
     }
   }, []);
@@ -404,6 +447,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     progress,
     renderer,
     gsplats,
+    performanceMode,
+    setPerformanceMode,
+    performanceRecorder,
     diagnostics,
     descriptor,
     isManifestFallback,
@@ -412,6 +458,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null)
     retry,
     frameScene,
     getCameraPose,
+    cameraPose,
     startVR,
     endXR,
     selectedGsplatformAnnotation,
