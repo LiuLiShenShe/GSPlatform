@@ -1,6 +1,7 @@
 # VR-01C — PICO Neo3 大场景 WebXR 性能诊断与初始位置
 
-**日期：** 2026-10-12  
+**日期：** 2026-10-12
+
 **范围：** 只读验证历史 13M Streamed SOG；接入官方 Viewer 1.35.0 Performance Mode；增加有界本地诊断 JSON；修复 authored initial camera 的 XR 首帧起点路径。**不删除 Gaussian、不重转历史资产、不改官方 Viewer。**
 
 ## 1. Starting HEAD 与工作边界
