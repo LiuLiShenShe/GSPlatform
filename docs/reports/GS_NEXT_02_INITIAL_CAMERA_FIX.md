@@ -241,6 +241,27 @@ XR 页进入 VR 前相机          : 0.45, -0.35, 0.6 / fov 74 —— 与 Deskto
 | 9 | 后端 Lint | `ruff check .`（仓库 venv，ruff 0.16.6） | `All checks passed!` |
 | 10 | 后端 类型 | `mypy app` | `Success: no issues found in 94 source files` |
 | 11 | Workers | `pytest tests`（迁移到 head 的隔离库） | **189 passed / 1 skipped**（190 collected） |
+| 12 | Clean checkout 复现门禁 | `verify_release_source.sh --from-commit df7d274` | **PASS / EXIT 0** |
+
+### 9.2.1 Clean checkout 门禁明细（`df7d274` = 本任务提交）
+
+```text
+[1] Source integrity        PASS（无 .git/.env/.venv/node_modules；tracked storage/ 包存在）
+[2] Fresh venv + deps       PASS（pip install -e apps/api[dev]，独立 Python 3.13 venv）
+[3] Import closure          IMPORT_OK（API + storage + workers.celery_app + 任务）
+[4] ruff                    All checks passed!
+[5] mypy                    Success: no issues found in 94 source files
+[6] backend pytest          全绿 / exit 0
+[7] workers pytest          155 passed / 35 skipped
+[8] reconstruction runtime  PASS（torch 2.14.0+cu126 / gsplat 1.5.3；CUDA 2×RTX A6000；
+                                gsplat CUDA rasterization OK 138 lit pixels / 8 splats）
+RESULT: PASS — clean checkout → fresh deps → imports → lint/type/tests all green  (EXIT 0)
+```
+
+> 注：门禁自身不建库，需 `GS_DATABASE_URL` 指向迁移到 head 的库。必须写**显式驱动**
+> （`postgresql+psycopg2://...`）：门禁新建的 venv 会装到 SQLAlchemy 2.1，其裸
+> `postgresql://` 默认走 psycopg v3，而项目声明的是 `psycopg2-binary` —— 这是门禁的
+> 使用前提（已实测），不是本任务改动引起的。
 
 新增测试：`performance-mode-policy.test.ts`（§8 策略）、`initial-camera-policy.test.ts`
 （+`runtimeInitialCameraUse` 的 5 例）、`super-splat-runtime.test.ts`（+默认 ON 3 例、
