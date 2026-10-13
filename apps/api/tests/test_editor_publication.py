@@ -74,6 +74,13 @@ def publication_edit(owner, db, clock, digest):
     edit = db.get(SceneEditSession, response.json()["id"])
     edit.result_sha256 = digest
     edit.status = "PUBLISHING"
+    # created_at and expires_at must come from the SAME controllable clock. The
+    # column defaults to database now(), so leaving created_at on wall-clock time
+    # makes the frozen publication clock expire the row in the past once real
+    # time passes the fixture instant, and ck_scene_edit_sessions_expiry_valid
+    # (expires_at > created_at) rejects it. The constraint is production
+    # behaviour and stays intact; only the fixture time source is controlled.
+    edit.created_at = clock.instant
     edit.expires_at = clock.instant + timedelta(days=1)
     edit.provenance = {"sourceVersionId": str(source.id), "editSessionId": str(edit.id)}
     db.commit()
