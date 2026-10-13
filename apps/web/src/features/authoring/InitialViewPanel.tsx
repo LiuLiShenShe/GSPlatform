@@ -2,7 +2,7 @@
  * InitialViewPanel — "Set Current Camera as Initial View" button,
  * displays the saved initial view state.
  */
-import { Button, Space, Typography, Tag } from 'antd';
+import { Button, Space, Typography, Tag, message } from 'antd';
 import { EyeOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ScenePresentation } from '../../services/presentationApi';
 import type { AuthoringCameraPose } from './authoringTypes';
@@ -27,9 +27,18 @@ export function InitialViewPanel({ presentation, onSetInitialView, onGetCurrentP
   const fov = presentation?.initialCameraFov;
 
   const handleSet = async () => {
-    const pose = await onGetCurrentPose();
-    if (pose) {
+    // GS-NEXT-02：保存失败必须**可见**。此前这里不捕获异常，PATCH 失败（如非
+    // 场景所有者 403）时既无错误提示、乐观写入的视角又被留在面板上，用户会
+    // 以为已保存 —— 而重新打开场景仍是官方鸟瞰。
+    try {
+      const pose = await onGetCurrentPose();
+      if (!pose) {
+        message.error('保存失败：Viewer 未就绪，无法读取当前视角');
+        return;
+      }
       await onSetInitialView(pose);
+    } catch {
+      message.error('保存初始视角失败，请确认你对该场景有编辑权限后重试');
     }
   };
 

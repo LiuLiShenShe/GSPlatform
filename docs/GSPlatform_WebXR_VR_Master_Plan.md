@@ -5,7 +5,7 @@
 > 本次修订基线：`93083af4ab2f1eade24637ed15a88272799af3b3`
 > 目标设备：**PICO Neo3**；第一交付形式：**头显浏览器直接访问自有 HTTPS 网站并进入 WebXR**。
 > 决策属性：**主计划 / 后续开发阶段的需求权威来源**。实际施工以当时最新 HEAD、锁定的官方依赖和真实 PICO 验收为准。
-> 本次修订依据：[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)（GS-NEXT-00 开发基线收口）。
+> 本次修订依据：[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)（GS-NEXT-00 开发基线收口）、[`docs/reports/GS_NEXT_01_PICO_READINESS.md`](../reports/GS_NEXT_01_PICO_READINESS.md)（GS-NEXT-01 PICO 就绪度）、[`docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md`](../reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md)（GS-NEXT-02 初始视角修复与默认性能模式）。
 
 ---
 
@@ -335,18 +335,34 @@ V1.0 主计划 §5/§2 存在两处**与固定版本官方源码不符**的表�
 | 清理实验（只读/未批准） | `workers/pipeline/gaussian_quality.py`、`workers/pipeline/cleanup_experiment.py` |
 | 导览点/热点预审（**设计，非实现**） | `docs/architecture/VR_03_PLAYCANVAS_ANNOTATION_REUSE.md` |
 | PICO 真机验收方法 | `docs/operations/VR_01C_PICO_TEST_GUIDE.md`、`docs/operations/VR_01D_CLEANUP_WORKFLOW.md` |
-| 当前基线与缺口 | `docs/reports/GS_NEXT_00_BASELINE_REPORT.md` |
+| 当前的基线与缺口 | `docs/reports/GS_NEXT_00_BASELINE_REPORT.md` |
+| PICO 就绪度 | `docs/reports/GS_NEXT_01_PICO_READINESS.md` |
+| 初始视角修复与默认性能模式 | `docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md` |
+| 性能模式默认策略 | `apps/web/src/scene-runtime/performanceModePolicy.ts` |
 
 ---
 
 ## 9. 下一任务边界
 
-当前基线的真实缺口、失败原因与下一任务（GS-NEXT-01）的建议实施边界，全部记录在
-[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)。
+当前基线的真实缺口、失败原因与后续任务的建议实施边界，记录在
+[GS-NEXT-00](../reports/GS_NEXT_00_BASELINE_REPORT.md)（基线收口）
+与 [GS-NEXT-01](../reports/GS_NEXT_01_PICO_READINESS.md)（PICO 就绪度）。
+
+**GS-NEXT-02（2026-10-13，SOFTWARE VERIFIED / HARDWARE PENDING）**：初始视角修复与
+Performance Mode 默认 ON，见 [报告](../reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md)。
+根因是保存侧而非恢复侧 —— (1) PATCH 返回后事务尚未提交导致创作页预览立刻读到旧值
+（已改为返回前 `commit()`）；(2) 乐观更新在保存失败时不回滚、且失败被静默吞掉，
+形成「从未持久化的假保存」（已改回滚 + 显式报错 + 保存后回读描述符验证）；
+(3) STALE 场景下描述符有意丢弃 initialCamera 而面板仍显示"已保存"
+（如实告警，不再谎称成功）；(4) XR 一次性 Rig 对齐必须等首个有效 tracked head pose
+（修复前在零值位姿上对齐后永不修正）。全库统计：dev 库 555 个 `u-*` 用户场景
+100% 无 authored 视角；163 个历史相机全部是 `workers/pipeline/convert_scene.py:300`
+的硬编码常量，不能用作"自动推荐"（因此平台有意不发明任何自动推荐来源）。
 
 主计划的下一阶段是**阶段 3 的真机闭环**：在真实 PICO Neo3 上完成 `/xr/:sceneId` 的
 immersive-vr 验收并回传诊断 JSON。**软件代码里已经没有可以"顺手做掉"的阶段 3 内容**——
-剩下的全部是真机证据。
+剩下的全部是真机证据；若真机上仍回退到鸟瞰，页面会显示 `initial-view-runtime-mismatch`
+告警并回传诊断 JSON。
 
 ---
 

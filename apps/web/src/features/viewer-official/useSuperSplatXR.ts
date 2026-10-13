@@ -415,7 +415,11 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
   const setPerformanceMode = useCallback((enabled: boolean) => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
-    runtime.setPerformanceMode(enabled, { persist: false });
+    // GS-NEXT-02 §五.5：XR 的手动切换与 Desktop 一样经官方 state 写入并持久化
+    // （官方 persistPreferences 写同一個 `performanceMode` 偏好 key）—— 消除
+    // 之前 `{persist:false}` 造成的"桌面记得、XR 不记得"的不一致。默认值本身
+    // 仍由 SuperSplatRuntime 在创建时以 persist:false 施加一次（见该处注释）。
+    runtime.setPerformanceMode(enabled);
     setPerformanceModeState(runtime.getPerformanceMode());
   }, []);
 

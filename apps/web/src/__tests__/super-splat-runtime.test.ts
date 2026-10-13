@@ -1384,3 +1384,103 @@ describe('FIX-02 viewpoints', () => {
     expect(fake.selectAnnotation).not.toHaveBeenCalled();
   });
 });
+
+describe('GS-NEXT-02 Performance Mode 默认 ON 与一次性 XR 对齐', () => {
+  /** 官方 persistPreferences 的替身：写 state 时同步落盘偏好 key。 */
+  function persistedHandle(): ViewerHandle {
+    const handle = makeFakeHandle();
+    Object.defineProperty(handle, 'state', { value: new Proxy(handle.state, {
+      set(target, key, value) {
+        Reflect.set(target, key, value);
+        if (key === 'performanceMode') localStorage.setItem('performanceMode', String(value));
+        return true;
+      },
+    }) });
+    return handle;
+  }
+
+  it('无偏好时默认 ON，且默认值不写入 localStorage（默认 ≠ 用户偏好）', async () => {
+    localStorage.removeItem('performanceMode');
+    mockedCreateViewer.mockResolvedValue(persistedHandle());
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.getPerformanceMode()).toBe(true);
+    expect(localStorage.getItem('performanceMode')).toBeNull();
+    // 默认值只在创建时施加一次：不重建 Viewer、不轮询
+    expect(mockedCreateViewer).toHaveBeenCalledTimes(1);
+    runtime.destroy();
+  });
+
+  it('显式偏好 OFF 优先：创建后仍为 OFF（尊重用户手动关闭）', async () => {
+    localStorage.setItem('performanceMode', 'false');
+    mockedCreateViewer.mockResolvedValue(persistedHandle());
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.getPerformanceMode()).toBe(false);
+    runtime.destroy();
+    localStorage.removeItem('performanceMode');
+  });
+
+  it('会话内手动 OFF 后不被初始化逻辑重新强制打开（同一 runtime 不重建）', async () => {
+    localStorage.removeItem('performanceMode');
+    mockedCreateViewer.mockResolvedValue(persistedHandle());
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    expect(runtime.getPerformanceMode()).toBe(true);
+    runtime.setPerformanceMode(false);
+    expect(runtime.getPerformanceMode()).toBe(false);
+    expect(localStorage.getItem('performanceMode')).toBe('false');
+    // 跨会话：重新创建（= 再次打开场景）时读取到显式偏好 OFF，仍不强制打开
+    const reopened = await SuperSplatRuntime.create(defaultOptions());
+    expect(reopened.getPerformanceMode()).toBe(false);
+    expect(mockedCreateViewer).toHaveBeenCalledTimes(2);
+    runtime.destroy();
+    reopened.destroy();
+    localStorage.removeItem('performanceMode');
+  });
+
+  it('未追踪（零值）头姿到来时不施加对齐，且不得注销等待中的订阅', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    mockedCreateViewer.mockResolvedValue(makeFakeHandle({ xr }));
+    const pose = { position: [10, 4, 20] as [number, number, number], target: [9, 4, 20] as [number, number, number], fov: 60 };
+    const runtime = await SuperSplatRuntime.create(defaultOptions({ mode: 'xr', xrInitialCamera: pose }));
+    await runtime.startVR();
+
+    // 未追踪阶段：官方 rig 停在 Y=0，相机本地位姿为零值
+    camera.setLocalPosition(0, 0, 0);
+    xr.fire('update');
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('pending');
+    expect(rig.getPosition().equals(new Vec3(0, 0, 0))).toBe(true);
+    // 关键回归：监听仍挂着（早期 return 不得走 finally 注销）
+    expect(xr.hasEvent('update')).toBe(true);
+
+    // 首个有效 tracked head pose 到来 → 一次性对齐并注销
+    camera.setLocalPosition(0.4, 1.7, -0.2);
+    xr.fire('update');
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('applied');
+    expect(camera.getPosition().x).toBeCloseTo(pose.position[0], 5);
+    expect(camera.getPosition().y).toBeCloseTo(pose.position[1], 5);
+    expect(camera.getPosition().z).toBeCloseTo(pose.position[2], 5);
+    expect(xr.hasEvent('update')).toBe(false);
+    runtime.destroy();
+  });
+
+  it('未追踪期间若反复来帧，rig 始终停在官方 Y=0（不得在错误位姿上对齐）', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    mockedCreateViewer.mockResolvedValue(makeFakeHandle({ xr }));
+    const runtime = await SuperSplatRuntime.create(defaultOptions({ mode: 'xr', xrInitialCamera: {
+      position: [3, 1.6, 8], target: [0, 1.2, 0], fov: 60,
+    } }));
+    await runtime.startVR();
+    for (let frame = 0; frame < 5; frame += 1) {
+      camera.setLocalPosition(0, 0, 0);
+      xr.fire('update');
+    }
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('pending');
+    expect(rig.getPosition().equals(new Vec3(0, 0, 0))).toBe(true);
+    runtime.destroy();
+  });
+});

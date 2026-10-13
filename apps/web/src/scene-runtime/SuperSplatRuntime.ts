@@ -28,6 +28,7 @@ import {
 } from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from './runtimeErrors';
 import type { SceneBounds } from './sceneScale';
+import { performanceModeTarget, readPerformanceModePreference } from './performanceModePolicy';
 import {
   SceneTransformAdapter,
   composeEntityEulerDeg,
@@ -226,7 +227,27 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     }
     const viewerOptions = toCreateViewerOptions(options);
     const handle = await createViewer(viewerOptions);
-    return new SuperSplatRuntime(handle, viewerOptions);
+    const runtime = new SuperSplatRuntime(handle, viewerOptions);
+    // GS-NEXT-02 §五：Performance Mode 默认策略（首次默认 ON，显式偏好优先）。
+    // 只在此处施加一次；绝不进入轮询/重建，用户手动切换不会被覆盖。
+    runtime.applyPerformanceModeDefault();
+    return runtime;
+  }
+
+  /**
+   * 施加 Performance Mode 默认策略（GS-NEXT-02 §五）。
+   *
+   * - 用户有显式偏好 → 官方 `readPreferences` 已在创建时采用，这里是 no-op。
+   * - 无偏好 → 写入官方 `state.performanceMode = ON`，但用 `persist:false`
+   *   保持 localStorage 里"无偏好"的事实（默认 ≠ 用户偏好）。
+   *
+   * 只在创建时调用一次：会话内用户手动 OFF 不会被重新强制打开。
+   */
+  private applyPerformanceModeDefault(): void {
+    const preference = readPerformanceModePreference();
+    const target = performanceModeTarget(this.requiredState().performanceMode, preference);
+    if (target === null) return;
+    this.setPerformanceMode(target, { persist: false });
   }
 
   /** 释放一切（engine / graphics context / 全部 listener / 容器子树）。幂等。 */
@@ -438,12 +459,20 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     this.cancelXRSpawn = cancel;
     cleanup.push(this.subscribeEngine(xr, 'end', cancel));
     cleanup.push(this.subscribeEngine(xr, 'update', () => {
+      const camera = xr.camera;
+      const rig = camera?.parent as Entity | null;
+      /*
+       * GS-NEXT-02：对齐前必须满足全部前置条件，且**不满足时必须继续等待**
+       * （早期 return 不得注销订阅 —— 否则首个未就绪帧就把一次性对齐机会丢掉，
+       * 用户永久停在官方 Y=0 出生点）。因此注销只发生在真正施加之后（见下方
+       * `finally`），前置判定全部放在 try 之外。
+       */
+      if (xr.type !== 'immersive-vr' || !camera || !rig) return;
+      const local = camera.getLocalPosition();
+      if (![...pose.position, ...pose.target, local.x, local.y, local.z].every(Number.isFinite)) return;
+      // 零值/未追踪位姿不算有效头姿；在它上面算朝向会得到错误出生朝向。
+      if (!isTrackedHeadPose(camera)) return;
       try {
-        const camera = xr.camera;
-        const rig = camera?.parent as Entity | null;
-        if (xr.type !== 'immersive-vr' || !camera || !rig) return;
-        const local = camera.getLocalPosition();
-        if (![...pose.position, ...pose.target, local.x, local.y, local.z].every(Number.isFinite)) return;
         const directionX = pose.target[0] - pose.position[0];
         const directionZ = pose.target[2] - pose.position[2];
         if (Math.hypot(directionX, directionZ) > 1e-6) {
@@ -455,6 +484,7 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
         rig.setPosition(pose.position[0] - offset.x, pose.position[1] - offset.y, pose.position[2] - offset.z);
         this.xrSpawnStatus = 'applied';
       } finally {
+        // 一次性对齐：施加后（无论 setEulerAngles/setPosition 是否抛错）注销。
         cancel();
       }
     }));
@@ -1021,6 +1051,22 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     return 1;
   }
 }
+
+/**
+ * XR Rig 一次性对齐（GS-NEXT-02 §五）：把已保存的初始视角落到首个**有效
+ * tracked head pose** 上。
+ *
+ * WebXR 在会话刚建立、tracking 尚未可用时会给出零值/无效头部位姿。此时若立刻
+ * 一次性写入 Rig（此后永不修正），用户会永久停在一个算错的出生点——正是
+ * 「进入后仍像站在场景外面鸟瞰」这一类现象。所以必须等到可信位姿：坐标有限
+ * 且非零（`local` / `local-floor` 参考空间下头部位姿的高度分量恒 >0，零值即
+ * 表示 tracking 原点尚未确定）。等不到就保持 pending，由 `xr.on('end')` 取消。
+ */
+const isTrackedHeadPose = (camera: { getLocalPosition(): { x: number; y: number; z: number } }): boolean => {
+  const local = camera.getLocalPosition();
+  if (![local.x, local.y, local.z].every(Number.isFinite)) return false;
+  return Math.hypot(local.x, local.y, local.z) > 1e-4;
+};
 
 function clampFov(fov: number): number {
   const value = Number.isFinite(fov) ? fov : DEFAULT_CAMERA_FOV;

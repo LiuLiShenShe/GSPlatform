@@ -205,14 +205,17 @@ describe('SSV-03: Official SuperSplat desktop viewer', () => {
     await waitFor(() => expect(officialHandle.requestFullscreen).toHaveBeenCalled());
   });
 
-  it('Performance 按钮写入官方 state.performanceMode', async () => {
+  it('Performance 按钮写入官方 state.performanceMode（GS-NEXT-02 §五：无偏好时默认 ON）', async () => {
+    localStorage.removeItem('performanceMode');
     renderApp({ route: '/scene/local-garden' });
     await screen.findByTestId('ov-mount');
     awaitOfficialReady();
 
-    expect(officialHandle.state.performanceMode).toBe(false);
-    await userEvent.click(screen.getByTestId('ov-performance'));
+    // GS-NEXT-02 §五.1：无显式偏好 → GSPlatform 产品默认 ON（不再沿用官方
+    // 桌面端默认 OFF）；默认值经官方 state 施加一次，非用户偏好。
     expect(officialHandle.state.performanceMode).toBe(true);
+    await userEvent.click(screen.getByTestId('ov-performance'));
+    expect(officialHandle.state.performanceMode).toBe(false);
   });
 
   it('Annotations 按钮切换官方 state.showAnnotations', async () => {

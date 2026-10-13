@@ -14,7 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Spin, Button, Space, Tag, message } from 'antd';
+import { Spin, Button, Space, Tag, message, Alert } from 'antd';
 import { SaveOutlined } from '@ant-design/icons';
 import { useSceneAuthoring } from '../features/authoring/useSceneAuthoring';
 import { InitialViewPanel } from '../features/authoring/InitialViewPanel';
@@ -30,8 +30,9 @@ import { GaussianEditorPanel } from '../features/authoring/GaussianEditorPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
 import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 import { resolveSceneRuntimeDescriptor } from '../scene-runtime/descriptorResolver';
-import { shouldFrameSceneOnLoad } from '../scene-runtime/initialCameraPolicy';
+import { runtimeInitialCameraUse, shouldFrameSceneOnLoad } from '../scene-runtime/initialCameraPolicy';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
+import type { SceneRuntimeDescriptorV1 } from '../scene-runtime/types';
 import type { SceneViewpoint } from '../services/presentationApi';
 import type { SceneAnnotation } from '../services/annotationApi';
 import {
@@ -65,7 +66,16 @@ export default function SceneAuthoringPage() {
   const [annotations, setAnnotations] = useState<SceneAnnotation[]>([]);
   const [pickingAnnotation, setPickingAnnotation] = useState(false);
 
+  // GS-NEXT-02：当前预览 runtime 使用的描述符（用于「已保存≠运行时采用」提示）。
+  const [activeDescriptor, setActiveDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
+
   const authoring = useSceneAuthoring(effectiveSceneId);
+
+  // 已保存的初始视角是否真的被运行时采用（见 initialCameraPolicy 说明）。
+  const initialViewUse = runtimeInitialCameraUse(
+    authoring.presentation?.initialCameraPosition,
+    activeDescriptor,
+  );
 
   // 官方 SuperSplatRuntime 预览（SSV-05）：
   // descriptor → buildExperienceSettings（官方 settings v2）→ SuperSplatRuntime。
@@ -84,6 +94,7 @@ export default function SceneAuthoringPage() {
         if (!descriptor.content.url) {
           throw new Error('场景尚未发布，无法预览');
         }
+        setActiveDescriptor(descriptor);
         const settings = buildExperienceSettings(descriptor);
         runtime = await SuperSplatRuntime.create({
           container: containerRef.current!,
@@ -243,6 +254,38 @@ export default function SceneAuthoringPage() {
     };
   }, [viewerReady]);
 
+  /**
+   * GS-NEXT-02：保存后**必须**回读运行时描述符再宣称成功。
+   *
+   * `setInitialView` 只写 `scene_presentations`；真正渲染的描述符在场景空间状态
+   * 被标记为失效时会**有意地**丢弃 initialCamera —— 那时「面板显示已保存」而
+   * 「打开场景仍是官方鸟瞰」，正是本次 PICO 复测暴露的现象。这里把两者对齐：
+   * 只有描述符真的带上这个视角才提示成功，否则明确告知失败原因。
+   */
+  const verifyInitialViewUsed = useCallback(
+    async (saved: CameraPose) => {
+      try {
+        const { descriptor: fresh } = await resolveSceneRuntimeDescriptor(effectiveSceneId);
+        setActiveDescriptor(fresh);
+        const use = runtimeInitialCameraUse(
+          { x: saved.position[0], y: saved.position[1], z: saved.position[2] },
+          fresh,
+        );
+        if (use.status === 'authored') {
+          message.success('已保存（初始视角已更新，打开场景将采用该视角）');
+          return;
+        }
+        message.error(
+          '初始视角已写入数据库，但运行时未采用它：打开场景仍会使用官方自动取景。'
+            + '这通常是因为场景几何变更后空间绑定被判定为失效，需要重新校验后再次保存。',
+        );
+      } catch {
+        message.warning('初始视角已保存，但未能读取运行时描述符，无法确认是否已采用');
+      }
+    },
+    [effectiveSceneId],
+  );
+
   const handleSaveAll = useCallback(async () => {
     const pose = await getCurrentPose();
     if (!pose) {
@@ -251,11 +294,22 @@ export default function SceneAuthoringPage() {
     }
     try {
       await authoring.setInitialView(pose);
-      message.success('已保存（初始视角已更新）');
+      await verifyInitialViewUsed(pose);
     } catch {
-      message.error('保存失败');
+      // setInitialView 失败时 hook 已回滚乐观值（面板回到服务器真相），
+      // 这里必须明确告知 —— 静默失败正是「以为保存了、重新打开仍是鸟瞰」的成因。
+      message.error('保存失败：请确认你对该场景有编辑权限，且 Viewer 已就绪');
     }
-  }, [authoring, getCurrentPose]);
+  }, [authoring, getCurrentPose, verifyInitialViewUsed]);
+
+  /** 初始视角面板的保存走同一条「保存 → 校验运行时」链路。 */
+  const handleSetInitialView = useCallback(
+    async (pose: CameraPose) => {
+      await authoring.setInitialView(pose);
+      await verifyInitialViewUsed(pose);
+    },
+    [authoring, verifyInitialViewUsed],
+  );
 
   const handleCaptureCover = useCallback(async () => {
     const runtime = runtimeRef.current;
@@ -347,9 +401,20 @@ export default function SceneAuthoringPage() {
         </Space>
 
         <GaussianEditorPanel sceneId={effectiveSceneId} />
+        {initialViewUse.status === 'ignored' && (
+          <div style={{ marginBottom: 8 }}>
+            <Alert
+              type="warning"
+              showIcon
+              data-testid="initial-view-runtime-mismatch"
+              message="已保存的初始视角未被运行时采用"
+              description="数据库里有初始视角，但当前场景描述符不包含它，打开场景会回退到官方自动取景。场景几何变更会判定空间绑定失效——请重新保存（或重新发布）后再确认。"
+            />
+          </div>
+        )}
         <InitialViewPanel
           presentation={authoring.presentation}
-          onSetInitialView={authoring.setInitialView}
+          onSetInitialView={handleSetInitialView}
           onGetCurrentPose={getCurrentPose}
         />
         <PostEffectsPanel

@@ -365,7 +365,16 @@ class AuthoringService:
         elif overwrite:
             pres.post_effects = None
 
-        self._session.flush()
+        # GS-NEXT-02: commit HERE, not only in the request-scoped dependency.
+        # `get_db_session` is a `yield` dependency, so its `commit()` runs in the
+        # teardown — i.e. after the response has already been sent. A client that
+        # PATCHes the presentation and immediately re-reads the runtime
+        # descriptor (the authoring page does exactly this: setInitialView →
+        # settingsRevision → re-resolve descriptor) could therefore read the
+        # pre-save value and rebuild the preview against it. Committing before
+        # returning makes the write visible to the very next read; the
+        # dependency's later commit is then a no-op.
+        self._session.commit()
         return _presentation_out(pres, self._storage, scene.slug)
 
     # ------------------------------------------------------------------ #

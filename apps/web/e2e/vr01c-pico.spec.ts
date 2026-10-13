@@ -52,7 +52,10 @@ test('small real SOG, official performance A/B, preference and local JSON export
   const camera = await settledCamera(page);
   await page.getByTestId('performance-on').click();
   await expect(page.getByTestId('performance-mode')).toHaveText('ON');
-  expect(await page.evaluate(() => localStorage.getItem('performanceMode'))).toBe('false');
+  // GS-NEXT-02 §五.5：XR 的手动切换与 Desktop 一致，经官方 persistPreferences
+  // 写入同一个 `performanceMode` 偏好 key（此前 XR 用 {persist:false}，导致
+  // "桌面记得、XR 不记得"）。这里手动切到 ON，偏好即被持久化为 'true'。
+  expect(await page.evaluate(() => localStorage.getItem('performanceMode'))).toBe('true');
   await page.waitForTimeout(2200);
   await page.getByTestId('performance-off').click();
   await expect(page.getByTestId('performance-mode')).toHaveText('OFF');

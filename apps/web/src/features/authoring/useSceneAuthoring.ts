@@ -105,6 +105,20 @@ export function useSceneAuthoring(sceneId: string): AuthoringState {
       setPresentation(updated);
       setLastSaved(new Date());
       return updated;
+    } catch (err) {
+      // GS-NEXT-02：失败必须**回滚乐观更新**。
+      //
+      // setInitialView 等 setter 会先本地乐观写入 patch，再发请求。如果请求失败
+      // （403 非所有者 / 网络 / 校验）而乐观值留在 state，面板就会显示一个**从未
+      // 持久化**的「已保存」视角 —— 用户以为保存成功，重新打开场景却仍是官方
+      // frameScene 鸟瞰。这正是 PICO 复测暴露现象的一类成因。这里以服务器为准
+      // 重新拉取，保证面板只反映真实持久化的值（失败路径多一次 GET，可接受）。
+      try {
+        setPresentation(await getPresentation(sceneIdRef.current));
+      } catch {
+        // 连读取都失败（离线）：至少不要把乐观值当成已保存 —— 清空由调用点提示。
+      }
+      throw err;
     } finally {
       setSaving(false);
     }
