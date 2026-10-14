@@ -200,7 +200,7 @@ GS-NEXT-04 的价值不在"补数据通路"，而在"补 XR 交互入口"。
 | # | 缺口 | 位置/证据 | 影响 |
 | --- | --- | --- | --- |
 | M1 | **XR 内无可交互热点入口** | 官方热点 = DOM + 鼠标；`XRViewerPage` 无任何标注入口 | 导览在 VR 中完全不可用（阶段 3 核心缺口） |
-| M2 | **官方 Annotation Navigator 被隐藏** | `superSplatUiCompatibility.ts:42` 隐藏 `.sse-ui` | Desktop 也缺 Prev/Next 导览器 |
+| M2 | **官方 Annotation Navigator 被隐藏** | `superSplatUiCompatibility.ts:42` 整层隐藏 `.sse-ui`，而官方导览器就在其中（见 §6.1） | Desktop 也缺 Prev/Next 导览器 —— **这是可以直接拿回来的官方 UI** |
 | M3 | 标注↔视点无关联 | 两张表无互指；`buildAnnotations` 不查 viewpoints | 无法"用视角当导览点相机" |
 | M4 | `style`/`textColor`/`textSize`/`description` 是死数据 | 官方 `Annotation` 无对应字段 | 作者以为可配，实际不生效 |
 | M5 | 官方限值**静默截断**，作者界面无提示 | `experienceAdapter.ts:242-243` 直接 `.slice` | 作者写 1000 字正文以为全可见 |
@@ -229,35 +229,93 @@ VR-03 §4 另一条**仍然成立且重要**：`ensurePoseAnnotation()` 把官�
 
 ## 6. 推荐下一步
 
-### 推荐：GS-NEXT-04 = "进入 VR 前选择导览点（Annotation-backed）"，Desktop 保持现状
+### 6.0 前置原则：能用官方 UI 就不用自绘的
+
+> **项目原则（用户明确要求，2026-10-14）**：前端 UI **凡是官方已有的，一律直接复用官方**；
+> 自绘的观感不可能优于官方，且会分叉出第二套样式与交互。
+> 本报告 §6.1 是按这条原则重新审视后的结论 —— 它把 GS-NEXT-04 的首选从
+> "自绘导览 UI" 改成了 "把被隐藏的官方导览器放行"。
+
+### 6.1 官方 Annotation UI 的完整清单（锁定 1.35.0，已逐条核对 DOM）
+
+官方 `uiHtml` 的容器结构（`dist/viewer.js:4193`，SVG 已折叠）：
+
+```html
+<div class="sse-sceneLayer"></div>          ← 标注层（GSPlatform 已保留）
+<div class="sse-ui">                       ← 官方 chrome（GSPlatform 整层隐藏）
+    <div class="sse-controlsWrap">…</div>       官方工具条（GSPlatform 用 React 自绘替代）
+    <div class="sse-joystickBase">…</div>
+    <div class="sse-annotationNav sse-hidden">  ★ 官方导览器（被隐藏）
+        <button class="sse-annotationPrev"></button>
+        <div class="sse-annotationInfo">
+          <span class="sse-annotationNavNumber"></span>
+          <span class="sse-annotationNavTitle"></span>
+        </div>
+        <button class="sse-annotationNext"></button>
+    </div>
+    <div class="sse-controlsHint">…</div>
+    <div class="sse-settingsPanel">…</div>
+    <div class="sse-infoPanel">…</div>
+    <div class="sse-tooltip"></div>            官方标注 tooltip（被隐藏）
+</div>
+```
+
+| 官方 UI | 所在容器 | GSPlatform 现状 | 能否直接复用 |
+| --- | --- | --- | --- |
+| 标注热点 `.sse-annotation-hotspots` | **`.sse-sceneLayer`**（`viewer.js:2963` 显式 append） | ✅ 可见、可点 | 已在用 |
+| 导览器 `.sse-annotationNav`（Prev/Next + 序号 + 标题） | `.sse-ui`（`initAnnotationControls`，`viewer.js:2658-2700`） | ❌ 被整层隐藏 | **可放行**：逻辑全由官方 `selectAnnotation` 驱动，零自研 |
+| 标注 tooltip `.sse-tooltip` | `.sse-ui` | ❌ 被隐藏 | 可评估放行 |
+| 工具条 `controlsWrap` / 设置面板 / infoPanel / 快捷键提示 | `.sse-ui` | ❌ 有意隐藏（React 自绘替代） | 不恢复 |
+
+官方导览器的行为**全部现成**（`viewer.js:2668-2698`）：
+- `annotations.length < 2` 时自动 `sse-hidden` 且按钮 disabled；
+- 循环切换 `(i±1 + n) % n`；
+- 序号 = `i+1`、标题 = `annotations[i].title`，随 `state.selectedAnnotation` 自动更新；
+- 未选中时 `sse-unselected` 置灰，点击信息区即选中；
+- 显隐跟随 `state.showAnnotations` —— **与 GSPlatform 工具栏的 Annotations 开关天然联动**。
+
+**结论：Desktop 侧的"导览点切换 UI"根本不需要写。** 只需要把
+`superSplatUiCompatibility.ts:42` 的整层 `.sse-ui { display:none }` 改成
+**按具体官方模块隐藏**（保留 `.sse-annotationNav`），即拿到官方外观 + 官方序号 +
+官方循环导航 + 官方相机过渡。
+
+**必须如实说明的风险**：
+- `.sse-*` 是官方**内部 class**，`superSplatUiCompatibility.ts:6-7` 自己就写明
+  「官方不保证稳定公开 API」。该层已固定 pin 在 1.35.0，升级依赖时必须重跑这层测试。
+- 官方导览器默认 `sse-hidden`，靠官方 `initUI` 的状态订阅才显示；GSPlatform 若隐藏其
+  父层，恢复后需实测是否正常显现。
+- 布局可能与 GSPlatform 自绘的 `OfficialViewerToolbar` 抢占位置/层级，需真实浏览器核对。
+
+### 6.2 推荐：GS-NEXT-04 = Desktop 先拿回官方导览器，XR 再补进入前选择
 
 **理由**：
-- 唯一真正的产品缺口是 M1（VR 内没有入口）；M2/M4/M5/M10 是"补齐"，不是"能不能用"。
-- GS-NEXT-03 已经建好同构的入口（`xr-viewpoint-picker`），照搬其形状即可，
-  **用户学习成本为零**，且不需要任何新 VR UI 系统。
-- 复用同一批 DB ID 与 `prepareXRSpawn()`，符合主计划 §5.5「热点元数据复用现有
-  Annotation，不新建第三套数据模型」。
+- 唯一真正的产品缺口仍是 M1（VR 内没有入口）；M2 现在有零自研的官方解法。
+- Desktop 侧按 6.1 改一处 CSS 作用域即可拿到官方导览体验 —— 属于「用官方 UI」而非「自绘 UI」。
+- XR 侧官方**没有**可复用的世界空间 UI（官方 UI 全部是 DOM），因此那里的选择器属于
+  「官方确实没有」的例外，只能薄薄一层，且应与 GS-NEXT-03 的 viewpoint picker 同构。
 
 **建议范围（供决策，本任务不实施）**：
 
 | 项 | 做法 | 是否需新增代码 |
 | --- | --- | --- |
-| XR 进入前导览点选择器 | 与 viewpoint picker 同构；选项来自 `descriptor.annotations`（仅带 authored camera 的） | 少量前端（新增 UI）+ 复用现有 hook 模式 |
-| 标注 pose → 出生位姿 | `runtime.worldTransform.sceneToRuntimeCamera()` → `setXRInitialCamera()` | 复用 GS-NEXT-03 已有的两个方法，**几乎零新增** |
+| Desktop 导览器 | 按 §6.1 把 `.sse-ui` 改成按模块隐藏，放行 `.sse-annotationNav` | 改 `superSplatUiCompatibility.ts` 一处 + 浏览器/契约测试 |
+| XR 进入前导览点选择 | 与 viewpoint picker 同构；选项来自 `descriptor.annotations`（仅带 authored camera 的） | 少量前端（官方无对应物，属例外） |
+| 标注 pose → 出生位姿 | `worldTransform.sceneToRuntimeCamera()` → `setXRInitialCamera()`（GS-NEXT-03 已有） | 几乎零新增 |
 | 数据模型 | **不动** | 无 |
-| Desktop 导览列表 | 二期：恢复官方 Navigator（`.sse-ui` 的**窄范围**放行，限 annotation-controls 区域） | 需改 `superSplatUiCompatibility`（有内部 CSS 依赖风险） |
 | M5 限值提示 | 作者面板显示官方 25/60/280 | 少量 UI |
-| M4 死数据 | **不建议**现在补 `style`/color —— 官方无对应字段，只能自绘热点（等于自研热点系统，违反原则）。应在 UI 上**如实说明不支持** | 少量 UI 文案 |
+| M4 死数据 | **不建议**补 `style`/color —— 官方无对应字段，只能自绘热点（等于自研热点系统）。应在 UI 上**如实说明不支持** | 少量 UI 文案 |
 | M7 双击绑定 | 若要做，改真双击并避免与官方聚焦冲突 | 需验证 |
 
-**不建议现在做**（理由与 VR-03 §13 一致）：XR 内的世界空间菜单/3D 热点球、自研热点
-投影与 tooltip、自研导航/传送、把 annotation 相机变成隐式跟随 viewpoint 的猜测。
+**不建议现在做**（与 VR-03 §13 一致）：XR 内的世界空间菜单/3D 热点球、自研热点
+投影与 tooltip、自研 Prev/Next（官方已有，直接放行即可）、自研导航/传送、
+把 annotation 相机变成隐式跟随 viewpoint 的猜测。
 
-### 必须在 GS-NEXT-04 验收里保留的硬门禁
+### 6.3 必须在 GS-NEXT-04 验收里保留的硬门禁
 - 真机 PICO Neo3：进入 VR 前选定的导览点 = 出生位姿（软件只能证明到
   `xrSpawnStatus`，**真机出生点是 PENDING**）。
 - 不退化官方导航：放置后摇杆移动/转向仍然正常、退出重入官方恢复完好。
 - 同一批 annotation ID 在 Desktop 与 XR 两侧解析一致（不得为 VR 复制一份数据）。
+- 官方导览器恢复后：`showAnnotations` 开关、序号/标题、循环导航、相机过渡全部正常。
 
 ---
 
@@ -269,23 +327,32 @@ VR-03 §4 另一条**仍然成立且重要**：`ensurePoseAnnotation()` 把官�
 | --- | --- |
 | 只做审计 | **否**（本报告） |
 | 让 Desktop 标注可用 | **否** —— 已经是官方热点 + 官方过渡在工作 |
-| 让 XR 有导览入口 | **是（少量）** —— 一个进入前选择器 + 把标注 pose 接进 GS-NEXT-03 已有的出生位姿通路 |
+| 让 Desktop 有导览点切换 UI | **否** —— 官方导览器现成，改一处 CSS 作用域放行即可（§6.1） |
+| 让 XR 有导览入口 | **是（少量）** —— 官方 UI 全是 DOM、immersive 内不可用，属"官方确实没有"的例外 |
 | 让标注相机 = 某个 viewpoint | **是（少量，且零新列）** —— 一个作者动作，把 viewpoint pose 复制进标注已有的 `camera_*` 列 |
-| 恢复官方 Prev/Next 导览器 | **是（中等风险）** —— 改 `.sse-ui` 放行范围，依赖官方内部 CSS class |
 | 做 XR 内的世界空间热点/菜单 | **是（很大）** —— 等于自研 VR UI 系统，**明确不建议** |
 
 **明确不需要新增数据模型。** `SceneAnnotation` 与 `SceneViewpoint` 现有列已经能表达
 GS-NEXT-04 的全部需求；任何"第三张导航表"都属于重复建设。
+
+> 按 §6.0 的「能用官方就不用自绘」原则，Desktop 侧的预期新增代码量是 **0 行**——
+> 官方导览器、序号、标题、循环导航、相机过渡全都是现成的。
 
 ---
 
 ## 8. 结论
 
 GSPlatform 的 Annotation 能力**远比预想的完整**：模型、CRUD、官方热点、官方相机过渡、
-媒体 Overlay、世界变换换算、官方限值全部到位，Desktop 今天就能点。**真正缺的只有
-"XR 里怎么选它"** —— 而 GS-NEXT-03 刚刚铺好的出生位姿通路，让这一步的成本从
-"从零实现 XR rig 放置"降到了"加一个进入前选择器"。
+媒体 Overlay、世界变换换算、官方限值全部到位，Desktop 今天就能点。
 
-因此 GS-NEXT-04 的边界可以定得很窄：**复用同一批 Annotation ID，复用官方
-`selectAnnotation`（Desktop）与 GS-NEXT-03 的 `setXRInitialCamera`（XR），
+按「能用官方就直接用」这条原则重新审视后，缺口进一步缩小：
+
+- **Desktop**：连导览点切换 UI 都不需要写 —— 官方 `.sse-annotationNav`（Prev/Next +
+  序号 + 标题 + 循环 + 官方过渡）是现成的，只是被本项目整层隐藏了，放行即可。
+- **XR**：官方 UI 全是 DOM、immersive 内不可用，"进入前选择" 才是真正需要薄薄一层的
+  地方；而 GS-NEXT-03 刚铺好的出生位姿通路，让它的成本从「从零实现 XR 放置」降到了
+  「加一个进入前选择器」。
+
+因此 GS-NEXT-04 的边界可以定得很窄：**Desktop 放行官方导览器（零自绘）；
+XR 复用同一批 Annotation ID 走 GS-NEXT-03 的 `setXRInitialCamera`；
 不加数据模型、不做 VR UI 系统。** 是否做、以什么顺序做，交给下一步决策。
