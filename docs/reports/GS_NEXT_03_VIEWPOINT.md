@@ -140,12 +140,12 @@ XR 页选视点后重新解析 —— 全都是「写完立刻读」。于是表
 | 4 | Web 构建 | `pnpm --filter @gsplatform/web build` | 通过（既有 chunk 体积警告） |
 | 5 | 新增 E2E | `playwright test e2e/gsnext03-viewpoint.spec.ts` | **5 passed** |
 | 6 | GS-NEXT-02 回归 | `playwright test e2e/gsnext02-initial-camera.spec.ts` | **7 passed** |
-| 7 | 后端 | `pytest tests`（迁移到 head 的隔离库） | **566 通过 / 0 失败**（含新增 4 例视点用例；`--collect-only` 计得 566，退出码 0） |
+| 7 | 后端 | `pytest tests`（迁移到 head 的隔离库） | **566 通过**（558 passed / 8 skipped，退出码 0；新增 4 例视点用例） |
 | 8 | 后端 Lint | `ruff check .`（仓库 venv） | `All checks passed!` |
 | 9 | 后端 类型 | `mypy app` | `Success: no issues found in 94 source files` |
 | 10 | Workers | `pytest workers/tests`（隔离库） | **190 passed** |
 | 11 | FIX-02 回归 | 见 §4.3 | **6 passed**（需按 §4.3 把 spec 的 API 常量指向 HEAD 服务） |
-| 12 | Clean checkout | `verify_release_source.sh --from-commit <sha>` | 见 §4.6 |
+| 12 | Clean checkout | `verify_release_source.sh --from-commit <sha>` | **PASS，退出码 0**（见 §4.5） |
 
 ### 4.3 两个「跑法」陷阱（都在自查中发现并排除，均非产品缺陷）
 
@@ -191,7 +191,34 @@ e2e/__tmp_fix02_head.spec.ts:  6 passed
   紧接着 GET /viewpoints → **含** PROBE          → read-your-write 成立
 ```
 
-### 4.5 数据保护与原则遵守
+### 4.5 Clean-checkout 复现门禁（提交后运行）
+
+```text
+GS_DATABASE_URL=postgresql+psycopg2://…/gsplatform_gsnext03 \
+  ./deploy/scripts/verify_release_source.sh --from-commit f1ad418
+```
+
+`git archive HEAD → 全新 venv → pip install -e apps/api[dev] → 生产闭包导入 →
+ruff / mypy / 后端 pytest / workers pytest → 重建契约（torch/gsplat）运行时校验`
+
+```text
+[1] Source integrity  ✓（无 .git/.env/.venv/node_modules；tracked storage 包在位）
+[3] Import closure    IMPORT_OK
+[4] ruff              All checks passed!
+[5] mypy              Success: no issues found in 94 source files
+[6] backend pytest    566（558 passed / 8 skipped）
+[7] workers pytest    155 passed / 35 skipped
+[8] reconstruction    PASS — torch 2.14.0+cu126 / gsplat 1.5.3 / CUDA 光栅化 OK（RTX A6000）
+RESULT: PASS — clean checkout → fresh deps → imports → lint/type/tests all green
+```
+
+**退出码 0。**
+
+> 用法前提（GS-NEXT-02 已记录，此处同样适用）：`GS_DATABASE_URL` 必须写显式驱动
+> `postgresql+psycopg2://`（全新 venv 里的 SQLAlchemy 2.1 默认走 psycopg v3，而本项目
+> 固定 `psycopg2-binary`），且库必须已迁移到 head。
+
+### 4.6 数据保护与原则遵守
 
 - **未 Fork SuperSplat、未修改官方 CameraManager、未自写相机动画、未自写导航系统、
   未引入 Three.js、未引入新 Viewer。** 全部为 wrapper + 官方能力编排。
