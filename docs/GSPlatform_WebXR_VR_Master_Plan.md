@@ -1,11 +1,11 @@
 # GSPlatform：通用 3D Gaussian Splatting Web + PICO VR 平台 —— 四阶段开发主计划
 
-> 版本：V2.0｜2026-10-13
+> 版本：V2.1｜2026-10-14
 > 项目：[`LiuLiShenShe/GSPlatform`](https://github.com/LiuLiShenShe/GSPlatform)
 > 本次修订基线：`93083af4ab2f1eade24637ed15a88272799af3b3`
 > 目标设备：**PICO Neo3**；第一交付形式：**头显浏览器直接访问自有 HTTPS 网站并进入 WebXR**。
 > 决策属性：**主计划 / 后续开发阶段的需求权威来源**。实际施工以当时最新 HEAD、锁定的官方依赖和真实 PICO 验收为准。
-> 本次修订依据：[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)（GS-NEXT-00 开发基线收口）、[`docs/reports/GS_NEXT_01_PICO_READINESS.md`](../reports/GS_NEXT_01_PICO_READINESS.md)（GS-NEXT-01 PICO 就绪度）、[`docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md`](../reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md)（GS-NEXT-02 初始视角修复与默认性能模式）。
+> 本次修订依据：[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)（GS-NEXT-00 开发基线收口）、[`docs/reports/GS_NEXT_01_PICO_READINESS.md`](../reports/GS_NEXT_01_PICO_READINESS.md)（GS-NEXT-01 PICO 就绪度）、[`docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md`](../reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md)（GS-NEXT-02 初始视角修复与默认性能模式）、[`docs/reports/GS_NEXT_03_VIEWPOINT.md`](../reports/GS_NEXT_03_VIEWPOINT.md)（GS-NEXT-03 官方 Viewpoint 快速切换）。
 
 ---
 
@@ -338,6 +338,8 @@ V1.0 主计划 §5/§2 存在两处**与固定版本官方源码不符**的表�
 | 当前的基线与缺口 | `docs/reports/GS_NEXT_00_BASELINE_REPORT.md` |
 | PICO 就绪度 | `docs/reports/GS_NEXT_01_PICO_READINESS.md` |
 | 初始视角修复与默认性能模式 | `docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md` |
+| 视点快速切换（官方能力编排） | `docs/reports/GS_NEXT_03_VIEWPOINT.md` |
+| XR 出生视点选择 | `apps/web/src/features/viewer-official/useSuperSplatXR.ts`、`apps/web/src/pages/XRViewerPage.tsx` |
 | 性能模式默认策略 | `apps/web/src/scene-runtime/performanceModePolicy.ts` |
 
 ---
@@ -358,6 +360,19 @@ Performance Mode 默认 ON，见 [报告](../reports/GS_NEXT_02_INITIAL_CAMERA_F
 （修复前在零值位姿上对齐后永不修正）。全库统计：dev 库 555 个 `u-*` 用户场景
 100% 无 authored 视角；163 个历史相机全部是 `workers/pipeline/convert_scene.py:300`
 的硬编码常量，不能用作"自动推荐"（因此平台有意不发明任何自动推荐来源）。
+
+**GS-NEXT-03（2026-10-14，SOFTWARE VERIFIED / HARDWARE PENDING）**：基于官方
+SuperSplat Runtime 的 Viewpoint 快速切换，见 [报告](../reports/GS_NEXT_03_VIEWPOINT.md)。
+核对后确认**大部分能力早已存在**（SceneViewpoint 模型、Backend CRUD、Desktop Saved
+Views 下拉、作者侧「保存当前视角」面板、官方 CameraManager 过渡），本任务没有重写
+其中任何一项。真正的缺口有两处：(1) 视点的增/改/删/重排只 `flush()` 不 `commit()`
+—— 与 GS-NEXT-02 同一类 yield 依赖 teardown 竞态，表现为「刚建的视点不出现 / 点了
+切换没反应」（已改为返回前 `commit()`，4 个后端用例锁定）；(2) XR 侧没有「进入 VR
+前选择出生视点」的入口（新增 `SuperSplatRuntime.viewpointRuntimePose()` /
+`setXRInitialCamera()`，XR 页复用既有进入前图层加选择器，**未新建任何 VR UI 系统**）。
+出生点优先级：用户显式选择 > authored 初始视角 > 官方 Y=0。四个 Case 全部在真实
+浏览器 + 真实 API 上验证（过渡轨迹 104–120 样本、单帧位移约 6% 全程 → 平滑无跳飞、
+不离开邻域 → 无鸟瞰；落位误差 < 0.05）。**真机出生点仍为 HARDWARE PENDING。**
 
 主计划的下一阶段是**阶段 3 的真机闭环**：在真实 PICO Neo3 上完成 `/xr/:sceneId` 的
 immersive-vr 验收并回传诊断 JSON。**软件代码里已经没有可以"顺手做掉"的阶段 3 内容**——

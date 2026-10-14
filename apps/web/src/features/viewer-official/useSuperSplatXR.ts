@@ -35,7 +35,7 @@ import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 import { hasAuthoredInitialCamera, shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
-import type { SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
+import type { RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
 export type OfficialXRStatus =
   | 'checking'
@@ -88,6 +88,20 @@ export interface OfficialXRViewerState {
   /** 重新走完整 boot（销毁重建）。 */
   retry: () => void;
   frameScene: () => void;
+  /**
+   * GS-NEXT-03：可用的已保存视角（enabled），与 Desktop 工具栏的 Saved Views
+   * **同一份数据**（同来自 `descriptor.viewpoints`）。
+   */
+  viewpoints: RuntimeViewpoint[];
+  /** 进入 VR 前当前选中的视点（null = 未选 = 用 authored 初始视角）。 */
+  selectedViewpointId: string | null;
+  /**
+   * 选择进入 VR 时的出生视点。传 id = 选中该视点并用官方过渡把相机导航过去；
+   * 传 null = 回到 authored 初始视角。返回是否成功（未知 / disabled → false）。
+   */
+  selectViewpoint: (viewpointId: string | null) => boolean;
+  /** XR 出生位姿状态（诊断用）：not-authored / not-entered / pending / applied / unavailable。 */
+  xrSpawnStatus: string;
   /**
    * 当前相机 pose（FIX-02 §16 —— 进入 VR 前的初始构图可读，与 Desktop
    * `ov-diagnostics.camera` 同源，用于核对 XR 与 Desktop 使用同一 authored
@@ -142,6 +156,14 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
   const [performanceMode, setPerformanceModeState] = useState(false);
   const [performanceRecorder, setPerformanceRecorder] = useState<RuntimePerformanceDiagnostics | null>(null);
   const [cameraPose, setCameraPoseState] = useState<CameraPose | null>(null);
+  /*
+   * GS-NEXT-03：进入 VR 前选择的视点。
+   * `authoredInitialRef` 保存创建 runtime 时用的出生 pose（「初始视角」选项的
+   * 回退目标）—— 不能事后重新解析 settings 得到它。
+   */
+  const authoredInitialRef = useRef<CameraPose | null>(null);
+  const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
+  const [xrSpawnStatus, setXrSpawnStatus] = useState<string>('not-authored');
   const recorderRef = useRef<RuntimePerformanceDiagnostics | null>(null);
   const [diagnostics, setDiagnostics] = useState<OfficialXRViewerState['diagnostics']>({
     secureContext: false,
@@ -260,6 +282,11 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           runtime.destroy();
           return;
         }
+        // GS-NEXT-03：「初始视角」选项的回退目标 = 创建时的 authored 出生 pose。
+        authoredInitialRef.current = hasAuthoredInitialCamera(desc)
+          ? settings.cameras[0]?.initial ?? null
+          : null;
+        setSelectedViewpointId(null);
         runtimeRef.current = runtime;
         recorder?.attach(runtime);
         // FIX-XR-01: 官方 loaded=true 而页面仍 loading → 收敛 ready。
@@ -290,6 +317,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           setGsplats(renderedSplatCount(runtime.app));
           setPerformanceModeState(runtime.getPerformanceMode());
           setCameraPoseState(runtime.getCameraPose());
+          // GS-NEXT-03：XR 出生位姿状态（not-authored = 未指定出生点）。
+          setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
           // FIX-XR-01: 轮询兜底 —— 若加载完成事件未被组件接收到（真实设备上
           // 存在事件与 state 竞态），状态轮询观察到 loaded=true 时也收敛 ready。
           syncReady();
@@ -393,6 +422,38 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     }
   }, []);
 
+  /**
+   * GS-NEXT-03：进入 VR 前选择视点（Desktop 侧同一份已保存视角）。
+   *
+   * - `viewpointId !== null`：官方过渡把相机导航到该视点（`selectViewpoint`），
+   *   **并**把同一个 RUNTIME pose 设为 XR 出生位姿 —— 用户在桌面模式看到的位置
+   *   就是进 VR 后的出生点。两者都走 wrapper，页面不碰相机。
+   * - `viewpointId === null`：回到 authored 初始视角（无 authored → null，
+   *   即保持官方 Y=0 出生语义）。
+   *
+   * 返回是否成功选中（未知 / disabled 视点 → false，不改出生位姿）。
+   */
+  const selectViewpoint = useCallback((viewpointId: string | null): boolean => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return false;
+    if (viewpointId === null) {
+      runtime.setXRInitialCamera(authoredInitialRef.current);
+      if (authoredInitialRef.current) runtime.resetCamera();
+      setSelectedViewpointId(null);
+      setCameraPoseState(runtime.getCameraPose());
+      setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
+      return true;
+    }
+    // 换位顺序：先取 pose（未知 id → 直接失败），再导航，最后设出生位姿。
+    const pose = runtime.viewpointRuntimePose(viewpointId);
+    if (!pose) return false;
+    if (!runtime.selectViewpoint(viewpointId)) return false;
+    runtime.setXRInitialCamera(pose);
+    setSelectedViewpointId(viewpointId);
+    setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
+    return true;
+  }, []);
+
   const startVR = useCallback(async () => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -461,6 +522,10 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     containerRef,
     retry,
     frameScene,
+    viewpoints: (descriptor?.viewpoints ?? []).filter((vp) => vp.enabled !== false),
+    selectedViewpointId,
+    selectViewpoint,
+    xrSpawnStatus,
     getCameraPose,
     cameraPose,
     startVR,

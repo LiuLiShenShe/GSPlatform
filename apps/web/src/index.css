@@ -989,6 +989,48 @@ a {
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 
+/* GS-NEXT-03 §四：进入 VR 前的出生视点选择（复用既有进入前 DOM 层） */
+.gs-xr__viewpoints {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(72vw, 560px);
+}
+
+.gs-xr__viewpoints-title {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.gs-xr__viewpoints-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.gs-xr__viewpoint {
+  padding: 7px 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.gs-xr__viewpoint[aria-pressed='true'] {
+  color: #06121f;
+  background: rgba(120, 220, 255, 0.92);
+  border-color: rgba(120, 220, 255, 0.95);
+}
+
+.gs-xr__viewpoint:hover {
+  border-color: rgba(120, 220, 255, 0.9);
+}
+
 .gs-xr__overlay {
   position: absolute;
   inset: 0;

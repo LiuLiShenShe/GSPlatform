@@ -165,7 +165,12 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   private readonly handle: ViewerHandle;
   private readonly unsubscribers: Set<() => void> = new Set();
   private destroyed = false;
-  private readonly xrInitialCamera: CameraPose | null;
+  /**
+   * XR 出生位姿（RUNTIME 空间）。GS-NEXT-03 起可在创建后经
+   * {@link setXRInitialCamera} 更换（进入 VR 前选择视点）；换位时必须先取消
+   * 尚未施加的对齐，否则旧 pose 会在首个 tracked 帧把 Rig 拉到错误出生点。
+   */
+  private xrInitialCamera: CameraPose | null;
   private cancelXRSpawn: (() => void) | null = null;
   private vrStarting = false;
   private xrSpawnStatus: 'not-authored' | 'not-entered' | 'pending' | 'applied' | 'unavailable' = 'not-authored';
@@ -621,6 +626,48 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   /** 已保存视角列表（只读副本语义）。 */
   getViewpoints(): readonly RuntimeViewpoint[] {
     return this.viewpoints;
+  }
+
+  /**
+   * 取某个已保存视角在 **RUNTIME** 空间的相机 pose（GS-NEXT-03）。
+   *
+   * 与 {@link selectViewpoint} 使用**完全同一套**换算（`worldTransform`
+   * `sceneToRuntimeCamera` + `clampFov`）—— 使用者不该自己重算坐标变换。
+   * 用于「进入 VR 前选择视点」：把该 pose 设为 XR 出生位姿后，用户看到自己在
+   * 桌面模式被导航到哪个位置，进 VR 后就出生在那里。enabled=false / id 不存在
+   * 时返回 null（与 selectViewpoint 的查找规则一致）。
+   */
+  viewpointRuntimePose(viewpointId: string): CameraPose | null {
+    const vp = this.viewpoints.find((v) => v.id === viewpointId && v.enabled !== false);
+    if (!vp) return null;
+    const rt = this.worldTransform.sceneToRuntimeCamera({
+      position: vp.position,
+      target: vp.target,
+      fov: vp.fov,
+    });
+    return {
+      position: [rt.position.x, rt.position.y, rt.position.z],
+      target: [rt.target.x, rt.target.y, rt.target.z],
+      fov: rt.fov,
+    };
+  }
+
+  /**
+   * 更换 XR 出生位姿（GS-NEXT-03，进入 VR 前选择视点）。
+   *
+   * 位姿为 **RUNTIME** 空间（与 authored initial camera 同空间）；传 null =
+   * 「不在任何指定位置出生」，等价于没有 authored 相机（保持官方 Y=0 语义）。
+   *
+   * 必须在 `startXR` **之前**调用（`prepareXRSpawn` 在 `startVR()` 内读取该字段）。
+   * 若此时已有尚未施加的对齐在等首个 tracked 帧，先取消它 —— 否则会在旧 pose
+   * 上出生，随后再被新 pose 覆盖（竞态）。
+   */
+  setXRInitialCamera(pose: CameraPose | null): void {
+    if (this.destroyed) return;
+    // 已有 pending 对齐 → 取消（其 cancel 会把 status 打回 unavailable）。
+    this.cancelXRSpawn?.();
+    this.xrInitialCamera = pose;
+    this.xrSpawnStatus = pose ? 'not-entered' : 'not-authored';
   }
 
   /**

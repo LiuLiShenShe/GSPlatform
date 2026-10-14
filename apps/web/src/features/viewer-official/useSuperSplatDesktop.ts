@@ -111,6 +111,15 @@ export interface OfficialDesktopViewerState {
 }
 
 const STATS_POLL_MS = 1000;
+/**
+ * `?diagnostics=1` 下的工程读数刷新间隔（GS-NEXT-03）。
+ *
+ * 相机切换是官方 CameraManager 的**约 1 秒过渡动画**；1s 轮询根本采不到中间帧，
+ * 于是「动画正常 / 无跳飞」这类断言无法验证（只能看到起点与终点）。诊断模式下
+ * 把读数采样提到 20Hz，使 e2e 可以观察过渡轨迹本身。**生产路径完全不变**
+ * （未开诊断 → 仍是 1s），也不引入任何 window 全局。
+ */
+const DIAGNOSTIC_POLL_MS = 50;
 
 function errorMessage(err: unknown): string {
   if (err instanceof SuperSplatRuntimeError) return `SuperSplatRuntimeError(${err.kind}): ${err.message}`;
@@ -118,7 +127,7 @@ function errorMessage(err: unknown): string {
   return String(err);
 }
 
-export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerState {
+export function useSuperSplatDesktop(sceneId: string, diagnostics = false): OfficialDesktopViewerState {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const runtimeRef = useRef<SuperSplatRuntime | null>(null);
   const unsubsRef = useRef<(() => void)[]>([]);
@@ -272,7 +281,8 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
 
         // 轮询真实引擎状态（renderer / gsplats / fullscreen / …）
         refresh();
-        pollRef.current = window.setInterval(refresh, STATS_POLL_MS);
+        // 诊断模式提高读数采样率（见 DIAGNOSTIC_POLL_MS 注释）；生产路径不变。
+        pollRef.current = window.setInterval(refresh, diagnostics ? DIAGNOSTIC_POLL_MS : STATS_POLL_MS);
 
         // 若创建时已首帧（小场景瞬时加载），状态由 refresh 置 ready。
       } catch (err) {
@@ -296,7 +306,7 @@ export function useSuperSplatDesktop(sceneId: string): OfficialDesktopViewerStat
       runtimeRef.current?.destroy();
       runtimeRef.current = null;
     };
-  }, [sceneId, reloadKey]);
+  }, [sceneId, reloadKey, diagnostics]);
 
   // ------------------------------------------------------------------ #
   // 动作（写入官方 state 或转发官方方法）

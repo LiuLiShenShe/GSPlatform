@@ -534,6 +534,11 @@ class AuthoringService:
             enabled=True,
         )
         self._viewpoints.add(vp)
+        # GS-NEXT-03：与 update_presentation 同一理由 —— 201 之后紧接着的读
+        # （创作页刷新、Desktop Saved Views、描述符重建）必须能看到这条视点。
+        # `get_db_session` 是 yield 依赖，其 commit 在响应发出后才跑，仅 flush
+        # 会让刚创建的视点在紧接的 GET 里消失（实测复现）。
+        self._session.commit()
         return SceneViewpointOut(
             id=str(vp.id),
             name=vp.name,
@@ -575,7 +580,8 @@ class AuthoringService:
             vp.order_index = body.orderIndex
         if body.enabled is not None:
             vp.enabled = body.enabled
-        self._session.flush()
+        # GS-NEXT-03：改动对紧接的读可见（重命名/停用后列表必须立即反映）。
+        self._session.commit()
         return SceneViewpointOut(
             id=str(vp.id),
             name=vp.name,
@@ -596,6 +602,8 @@ class AuthoringService:
         if vp is None:
             raise NotFoundError("视角不存在")
         self._viewpoints.delete(vp)
+        # GS-NEXT-03：删除后紧接的列表读取不得再看到该视点。
+        self._session.commit()
 
     def reorder_viewpoints(
         self, slug_or_id: str, owner_id: uuid.UUID, body: SceneViewpointReorderRequest
@@ -608,7 +616,8 @@ class AuthoringService:
             raise ConflictError("视角列表不完整，请刷新后重试")
         for index, vp_id in enumerate(body.viewpointIds):
             existing[vp_id].order_index = index + 1
-        self._session.flush()
+        # GS-NEXT-03：重排结果对紧接的读可见（返回的列表即已提交顺序）。
+        self._session.commit()
         return self.list_viewpoints(slug_or_id, owner_id)
 
     # ------------------------------------------------------------------ #

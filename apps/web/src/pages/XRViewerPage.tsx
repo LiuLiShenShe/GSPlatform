@@ -120,6 +120,41 @@ export default function XRViewerPage() {
           {state.status === 'ready' && (
             <p className="gs-xr__hint" data-testid="xr-hint">戴上头显，点击进入沉浸式体验</p>
           )}
+          {/*
+            GS-NEXT-03 §四：进入 VR 前选择出生视点。
+            复用**已存在的**进入前 DOM 层（不是新的 VR UI 系统、不引入任何 VR 内
+            控件）：点选即用官方过渡把相机导航过去，并把同一 pose 设为 XR 出生位姿
+            —— 桌面上看到的位置就是进 VR 后的出生点。DOM overlay 在头显内不可见时，
+            用户在头显外（PC 浏览器）先选好再戴上即可。
+          */}
+          {state.viewpoints.length > 0 && (
+            <div className="gs-xr__viewpoints" data-testid="xr-viewpoint-picker">
+              <p className="gs-xr__viewpoints-title">出生位置</p>
+              <div className="gs-xr__viewpoints-list">
+                <button
+                  type="button"
+                  className="gs-xr__viewpoint"
+                  aria-pressed={state.selectedViewpointId === null}
+                  data-testid="xr-viewpoint-initial"
+                  onClick={() => state.selectViewpoint(null)}
+                >
+                  初始视角
+                </button>
+                {state.viewpoints.map((vp) => (
+                  <button
+                    key={vp.id}
+                    type="button"
+                    className="gs-xr__viewpoint"
+                    aria-pressed={state.selectedViewpointId === vp.id}
+                    data-testid={`xr-viewpoint-${vp.id}`}
+                    onClick={() => state.selectViewpoint(vp.id)}
+                  >
+                    {vp.name || '未命名视角'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             type="button"
             className="gs-xr__btn gs-xr__btn--enter"
@@ -170,6 +205,10 @@ export default function XRViewerPage() {
           format: state.descriptor?.content.format ?? null,
           isManifestFallback: state.isManifestFallback,
           error: state.error,
+          // GS-NEXT-03：进入 VR 前的出生视点 + 出生位姿状态（诊断取证用）。
+          selectedViewpointId: state.selectedViewpointId,
+          viewpointCount: state.viewpoints.length,
+          xrSpawnStatus: state.xrSpawnStatus,
           camera: (() => {
             const pose = state.cameraPose;
             return pose

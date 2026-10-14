@@ -1484,3 +1484,128 @@ describe('GS-NEXT-02 Performance Mode 默认 ON 与一次性 XR 对齐', () => {
     runtime.destroy();
   });
 });
+
+describe('GS-NEXT-03 视点：runtime pose 查询 + 进入 VR 前更换出生位姿', () => {
+  const VP = {
+    id: 'vp-a', name: 'A', position: { x: 0, y: 1.6, z: 0 }, target: { x: 0, y: 1, z: -2 },
+    fov: 55, orderIndex: 0, enabled: true,
+  };
+
+  it('viewpointRuntimePose 与 selectViewpoint 用同一套换算（RUNTIME 空间）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      worldTransform: { position: { x: 10, y: 0, z: 0 }, rotation: null, scale: null },
+      viewpoints: [VP],
+    }));
+
+    const pose = runtime.viewpointRuntimePose('vp-a');
+    expect(pose).not.toBeNull();
+    expect(pose!.position).toEqual([10, 1.6, 0]);
+    expect(pose!.target).toEqual([10, 1, -2]);
+    expect(pose!.fov).toBe(55);
+
+    // 与 selectViewpoint 注入官方标注的 pose 逐字段一致（不得有两套换算）
+    expect(runtime.selectViewpoint('vp-a')).toBe(true);
+    const idx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const injected = readInjectedAnnotation(fake, idx);
+    expect(injected.camera.initial.position).toEqual(pose!.position);
+    expect(injected.camera.initial.target).toEqual(pose!.target);
+    expect(injected.camera.initial.fov).toBe(pose!.fov);
+  });
+
+  it('viewpointRuntimePose 对未知 / disabled 视角返回 null（与 selectViewpoint 规则一致）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      viewpoints: [VP, { ...VP, id: 'vp-off', enabled: false }],
+    }));
+    expect(runtime.viewpointRuntimePose('vp-a')).not.toBeNull();
+    expect(runtime.viewpointRuntimePose('vp-off')).toBeNull();
+    expect(runtime.viewpointRuntimePose('no-such')).toBeNull();
+  });
+
+  it('setXRInitialCamera 决定进入 VR 时的出生位姿（而非创建时的值）', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    mockedCreateViewer.mockResolvedValue(makeFakeHandle({ xr }));
+
+    const authored = { position: [2.5, 1.8, 6] as [number, number, number], target: [0, 0.6, 0] as [number, number, number], fov: 47 };
+    const viewpoint = { position: [1, 1.6, 2] as [number, number, number], target: [0, 1.4, 0] as [number, number, number], fov: 60 };
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      mode: 'xr', xrInitialCamera: authored, viewpoints: [VP],
+    }));
+
+    // 换位姿（进入 VR 前选中视点）
+    runtime.setXRInitialCamera(viewpoint);
+    await runtime.startVR();
+    camera.setLocalPosition(0.2, 1.6, -0.3);
+    xr.fire('update');
+    // 出生点是「换过之后的」视点，不是创建时的 authored 相机
+    expect(camera.getPosition().x).toBeCloseTo(viewpoint.position[0], 5);
+    expect(camera.getPosition().y).toBeCloseTo(viewpoint.position[1], 5);
+    expect(camera.getPosition().z).toBeCloseTo(viewpoint.position[2], 5);
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('applied');
+    await runtime.endXR();
+  });
+
+  it('setXRInitialCamera(null) = 不指定出生点（保持官方 Y=0 语义，不做 Rig 对齐）', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    mockedCreateViewer.mockResolvedValue(makeFakeHandle({ xr }));
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      mode: 'xr',
+      xrInitialCamera: { position: [2.5, 1.8, 6], target: [0, 0.6, 0], fov: 47 },
+      viewpoints: [VP],
+    }));
+
+    runtime.setXRInitialCamera(null);
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('not-authored');
+    await runtime.startVR();
+    expect(xr.hasEvent('update')).toBe(false); // 未注册对齐监听 = 不会移动 Rig
+    camera.setLocalPosition(0.2, 1.6, -0.3);
+    xr.fire('update');
+    expect(rig.getPosition().equals(new Vec3(0, 0, 0))).toBe(true);
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('not-authored');
+    await runtime.endXR();
+  });
+
+  it('换位姿时取消尚未施加的旧对齐（不得在旧 pose 上出生）', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    mockedCreateViewer.mockResolvedValue(makeFakeHandle({ xr }));
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      mode: 'xr',
+      xrInitialCamera: { position: [2.5, 1.8, 6], target: [0, 0.6, 0], fov: 47 },
+      viewpoints: [VP],
+    }));
+
+    await runtime.startVR();
+    // 已进入 pending（等待首个 tracked 帧）
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('pending');
+    // 会话进行中改选视点：旧对齐必须被取消，新位姿重新注册
+    runtime.setXRInitialCamera({ position: [1, 1.6, 2], target: [0, 1.4, 0], fov: 60 });
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('not-entered');
+    expect(xr.hasEvent('update')).toBe(false); // 旧监听已注销（尚未重新 startXR）
+    await runtime.endXR();
+    runtime.destroy();
+  });
+
+  it('已 destroy 的 runtime 上换位姿不抛错（幂等守卫）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({ viewpoints: [VP] }));
+    runtime.destroy();
+    expect(() => runtime.setXRInitialCamera({ position: [1, 1, 1], target: [0, 0, 0], fov: 60 })).not.toThrow();
+    expect(() => runtime.setXRInitialCamera(null)).not.toThrow();
+  });
+});

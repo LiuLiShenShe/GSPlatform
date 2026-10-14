@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { findScene } from '../services/sceneApi';
 import type { SceneSummary } from '../fixtures/scenes';
@@ -10,6 +10,7 @@ import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMe
 import { useSuperSplatDesktop } from '../features/viewer-official/useSuperSplatDesktop';
 import { useBackgroundAudio } from '../hooks/useBackgroundAudio';
 import { SCENE_SCALE_WARNING } from '../scene-runtime/sceneScale';
+import { diagnosticsEnabled } from '../scene-runtime/RuntimePerformanceDiagnostics';
 
 /**
  * 全屏 Scene Viewer 页面（SSV-09 起仅官方 runtime）。
@@ -30,8 +31,15 @@ export default function SceneViewerPage() {
 
 /** 官方 SuperSplat runtime 唯一路径。 */
 function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
-  const state = useSuperSplatDesktop(sceneId);
   const [searchParams] = useSearchParams();
+  const location = useLocation();
+  // GS-NEXT-03：`?diagnostics=1` 时提高工程读数采样率，使相机过渡动画可被 e2e
+  // 观察（相机切换是官方约 1s 过渡动画）。未开诊断 → 生产节奏完全不变。
+  const diagnostics = diagnosticsEnabled(
+    location.search,
+    import.meta.env.DEV || import.meta.env.VITE_XR_PERFORMANCE_DIAGNOSTICS === 'true',
+  );
+  const state = useSuperSplatDesktop(sceneId, diagnostics);
 
   // FIX-03 §5/§6/§7：背景音频由 GSPlatform 自建控制器管理（官方 soundUrl 无
   // volume/loop/enabled API，已停用）。descriptor 就绪后自动配置；场景切换/卸载释放。
