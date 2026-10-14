@@ -33,9 +33,10 @@ import {
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 import { hasAuthoredInitialCamera, shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
+import { eligibleGuidePoints } from '../../scene-runtime/guidePoints';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
-import type { RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
+import type { RuntimeAnnotation, RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
 export type OfficialXRStatus =
   | 'checking'
@@ -100,6 +101,21 @@ export interface OfficialXRViewerState {
    * 传 null = 回到 authored 初始视角。返回是否成功（未知 / disabled → false）。
    */
   selectViewpoint: (viewpointId: string | null) => boolean;
+  /**
+   * GS-NEXT-04：可作为 XR 出生位姿的**导览点**（Annotation-backed）。
+   *
+   * 与 Desktop 的官方热点、与 `descriptor.annotations` **同一份数据、同一批
+   * 数据库 ID**；只保留作者真的存过相机的（见 `scene-runtime/guidePoints.ts`）。
+   */
+  guidePoints: RuntimeAnnotation[];
+  /** 进入 VR 前当前选中的导览点（null = 未选）。与 `selectedViewpointId` 互斥。 */
+  selectedGuidePointId: string | null;
+  /**
+   * 选择进入 VR 时的出生导览点。传 id = 官方过渡把相机导航到该标注的相机、并把
+   * 同一 pose 设为 XR 出生位姿；传 null = 回到 authored 初始视角。
+   * 返回是否成功（未知 / 无自有相机 → false，不改出生位姿）。
+   */
+  selectGuidePoint: (annotationId: string | null) => boolean;
   /** XR 出生位姿状态（诊断用）：not-authored / not-entered / pending / applied / unavailable。 */
   xrSpawnStatus: string;
   /**
@@ -163,6 +179,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
    */
   const authoredInitialRef = useRef<CameraPose | null>(null);
   const [selectedViewpointId, setSelectedViewpointId] = useState<string | null>(null);
+  /* GS-NEXT-04：出生导览点。与视点互斥 —— 二者写的是同一个「出生位姿」，
+   * 同时选中会让「选了哪个出生点」变得不可知。 */
+  const [selectedGuidePointId, setSelectedGuidePointId] = useState<string | null>(null);
   const [xrSpawnStatus, setXrSpawnStatus] = useState<string>('not-authored');
   const recorderRef = useRef<RuntimePerformanceDiagnostics | null>(null);
   const [diagnostics, setDiagnostics] = useState<OfficialXRViewerState['diagnostics']>({
@@ -287,6 +306,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           ? settings.cameras[0]?.initial ?? null
           : null;
         setSelectedViewpointId(null);
+        setSelectedGuidePointId(null);
         runtimeRef.current = runtime;
         recorder?.attach(runtime);
         // FIX-XR-01: 官方 loaded=true 而页面仍 loading → 收敛 ready。
@@ -440,6 +460,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
       runtime.setXRInitialCamera(authoredInitialRef.current);
       if (authoredInitialRef.current) runtime.resetCamera();
       setSelectedViewpointId(null);
+      setSelectedGuidePointId(null);
       setCameraPoseState(runtime.getCameraPose());
       setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
       return true;
@@ -450,6 +471,43 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     if (!runtime.selectViewpoint(viewpointId)) return false;
     runtime.setXRInitialCamera(pose);
     setSelectedViewpointId(viewpointId);
+    // GS-NEXT-04：与导览点互斥（同一个出生位姿槽位）。
+    setSelectedGuidePointId(null);
+    setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
+    return true;
+  }, []);
+
+  /**
+   * GS-NEXT-04：进入 VR 前选择**导览点**（Annotation-backed 出生位姿）。
+   *
+   * 与视点的唯一差别是 pose 的来源：
+   *   - 视点：来自 `descriptor.viewpoints`，需 wrapper 用 SceneTransformAdapter 换算；
+   *   - 导览点：直接读官方 `settings.annotations[i].camera.initial` —— 该值**已经**
+   *     由 `experienceAdapter` 换算成 RUNTIME 空间，这里绝不再换算第二次。
+   *
+   * 导航用官方 `selectAnnotation(index)`（官方过渡动画 + 官方 hotspot 选中态），
+   * 页面不碰相机。未知 ID / 缺自有相机 → 返回 false 且**不改**出生位姿
+   * （见 `scene-runtime/guidePoints.ts` 的准入理由）。
+   */
+  const selectGuidePoint = useCallback((annotationId: string | null): boolean => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return false;
+    if (annotationId === null) {
+      runtime.setXRInitialCamera(authoredInitialRef.current);
+      if (authoredInitialRef.current) runtime.resetCamera();
+      setSelectedGuidePointId(null);
+      setSelectedViewpointId(null);
+      setCameraPoseState(runtime.getCameraPose());
+      setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
+      return true;
+    }
+    const pose = runtime.annotationRuntimePose(annotationId);
+    if (!pose) return false;
+    // 官方导航路径：selectAnnotation 走官方 CameraManager 过渡，并置位官方选中态。
+    if (!runtime.selectGsplatformAnnotation(annotationId)) return false;
+    runtime.setXRInitialCamera(pose);
+    setSelectedGuidePointId(annotationId);
+    setSelectedViewpointId(null); // 与视点互斥
     setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
     return true;
   }, []);
@@ -525,6 +583,11 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     viewpoints: (descriptor?.viewpoints ?? []).filter((vp) => vp.enabled !== false),
     selectedViewpointId,
     selectViewpoint,
+    // GS-NEXT-04：导览点与官方热点、descriptor.annotations 同一批 DB ID；
+    // 只保留作者真的存过相机的（无相机的老热点不冒充导览目的地）。
+    guidePoints: eligibleGuidePoints(descriptor?.annotations ?? []),
+    selectedGuidePointId,
+    selectGuidePoint,
     xrSpawnStatus,
     getCameraPose,
     cameraPose,

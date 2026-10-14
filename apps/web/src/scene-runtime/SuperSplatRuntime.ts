@@ -520,6 +520,20 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     this.requireLive().selectAnnotation(null);
   }
 
+  /**
+   * 按 **GSPlatform 数据库 ID** 选中标注（GS-NEXT-04），并过渡到其相机。
+   *
+   * 与 {@link selectAnnotation} 的区别：入参是稳定的数据库 ID 而不是官方数组
+   * 下标（禁止把 index 当 ID —— 下标会随「停用某条标注」而整体错位）。
+   * 找不到（含非 GSPlatform 标注）返回 false 且不做任何事。
+   */
+  selectGsplatformAnnotation(annotationId: string): boolean {
+    const index = this.annotationIndexById(annotationId);
+    if (index < 0) return false;
+    this.requireLive().selectAnnotation(index);
+    return true;
+  }
+
   /** 保持相机相对移动输入：x 向右，z 向前，范围 -1..1；(0,0) 停止。需要 state.loaded。 */
   setMoveInput(x: number, z: number): void {
     this.requireLive().setMoveInput(x, z);
@@ -606,6 +620,11 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   selectViewpoint(viewpointId: string): boolean {
     const vp = this.viewpoints.find((v) => v.id === viewpointId && v.enabled !== false);
     if (!vp) return false;
+    // GS-NEXT-04：切到「观察点」时先清掉官方标注选中态 —— 二者共用同一个
+    // 「当前停在哪里」的语义（官方 tooltip / 媒体 Overlay / 导览器序号都读它）。
+    // 不清的话，相机已经到观察点了，导览器却还显示着上一个导览点的标题。
+    // 官方 selectAnnotation 要求 loaded；未加载时保持旧行为（不做这次清理）。
+    if (this.requiredState().loaded) this.requireLive().selectAnnotation(null);
     const rt = this.worldTransform.sceneToRuntimeCamera({
       position: vp.position,
       target: vp.target,
@@ -653,7 +672,40 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   }
 
   /**
-   * 更换 XR 出生位姿（GS-NEXT-03，进入 VR 前选择视点）。
+   * 某条 GSPlatform 标注在 **RUNTIME** 空间的相机 pose（GS-NEXT-04）。
+   *
+   * 直接读官方 `settings.annotations[i].camera.initial` —— 该值**已经**由
+   * `experienceAdapter.buildAnnotations()` 从 `SceneAnnotation` 的自有相机经
+   * `SceneTransformAdapter` 换算到 RUNTIME 空间（未作者化相机时官方回落场景
+   * 初始相机）。因此这里**绝不做第二次换算**（两套数学必然漂移）。
+   *
+   * 与 {@link viewpointRuntimePose} 的区别：视角来自描述符 viewpoints（需要我们
+   * 换算）；标注来自官方 settings（官方已经换算好了）。
+   *
+   * 未知 / 非 GSPlatform 标注（无 extras 协议）→ null。调用方应先用
+   * `eligibleGuidePoints()` 过滤「自有相机齐全」的标注，避免把「回落到初始相机」
+   * 的老热点当成真实导览目的地（VR-03 §8 要求 1）。
+   */
+  annotationRuntimePose(annotationId: string): CameraPose | null {
+    const index = this.annotationIndexById(annotationId);
+    if (index < 0) return null;
+    const initial = this.annotations[index]?.camera?.initial;
+    if (!initial) return null;
+    const { position, target, fov } = initial;
+    if (![...position, ...target].every(Number.isFinite) || !Number.isFinite(fov)) return null;
+    return { position: [...position], target: [...target], fov };
+  }
+
+  /** GSPlatform 标注 ID → 官方 settings.annotations 下标；找不到返回 -1。 */
+  private annotationIndexById(annotationId: string): number {
+    return this.annotations.findIndex((ann) => {
+      const extras = ann?.extras as { gsplatform?: { annotationId?: unknown } } | undefined;
+      return extras?.gsplatform?.annotationId === annotationId;
+    });
+  }
+
+  /**
+   * 更换 XR 出生位姿（GS-NEXT-03，进入 VR 前选择视点；GS-NEXT-04 扩展到导览点）。
    *
    * 位姿为 **RUNTIME** 空间（与 authored initial camera 同空间）；传 null =
    * 「不在任何指定位置出生」，等价于没有 authored 相机（保持官方 Y=0 语义）。

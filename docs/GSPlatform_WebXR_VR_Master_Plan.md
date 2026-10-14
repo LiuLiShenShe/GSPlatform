@@ -5,7 +5,7 @@
 > 本次修订基线：`93083af4ab2f1eade24637ed15a88272799af3b3`
 > 目标设备：**PICO Neo3**；第一交付形式：**头显浏览器直接访问自有 HTTPS 网站并进入 WebXR**。
 > 决策属性：**主计划 / 后续开发阶段的需求权威来源**。实际施工以当时最新 HEAD、锁定的官方依赖和真实 PICO 验收为准。
-> 本次修订依据：[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)（GS-NEXT-00 开发基线收口）、[`docs/reports/GS_NEXT_01_PICO_READINESS.md`](../reports/GS_NEXT_01_PICO_READINESS.md)（GS-NEXT-01 PICO 就绪度）、[`docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md`](../reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md)（GS-NEXT-02 初始视角修复与默认性能模式）、[`docs/reports/GS_NEXT_03_VIEWPOINT.md`](../reports/GS_NEXT_03_VIEWPOINT.md)（GS-NEXT-03 官方 Viewpoint 快速切换）。
+> 本次修订依据：[`docs/reports/GS_NEXT_00_BASELINE_REPORT.md`](../reports/GS_NEXT_00_BASELINE_REPORT.md)（GS-NEXT-00 开发基线收口）、[`docs/reports/GS_NEXT_01_PICO_READINESS.md`](../reports/GS_NEXT_01_PICO_READINESS.md)（GS-NEXT-01 PICO 就绪度）、[`docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md`](../reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md)（GS-NEXT-02 初始视角修复与默认性能模式）、[`docs/reports/GS_NEXT_03_VIEWPOINT.md`](../reports/GS_NEXT_03_VIEWPOINT.md)（GS-NEXT-03 官方 Viewpoint 快速切换）、[`docs/reports/GS_NEXT_04A_ANNOTATION_AUDIT.md`](../reports/GS_NEXT_04A_ANNOTATION_AUDIT.md)（GS-NEXT-04A 标注导览只读审计）、[`docs/reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md`](../reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md)（GS-NEXT-04 官方标注导览 + XR 出生导览点）。
 
 ---
 
@@ -339,7 +339,10 @@ V1.0 主计划 §5/§2 存在两处**与固定版本官方源码不符**的表�
 | PICO 就绪度 | `docs/reports/GS_NEXT_01_PICO_READINESS.md` |
 | 初始视角修复与默认性能模式 | `docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md` |
 | 视点快速切换（官方能力编排） | `docs/reports/GS_NEXT_03_VIEWPOINT.md` |
-| XR 出生视点选择 | `apps/web/src/features/viewer-official/useSuperSplatXR.ts`、`apps/web/src/pages/XRViewerPage.tsx` |
+| 标注导览（Desktop 官方导览器 + XR 出生导览点） | `docs/reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md` |
+| XR 出生视点/导览点选择 | `apps/web/src/features/viewer-official/useSuperSplatXR.ts`、`apps/web/src/pages/XRViewerPage.tsx` |
+| 导览点准入规则 | `apps/web/src/scene-runtime/guidePoints.ts` |
+| 官方 UI 作用域兼容层（放行导览器） | `apps/web/src/scene-runtime/superSplatUiCompatibility.ts` |
 | 性能模式默认策略 | `apps/web/src/scene-runtime/performanceModePolicy.ts` |
 
 ---
@@ -378,6 +381,42 @@ Views 下拉、作者侧「保存当前视角」面板、官方 CameraManager �
 immersive-vr 验收并回传诊断 JSON。**软件代码里已经没有可以"顺手做掉"的阶段 3 内容**——
 剩下的全部是真机证据；若真机上仍回退到鸟瞰，页面会显示 `initial-view-runtime-mismatch`
 告警并回传诊断 JSON。
+
+**GS-NEXT-04（2026-10-14，SOFTWARE VERIFIED / HARDWARE PENDING）**：官方标注导览
+（Desktop）+ XR 出生导览点，见 [审计](../reports/GS_NEXT_04A_ANNOTATION_AUDIT.md) 与
+[实施报告](../reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md)。先只读审计、再动手，结论是
+**官方标注 UI（hotspot / tooltip / Prev-Next 导览器）在锁定版 1.35.0 里逻辑已完整，只是被
+GSPlatform 的作用域 CSS 连同其余 chrome 一起藏掉了**。按"能用官方就直接用"的原则：
+
+1. **Desktop 新增 0 行 UI 代码** —— 隐藏规则从 `.sse-ui { display:none }` 改为
+   `.sse-ui > *:not(.sse-annotationNav) { display:none }`（白名单，官方将来新增 chrome 会
+   自动隐藏）。循环导航 / 少于 2 条隐藏 / 按钮 disable / 序号标题跟随 / 显隐跟随官方
+   `showAnnotations` 全部由官方提供。刻意**不给导览器自身写 display**（那会破坏官方
+   `sse-hidden` / `sse-desktop` / `sse-touch` 三态）；放行导览器后其余 chrome 仍必须隐藏，
+   否则全宽 `.sse-controlsWrap` 会吃掉 canvas 拖拽（已用真实拖拽用例锁定）。
+2. **XR 新增 0 个数据模型** —— "导览点"= 带作者化相机的标注，并进 GS-NEXT-03 已有的
+   "出生位置"选择器（同一批数据库 ID，与 Desktop 官方热点同源），与观察点互斥。
+   pose 直接取官方 `annotations[i].camera.initial`（**已由 experienceAdapter 换算到 RUNTIME
+   空间，绝不再换算一次**）。准入规则 `guidePoints.ts` 排除"无自有相机、官方会回落成场景
+   初始相机"的老热点 —— 否则就是一个不报错的假承诺。
+3. 放行官方 UI 暴露出的连带修复：`selectViewpoint()` 切换观察点前先清官方标注选中态
+   （tooltip / 媒体 Overlay / 导览器序号读的是同一个官方状态）。
+
+验证：GS-NEXT-04 专项 4 用例全过（导览器序号 1→2→3→回绕、相机落到各标注作者化相机、
+其余 chrome 可见数 0、canvas 拖拽仍生效；XR 导览点 `gp=3`、选中后出生位姿 = 标注相机、
+与观察点互斥）；GS-NEXT-04+02+03 串行 **16 passed**（未回归）；SSV-06 三件套更新到新契约
+**5 passed**；vitest 326、tsc 0 error、ruff/mypy 全过、后端 566 + workers 189。
+**真机出生点仍为 HARDWARE PENDING。**
+
+另登记两处与代码无关的**跑法陷阱**（详见实施报告 §6）：(a)
+`apps/web/src/services/http.ts` 的默认 `baseURL` 是绝对地址 `:8001`，不走 vite 代理，
+与 `GS_API_PROXY_TARGET` 指向的库会**脑裂**（页面与 spec 打两个不同的库）—— 已在
+gitignored 的 `apps/web/.env.development.local` 用 `VITE_API_BASE_URL=/api/v1` 消除；
+(b) 后端 pytest 用的是**开发库**而非测试库，开发库迁移滞后即大面积报
+`UndefinedColumn` —— 本轮把隔离库 `gsplatform_test` 迁到 head 后跑全绿，**未动共享开发库**。
+共享开发库里 `fix02-semantics` 夹具的初始相机已漂移成一组像归一化方向向量的值（且多出
+4 条 `GS-NEXT-03 视点A` 残骸），导致 `fix02-semantics.spec.ts` 5 个用例在**干净 HEAD 上
+同样失败**，与本轮改动无关，已如实登记待场景所有者确认。
 
 ---
 

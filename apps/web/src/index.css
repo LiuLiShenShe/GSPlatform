@@ -1011,6 +1011,14 @@ a {
   gap: 8px;
 }
 
+/* GS-NEXT-04：「观察点」与「导览点」分组标题 —— 二者共用同一个「出生位置」层。 */
+.gs-xr__viewpoints-group {
+  margin: 6px 0 2px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.5);
+}
+
 .gs-xr__viewpoint {
   padding: 7px 14px;
   font-size: 13px;

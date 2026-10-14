@@ -929,7 +929,6 @@ describe('相机 pose 封装（SSV-05）', () => {
     const runtime = await SuperSplatRuntime.create(defaultOptions());
     runtime.setCameraPose({ position: [0, 1, 0], target: [0, 1, -5], fov: 200 });
     // 注入一条隐藏标注（extras 无 annotationId → 不被当真实标注）并 select 它。
-    expect(fake.selectAnnotation).toHaveBeenCalledTimes(1);
     const idx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
     const injected = readInjectedAnnotation(fake, idx);
     expect(injected.camera.initial.position).toEqual([0, 1, 0]);
@@ -1335,8 +1334,11 @@ describe('FIX-02 viewpoints', () => {
     }));
     expect(runtime.getViewpoints()).toHaveLength(1);
     expect(runtime.selectViewpoint('vp-a')).toBe(true);
-    expect(fake.selectAnnotation).toHaveBeenCalledTimes(1);
-    const idx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // GS-NEXT-04：selectViewpoint 先清空官方标注选中态（一次 null），再导航到注入的
+    // pose 标注 —— 顺序即「先离开上一个导览点，再去观察点」。
+    const seq = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0]);
+    expect(seq).toEqual([null, expect.any(Number)]);
+    const idx = seq[seq.length - 1];
     const injected = readInjectedAnnotation(fake, idx);
     // position (0,1.6,0) → +10 → (10,1.6,0)
     expect(injected.camera.initial.position).toEqual([10, 1.6, 0]);
@@ -1367,10 +1369,13 @@ describe('FIX-02 viewpoints', () => {
     }));
     runtime.selectViewpoint('vp-1');
     runtime.selectViewpoint('vp-1');
-    expect(fake.selectAnnotation).toHaveBeenCalledTimes(2);
-    const i0 = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    const i1 = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[1][0];
-    expect(i0).toBe(i1);
+    // GS-NEXT-04：每次 selectViewpoint = 清选中(null) + 导航(index)；本用例要验的
+    // 「两次导航复用同一个注入下标」仍然只看非 null 的调用。
+    const navIdx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls
+      .map((c) => c[0])
+      .filter((v) => v !== null);
+    expect(navIdx).toHaveLength(2);
+    expect(navIdx[0]).toBe(navIdx[1]);
     expect((fake.annotations as unknown as unknown[]).length).toBe(1);
   });
 
@@ -1508,7 +1513,9 @@ describe('GS-NEXT-03 视点：runtime pose 查询 + 进入 VR 前更换出生位
 
     // 与 selectViewpoint 注入官方标注的 pose 逐字段一致（不得有两套换算）
     expect(runtime.selectViewpoint('vp-a')).toBe(true);
-    const idx = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // GS-NEXT-04：最后一次调用才是导航（前面是清选中 null）。
+    const calls3 = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls;
+    const idx = calls3[calls3.length - 1][0];
     const injected = readInjectedAnnotation(fake, idx);
     expect(injected.camera.initial.position).toEqual(pose!.position);
     expect(injected.camera.initial.target).toEqual(pose!.target);
@@ -1607,5 +1614,146 @@ describe('GS-NEXT-03 视点：runtime pose 查询 + 进入 VR 前更换出生位
     runtime.destroy();
     expect(() => runtime.setXRInitialCamera({ position: [1, 1, 1], target: [0, 0, 0], fov: 60 })).not.toThrow();
     expect(() => runtime.setXRInitialCamera(null)).not.toThrow();
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// GS-NEXT-04：导览点（Annotation）→ XR 出生位姿
+// ────────────────────────────────────────────────────────────────────────
+
+/** 官方 settings.annotations 条目（已是 RUNTIME 空间，由 experienceAdapter 换算）。 */
+function officialAnnotation(
+  annotationId: string | null,
+  initial: { position: [number, number, number]; target: [number, number, number]; fov: number },
+) {
+  return {
+    position: [0, 0, 0] as [number, number, number],
+    title: annotationId ?? 'no-id',
+    text: '',
+    ...(annotationId ? { extras: { gsplatform: { annotationId, contentType: 'TEXT' } } } : {}),
+    camera: { initial },
+  };
+}
+
+describe('GS-NEXT-04 导览点：官方标注相机 → XR 出生位姿', () => {
+  const NEAR = { position: [1, 1.5, 2] as [number, number, number], target: [0, 1.2, 0] as [number, number, number], fov: 58 };
+  const FAR = { position: [-3, 2, 4] as [number, number, number], target: [0, 1, 0] as [number, number, number], fov: 40 };
+
+  it('annotationRuntimePose 直接读官方 camera.initial —— 绝不做第二次换算', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    // 官方 settings 里的相机**已经**是 RUNTIME 空间（adapter 换算过）。
+    (fake as unknown as { annotations: unknown[] }).annotations = [officialAnnotation('ann-a', NEAR)];
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+
+    // 世界变换非恒等：若本方法错误地再换算一次，坐标会被二次平移。
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      worldTransform: { position: { x: 10, y: 0, z: 0 }, rotation: null, scale: null },
+    }));
+
+    const pose = runtime.annotationRuntimePose('ann-a');
+    expect(pose).not.toBeNull();
+    expect(pose!.position).toEqual([1, 1.5, 2]); // 原样读取，未 +10
+    expect(pose!.target).toEqual([0, 1.2, 0]);
+    expect(pose!.fov).toBe(58);
+  });
+
+  it('未知 ID / 非 GSPlatform 标注（无 extras 协议）返回 null', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    (fake as unknown as { annotations: unknown[] }).annotations = [
+      officialAnnotation('ann-a', NEAR),
+      officialAnnotation(null, FAR), // 例如视点导航注入的隐藏 pose 标注
+    ];
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({}));
+
+    expect(runtime.annotationRuntimePose('ann-a')).not.toBeNull();
+    expect(runtime.annotationRuntimePose('no-such')).toBeNull();
+    expect(runtime.annotationRuntimePose('')).toBeNull();
+    // 注入的隐藏标注没有 annotationId → 不得被当成导览点解析
+    expect(runtime.annotationRuntimePose('no-id')).toBeNull();
+  });
+
+  it('相机数值非有限 → null（不让 NaN 变成出生点）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    (fake as unknown as { annotations: unknown[] }).annotations = [
+      officialAnnotation('ann-nan', {
+        position: [Number.NaN, 1, 2],
+        target: [0, 1, 0],
+        fov: 50,
+      }),
+    ];
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({}));
+    expect(runtime.annotationRuntimePose('ann-nan')).toBeNull();
+  });
+
+  it('selectGsplatformAnnotation 按**数据库 ID** 定位官方下标（不是把 index 当 ID）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    (fake as unknown as { annotations: unknown[] }).annotations = [
+      officialAnnotation('ann-first', NEAR),
+      officialAnnotation('ann-second', FAR),
+    ];
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({}));
+
+    expect(runtime.selectGsplatformAnnotation('ann-second')).toBe(true);
+    expect((fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(1);
+
+    expect(runtime.selectGsplatformAnnotation('no-such')).toBe(false);
+    // 未知 ID 不得触发任何官方选择
+    expect((fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+  });
+
+  it('导览点 pose 可直接喂给 setXRInitialCamera（进入 VR 的出生位姿）', async () => {
+    const rig = new Entity('rig');
+    const camera = new Entity('camera');
+    rig.addChild(camera);
+    const xr = Object.assign(new EventHandler(), { active: false, type: 'immersive-vr', spaceType: 'local-floor', camera });
+    const fake = makeFakeHandle({ xr });
+    (fake.state as Record<string, unknown>).loaded = true;
+    (fake as unknown as { annotations: unknown[] }).annotations = [officialAnnotation('ann-a', NEAR)];
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      mode: 'xr',
+      xrInitialCamera: { position: [2.5, 1.8, 6], target: [0, 0.6, 0], fov: 47 },
+    }));
+
+    const pose = runtime.annotationRuntimePose('ann-a')!;
+    runtime.setXRInitialCamera(pose);
+    await runtime.startVR();
+    camera.setLocalPosition(0.2, 1.6, -0.3);
+    xr.fire('update');
+
+    // 出生在导览点，而不是 authored 初始视角
+    expect(camera.getPosition().x).toBeCloseTo(NEAR.position[0], 5);
+    expect(camera.getPosition().y).toBeCloseTo(NEAR.position[1], 5);
+    expect(camera.getPosition().z).toBeCloseTo(NEAR.position[2], 5);
+    expect((runtime.getXRState() as { spawnStatus: string }).spawnStatus).toBe('applied');
+    await runtime.endXR();
+  });
+
+  it('selectViewpoint 会清掉官方标注选中态（观察点与导览点共用「当前停在哪」语义）', async () => {
+    const fake = makeFakeHandle();
+    (fake.state as Record<string, unknown>).loaded = true;
+    mockedCreateViewer.mockResolvedValueOnce(fake);
+    const runtime = await SuperSplatRuntime.create(defaultOptions({
+      viewpoints: [{
+        id: 'vp-a', name: 'A', position: { x: 0, y: 1.6, z: 0 },
+        target: { x: 0, y: 1, z: -2 }, fov: 55, orderIndex: 0, enabled: true,
+      }],
+    }));
+
+    (fake.state as Record<string, unknown>).selectedAnnotation = 0;
+    expect(runtime.selectViewpoint('vp-a')).toBe(true);
+
+    // 第一次调用必须是 selectAnnotation(null)（清选中），随后才是注入标注的导航。
+    const calls = (fake.selectAnnotation as ReturnType<typeof vi.fn>).mock.calls;
+    expect(calls[0][0]).toBeNull();
+    expect(runtime.selectedGsplatformAnnotation).toBeNull();
   });
 });
