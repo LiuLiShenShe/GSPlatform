@@ -31,7 +31,50 @@ def _scene_asset_url(slug: str, rel: str) -> str:
     return f"{SCENE_ASSET_BASE.format(slug=slug)}/{rel.lstrip('/')}"
 
 
+def resolve_poster_url(session: Session, scene: Scene, version: object | None) -> str | None:
+    """场景封面的**真实可服务 URL**，没有封面则 ``None``。
+
+    与 ``SceneRuntimeService._resolve_poster_url`` 同一份实现（作品列表与运行时
+    描述符必须给出同一个答案，否则同一个场景在列表里是裂图、在看详情页时又能显示）。
+
+    优先级：
+      1. 作者上传的封面（``presentations.cover_asset_id``，存储在
+         ``presentation/<scene>/cover``）→ ``/{slug}/presentation/cover``；
+      2. 当前版本的发布清单自带 poster（Asset kind=POSTER）→ ``assets/poster.webp``；
+      3. 都没有 → ``None``。
+
+    历史行为是无条件发出 ``assets/poster.webp``：该路径对**任何**场景都不存在
+    （封面在 ``presentation/<scene>/cover``），于是全站封面恒为 404。
+    """
+    from app.db.models.asset import Asset
+    from app.db.models.enums import AssetKind
+    from app.db.models.scene_presentation import ScenePresentation
+
+    cover_asset_id = (
+        session.query(ScenePresentation.cover_asset_id)
+        .filter(ScenePresentation.scene_id == scene.id)
+        .scalar()
+    )
+    if cover_asset_id is not None:
+        return f"/api/v1/scenes/{scene.slug}/presentation/cover"
+    if version is None:
+        return None
+    has_poster = (
+        session.query(Asset.id)
+        .filter(
+            Asset.scene_id == scene.id,
+            Asset.version_id == version.id,  # type: ignore[attr-defined]
+            Asset.kind == AssetKind.POSTER.value,
+        )
+        .first()
+    )
+    if has_poster is None:
+        return None
+    return _scene_asset_url(scene.slug, "poster.webp")
+
+
 def _summary_from_scene(
+    session: Session,
     scene: Scene,
     *,
     is_favorited: bool = False,
@@ -59,7 +102,7 @@ def _summary_from_scene(
         sizeMB=size_mb,
         views=scene.views,
         likes=scene.likes,
-        posterUrl=_scene_asset_url(scene.slug, "poster.webp"),
+        posterUrl=resolve_poster_url(session, scene, version),
         manifestUrl=manifest_url,
         publishedAt=scene.published_at,
         updatedAt=scene.updated_at,
@@ -70,6 +113,7 @@ def _summary_from_scene(
 
 
 def _detail_from_scene(
+    session: Session,
     scene: Scene,
     *,
     is_favorited: bool = False,
@@ -77,6 +121,7 @@ def _detail_from_scene(
     share_count: int | None = None,
 ) -> SceneDetailOut:
     summary = _summary_from_scene(
+        session,
         scene,
         is_favorited=is_favorited,
         favorite_count=favorite_count,
@@ -117,7 +162,7 @@ class SceneService:
             fav_ids = set()
         return SceneListPage(
             items=[
-                _summary_from_scene(s, is_favorited=s.id in fav_ids)
+                _summary_from_scene(self._session, s, is_favorited=s.id in fav_ids)
                 for s in items
             ],
             meta=PageMeta(limit=limit, nextCursor=next_cursor),
@@ -128,7 +173,7 @@ class SceneService:
         scene = self._repo.get_public_by_slug(slug)
         if scene is None:
             raise NotFoundError(f"场景 {slug} 不存在或不可见")
-        return _detail_from_scene(scene)
+        return _detail_from_scene(self._session, scene)
 
     def resolve_detail(
         self, slug: str, identity: RequestIdentity | None
@@ -152,14 +197,14 @@ class SceneService:
                 identity is not None
                 and self._repo.is_favorited(identity.user_id, public.id)
             )
-            return _detail_from_scene(public, is_favorited=fav)
+            return _detail_from_scene(self._session, public, is_favorited=fav)
 
         user_id = identity.user_id if identity is not None else None
         scene = SceneAccessPolicy(self._session).resolve_readable_for_user(
             slug, user_id
         )
         fav = identity is not None and self._repo.is_favorited(identity.user_id, scene.id)
-        return _detail_from_scene(scene, is_favorited=fav)
+        return _detail_from_scene(self._session, scene, is_favorited=fav)
 
     def increment_views(self, slug: str) -> None:
         """Increment view counter (best-effort, not called for owners)."""
@@ -187,7 +232,7 @@ class SceneService:
             sort=sort,
         )
         return SceneListPage(
-            items=[_summary_from_scene(s) for s in items],
+            items=[_summary_from_scene(self._session, s) for s in items],
             meta=PageMeta(limit=limit, nextCursor=next_cursor),
         )
 

@@ -414,9 +414,19 @@ GSPlatform 的作用域 CSS 连同其余 chrome 一起藏掉了**。按"能用�
 gitignored 的 `apps/web/.env.development.local` 用 `VITE_API_BASE_URL=/api/v1` 消除；
 (b) 后端 pytest 用的是**开发库**而非测试库，开发库迁移滞后即大面积报
 `UndefinedColumn` —— 本轮把隔离库 `gsplatform_test` 迁到 head 后跑全绿，**未动共享开发库**。
-共享开发库里 `fix02-semantics` 夹具的初始相机已漂移成一组像归一化方向向量的值（且多出
-4 条 `GS-NEXT-03 视点A` 残骸），导致 `fix02-semantics.spec.ts` 5 个用例在**干净 HEAD 上
-同样失败**，与本轮改动无关，已如实登记待场景所有者确认。
+共享开发库 `gsplatform` 随后也已按用户指示修复（见 [实施报告 §10](../reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md)）：
+迁到 head `cd03ef05ab06`（此前落后 4 个迁移，workers 因 `upload_sessions.scene_type`
+缺失而失败；DBA 注意：迁移被 4 个泄漏 3 天的 `idle in transaction` 会话卡住）；
+`fix02-semantics` 夹具的初始相机恢复为 `[2.5,1.8,6] / [0,0.6,0]`、删除 4 条残骸视点
+（该 spec 随即 6 passed）；`ssv07-collision.spec.ts` 按**当前真实契约**重写 ——
+未校准场景 walk 被诚实拒绝，而不是伪造一条 VERIFIED 校准（**物理行走+碰撞在浏览器层
+的覆盖缺口已明确登记**）；描述符与作品列表的 `posterUrl` 恒 404 修好（封面实际在
+`/presentation/cover`，此前全站封面都是裂图），修后公网 HTTPS 实测整页 0 条 4xx/5xx。
+
+实机（PICO Neo3）验收的**准备**已完成并写入 [实施报告 §9](../reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md)：
+本机无头显 / 无 OpenXR runtime / 无 adb，immersive-vr 会话只能在真机上验证；
+除该次会话外的全部链路已在**真实公网 HTTPS** 上实测通过（secure context、
+navigator.xr、官方 WebGL2 runtime、authored 初始视角、观察点 1 / 导览点 3、0 条 4xx）。
 
 ---
 

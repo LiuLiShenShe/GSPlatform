@@ -116,7 +116,7 @@ class ShareService:
         if scene.status != "PUBLISHED" or scene.current_version_id is None:
             raise ForbiddenError("被分享的场景当前不可见")
 
-        return _detail_from_scene(scene), link
+        return _detail_from_scene(self._db, scene), link
 
     # ------------------------------------------------------------------
     # revoke

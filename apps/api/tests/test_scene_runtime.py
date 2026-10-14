@@ -73,10 +73,8 @@ class TestBasic:
         assert body["schemaVersion"] == 1
         assert body["scene"]["id"] == public_scene.slug
         assert body["scene"]["name"] == "测试场景"
-        assert (
-            body["scene"]["posterUrl"]
-            == f"/api/v1/scenes/{public_scene.slug}/assets/poster.webp"
-        )
+        # 无 POSTER 资产 → 不得发出必然 404 的封面 URL（见下方 TestPosterUrl）。
+        assert body["scene"]["posterUrl"] is None
         # default fixture version is streamed-sog without entryUrl → lod-meta
         # fallback. FIX-05 §8：优先不可变版本化 URL（versions/<asset_version>/）
         # —— current 是可重指向别名，只用于无法获得版本段时兜底。
@@ -97,6 +95,90 @@ class TestBasic:
         assert resp.status_code == 200
         assert resp.json()["content"]["url"] is None
         assert resp.json()["content"]["format"] is None
+
+
+# ─── posterUrl：只在海报资产真的存在时发出 ─────────────────────────────────
+class TestPosterUrl:
+    """描述符不得承诺一个不存在的封面 URL。
+
+    历史行为是无条件拼 ``.../poster.webp``，于是「源清单里没有 poster」的场景
+    （合成夹具、未附封面的历史发布）在桌面/XR 页面每次加载都留下一条必然的 404
+    控制台报错，看起来像内容缺失 —— 实际是描述符在说谎。
+    """
+
+    def test_no_poster_asset_emits_null(self, db):
+        scene = _make_scene(db)
+        _attach_version(
+            db,
+            scene,
+            fmt="streamed-sog",
+            manifest={"format": "streamed-sog", "stream": {"entryUrl": "a.sog"}},
+        )
+        db.expire_all()
+        assert _get(scene.slug).json()["scene"]["posterUrl"] is None
+
+    def test_poster_asset_emits_served_url(self, db, public_scene):
+        from app.db.models.asset import Asset
+
+        db.add(
+            Asset(
+                scene_id=public_scene.id,
+                version_id=public_scene.current_version.id,
+                kind="POSTER",
+                storage_key="current/poster.webp",
+                mime_type="image/webp",
+                byte_size=0,
+                sha256="",
+            )
+        )
+        db.commit()
+        db.expire_all()
+        assert (
+            _get(public_scene.slug).json()["scene"]["posterUrl"]
+            == f"/api/v1/scenes/{public_scene.slug}/assets/poster.webp"
+        )
+
+    def test_author_cover_wins_and_points_at_the_cover_route(self, db, public_scene):
+        """作者上传的封面（storage_key = presentation/<scene>/cover）不在
+        ``assets/poster.webp``，必须指向真正服务它的 ``/presentation/cover``。"""
+        import uuid as _uuid
+
+        from app.db.models.asset import Asset
+        from app.db.models.scene_presentation import ScenePresentation
+
+        db.add(
+            Asset(
+                id=_uuid.uuid4(),
+                scene_id=public_scene.id,
+                version_id=None,
+                kind="POSTER",
+                storage_key=f"presentation/{public_scene.id}/cover",
+                mime_type="image/webp",
+                byte_size=17,
+                sha256="",
+            )
+        )
+        db.flush()
+        cover_id = db.query(Asset.id).filter(
+            Asset.storage_key == f"presentation/{public_scene.id}/cover"
+        ).scalar()
+        assert cover_id is not None
+        db.add(
+            ScenePresentation(
+                scene_id=public_scene.id,
+                cover_asset_id=cover_id,
+            )
+        )
+        db.commit()
+        db.expire_all()
+        assert (
+            _get(public_scene.slug).json()["scene"]["posterUrl"]
+            == f"/api/v1/scenes/{public_scene.slug}/presentation/cover"
+        )
+
+    def test_no_current_version_emits_null(self, db):
+        scene = _make_scene(db)
+        assert _get(scene.slug).json()["scene"]["posterUrl"] is None
 
 
 # ─── 3-5. content formats ──────────────────────────────────────────────────

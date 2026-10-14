@@ -83,7 +83,7 @@ class FavoriteService:
             )
             .order_by(Favorite.created_at.desc())
         ).all()
-        return [_summary_from_scene(scene) for scene, _ in rows]
+        return [_summary_from_scene(self._db, scene) for scene, _ in rows]
 
     # ------------------------------------------------------------------
     def favorite_ids(self, user_id: uuid.UUID, scene_ids: list[uuid.UUID]) -> set[uuid.UUID]:

@@ -54,6 +54,7 @@ from app.schemas.scene_runtime import (
 )
 from app.services.collision import world_transform_hash
 from app.services.scene_access import SceneAccessPolicy
+from app.services.scenes import resolve_poster_url
 
 # Business URL prefixes produced by the serving layer. Never filesystem paths.
 SCENE_ASSET_BASE = "/api/v1/scenes/{slug}/assets"
@@ -260,6 +261,24 @@ class SceneRuntimeService:
             relative = relative[2:]
         return f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/{relative}"
 
+    def _resolve_poster_url(
+        self, scene: Scene, version: SceneVersion | None
+    ) -> str | None:
+        """封面 URL —— 只在**确实有封面可服务**时才发出，且指向它真正的地址。
+
+        实现在 ``app/services/scenes.py::resolve_poster_url``（与作品列表共用同一份，
+        否则同一个场景会在列表里是裂图、在看详情页时又能显示）。简述：
+
+        1. 有作者上传的封面（``presentations.cover_asset_id``）→ ``/{slug}/presentation/cover``；
+        2. 否则当前版本有发布清单自带的 poster 资产 → ``assets/poster.webp``；
+        3. 否则 → ``None``。
+
+        历史行为是无条件发出 ``assets/poster.webp``：封面字节在
+        ``presentation/<scene>/cover``，**不在**那个路径上，于是全站封面恒为 404
+        （桌面/XR 控制台一条红色 404，作品列表里是裂图）。
+        """
+        return resolve_poster_url(self._session, scene, version)
+
     def _resolve_content(
         self, scene: Scene, version: SceneVersion | None
     ) -> RuntimeContentOut:
@@ -347,7 +366,7 @@ class SceneRuntimeService:
         scene_block = RuntimeSceneOut(
             id=scene.slug,
             name=scene.title,
-            posterUrl=f"{SCENE_ASSET_BASE.format(slug=scene.slug)}/poster.webp",
+            posterUrl=self._resolve_poster_url(scene, version),
         )
         content = self._resolve_content(scene, version)
         presentation = self._build_presentation(scene)
