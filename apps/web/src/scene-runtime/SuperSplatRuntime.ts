@@ -20,7 +20,7 @@ import {
 // 官方 viewer 样式（.sse-viewer 根容器 100%×100%、canvas 绝对定位填充）。
 // 不导入则官方根容器无尺寸，画布停留在默认 300×150，场景只在左上角一小块显示。
 import '@playcanvas/supersplat-viewer/viewer.css';
-import { Vec3, type Entity, type EventHandler } from 'playcanvas';
+import type { Entity, EventHandler } from 'playcanvas';
 import {
   CAMERA_FOV_RANGE,
   DEFAULT_CAMERA_FOV,
@@ -36,7 +36,31 @@ import {
 } from './SceneTransformAdapter';
 import type { ScenePickingAdapter } from './ScenePickingAdapter';
 import { applyUiScopeStyles } from './superSplatUiCompatibility';
-import type { RuntimeViewpoint, RuntimeWorldTransform } from './types';
+import {
+  buildXrDestinations,
+  destinationIndexByKey,
+  stepDestinationIndex,
+  INITIAL_DESTINATION_ID,
+  type XrDestination,
+} from './xrDestinations';
+import { applyRigPose, rigNodesFrom } from './xrRigPose';
+import {
+  buildXrMenuItems,
+  createComfortFade,
+  createComfortVeil,
+  createXrMenuFont,
+  ensureXrUiSystems,
+  installXrMenu,
+  uiLayerId,
+  XR_FLOOR_TELEPORT_ALLOWED,
+  XR_MENU_ACTIVE_EVENT,
+  XR_MENU_EVENTS,
+  type ComfortFade,
+  type XrMenuFont,
+  type XrMenuHandle,
+  type XrUiHostApp,
+} from './xrMenu';
+import type { RuntimeAnnotation, RuntimeViewpoint, RuntimeWorldTransform } from './types';
 
 /**
  * 相机封装（SSV-05 §5）目标距离策略。
@@ -113,6 +137,14 @@ export interface SuperSplatRuntimeOptions {
    * 字段，注入会生成多余 hotspot）。
    */
   viewpoints?: RuntimeViewpoint[];
+  /**
+   * GS-NEXT-05：可作为**会话内导览目的地**的标注（调用方已用
+   * `eligibleGuidePoints()` 过滤：停用 / 无作者化相机的不进列表）。
+   *
+   * 与进入 VR 前那个「出生位置」选择器是**同一份数据**（同 `descriptor.annotations`
+   * 过滤结果、同批数据库 ID）—— 菜单里能到的点 = 桌面上能选的点。
+   */
+  guidePoints?: RuntimeAnnotation[];
   xrInitialCamera?: CameraPose | null;
 }
 
@@ -132,6 +164,30 @@ export type ProgressCallback = (progress: number) => void;
 export type XRModeCallback = (mode: XrMode | null) => void;
 export type SelectedAnnotationCallback = (index: number | null) => void;
 export type CameraModeCallback = (mode: RuntimeCameraMode) => void;
+
+/** 会话内导览菜单诊断读数（GS-NEXT-05；真机 / e2e 取证口）。 */
+export interface XrMenuInfo {
+  /** unavailable | empty | installed | install-failed | no-navigation */
+  state: string;
+  /** 官方 XrMenu 实例是否装上（菜单可见还要手柄按 Y）。 */
+  menuInstalled: boolean;
+  /** 可达目的地数量（已过滤掉停用 / 无作者化相机的）。 */
+  destinationCount: number;
+  /** 当前目的地下标（-1 = 未指定）。 */
+  destinationIndex: number;
+  /** 当前目的地 key（`kind:id`）。 */
+  currentDestination: string | null;
+  /** 菜单首行文本（`序号/总数 · 名称`）。 */
+  currentLabel: string;
+  /** 官方 XrNavigation 的地面传送当前是否开启（本产品恒为 false，见 XR_FLOOR_TELEPORT_ALLOWED）。 */
+  floorTeleportEnabled: boolean;
+  /** 官方菜单当前是否可见（`xr:menu:active`）。 */
+  menuVisible: boolean;
+  /** 舒适过渡是否进行中。 */
+  fadePending: boolean;
+  /** 本层补装的官方 UI 组件系统（官方 Viewer 默认没装）。 */
+  uiSystemsAdded: string[];
+}
 
 /**
  * 统一官方 SuperSplat Runtime。
@@ -199,6 +255,43 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     scale: AdapterVec3;
   } | null = null;
 
+  // ------------------------------------------------------------------ //
+  // GS-NEXT-05：会话内导览（官方 XrMenu + 官方 XrNavigation 仲裁）
+  // ------------------------------------------------------------------ //
+
+  /**
+   * authored initial camera（创建时传入，**不变**）。会话内「返回初始位置」
+   * 的目标就是它 —— 与进入 VR 前的出生对齐用的是同一份数据。
+   */
+  private readonly authoredInitialCamera: CameraPose | null;
+
+  /** 会话内导览目的地（= 进入 VR 前那个出生位置选择器的同一份数据）。 */
+  private readonly xrGuidePoints: RuntimeAnnotation[];
+
+  /** 当前目的地 key（`buildXrDestinations` 产出；null = 未指定）。 */
+  private xrDestinationKey: string | null = null;
+
+  /** 官方 XrMenu 句柄（未安装 = null，见 {@link xrMenuInfo}）。 */
+  private xrMenu: XrMenuHandle | null = null;
+  /** 官方菜单字体资产（随 runtime 一起释放）。 */
+  private xrMenuFont: XrMenuFont | null = null;
+  /** 舒适过渡（黑纱）状态机。 */
+  private xrFade: ComfortFade | null = null;
+  /** 官方 XrNavigation 实例（floor teleport 仲裁对象）。 */
+  private xrNavigation: { enableTeleport: boolean } | null = null;
+  /** 官方菜单当前是否可见（`xr:menu:active` 维护）。 */
+  private xrMenuVisible = false;
+  /**
+   * 目的地变化订阅者（GS-NEXT-05）：会话内用手柄菜单切换目的地后，页面上的
+   * 「选中观察点 / 选中导览点」也必须跟着走 —— 否则 DOM 上显示的选中项与
+   * 实际所在位置不一致（与 GS-NEXT-04 放行官方导览器时遇到的同一类假状态）。
+   */
+  private readonly xrDestinationListeners = new Set<(key: string | null) => void>();
+  /** 本层补装的官方 UI 组件系统名（诊断用；官方 App 默认没装）。 */
+  private xrUiSystemsAdded: string[] = [];
+  /** 菜单安装/使用状态（诊断取证口；不可用时不影响进入 VR 与桌面导航）。 */
+  private xrMenuState: 'unavailable' | 'empty' | 'installed' | 'install-failed' | 'no-navigation' = 'unavailable';
+
   private constructor(handle: ViewerHandle, viewerOptions: CreateViewerOptions) {
     this.handle = handle;
     this.mode = viewerOptions.renderer === 'webgl' ? 'xr' : 'desktop';
@@ -208,11 +301,14 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     const options = viewerOptions as CreateViewerOptions & {
       worldTransform?: RuntimeWorldTransform | null;
       viewpoints?: RuntimeViewpoint[];
+      guidePoints?: RuntimeAnnotation[];
       xrInitialCamera?: CameraPose | null;
     };
     this.activeTransform = SceneTransformAdapter.fromWorldTransform(options.worldTransform);
     this.viewpoints = options.viewpoints ?? [];
+    this.xrGuidePoints = options.guidePoints ?? [];
     this.xrInitialCamera = options.xrInitialCamera ?? null;
+    this.authoredInitialCamera = options.xrInitialCamera ?? null;
     if (this.xrInitialCamera) this.xrSpawnStatus = 'not-entered';
   }
 
@@ -236,6 +332,9 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     // GS-NEXT-02 §五：Performance Mode 默认策略（首次默认 ON，显式偏好优先）。
     // 只在此处施加一次；绝不进入轮询/重建，用户手动切换不会被覆盖。
     runtime.applyPerformanceModeDefault();
+    // GS-NEXT-05：官方 XrMenu 只在 XR 模式安装（Desktop 不需要、也不该多一层 UI）。
+    // 失败**不抛** —— 菜单不可用时进入 VR 与桌面导航必须照常工作。
+    if (runtime.mode === 'xr') runtime.initXRNavigation();
     return runtime;
   }
 
@@ -261,6 +360,15 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
       return;
     }
     this.cancelXRSpawn?.();
+    // GS-NEXT-05：先拆舒适过渡（它持有 app 'update' 订阅 + 相机下的黑纱实体），
+    // 再销毁官方菜单脚本（官方脚本自己摘 xr / xr.input 监听），最后摘字体资产。
+    this.xrFade?.destroy();
+    this.xrFade = null;
+    this.xrMenu?.destroy();
+    this.xrMenu = null;
+    this.xrMenuFont?.destroy();
+    this.xrMenuFont = null;
+    this.xrNavigation = null;
     this.destroyed = true;
     // 先摘掉本层订阅，再销毁 handle（handle.destroy 本身也清理官方内部 listener）。
     for (const unsubscribe of this.unsubscribers) {
@@ -417,6 +525,8 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
       headLocalPosition: vector(camera?.getLocalPosition()),
       headWorldPosition: vector(camera?.getPosition()),
       spawnStatus: this.xrSpawnStatus,
+      // GS-NEXT-05：会话内导览菜单诊断（真机 / e2e 取证口）。
+      xrMenu: this.xrMenuInfo(),
     };
   }
 
@@ -465,33 +575,29 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     cleanup.push(this.subscribeEngine(xr, 'end', cancel));
     cleanup.push(this.subscribeEngine(xr, 'update', () => {
       const camera = xr.camera;
-      const rig = camera?.parent as Entity | null;
       /*
        * GS-NEXT-02：对齐前必须满足全部前置条件，且**不满足时必须继续等待**
-       * （早期 return 不得注销订阅 —— 否则首个未就绪帧就把一次性对齐机会丢掉，
-       * 用户永久停在官方 Y=0 出生点）。因此注销只发生在真正施加之后（见下方
-       * `finally`），前置判定全部放在 try 之外。
+       * （注销只发生在真正施加之后 —— 否则首个未就绪帧就把一次性对齐机会丢掉，
+       * 用户永久停在官方 Y=0 出生点）。注意 `finally` 只在"已施加/已失败"时
+       * 注销：在 `try` 里 `return` 也会跑 `finally`，那会把这个坑重新引入。
        */
-      if (xr.type !== 'immersive-vr' || !camera || !rig) return;
-      const local = camera.getLocalPosition();
-      if (![...pose.position, ...pose.target, local.x, local.y, local.z].every(Number.isFinite)) return;
-      // 零值/未追踪位姿不算有效头姿；在它上面算朝向会得到错误出生朝向。
-      if (!isTrackedHeadPose(camera)) return;
+      if (xr.type !== 'immersive-vr' || !camera) return;
+      const nodes = rigNodesFrom(camera);
+      if (!nodes) return;
+      // GS-NEXT-05：与「会话内导览传送」**共用同一套** Rig 定位数学
+      // （scene-runtime/xrRigPose.ts）。返回 false = 位姿不可信（未追踪 / 非有限）
+      // → 保持 pending 继续等。抛错同样结束等待，但记日志而不是让异常逃进
+      // 引擎的 XR update 循环（那会让之后每一帧都重复抛）。
+      let applied = false;
+      let failed = false;
       try {
-        const directionX = pose.target[0] - pose.position[0];
-        const directionZ = pose.target[2] - pose.position[2];
-        if (Math.hypot(directionX, directionZ) > 1e-6) {
-          const headForward = camera.getLocalRotation().transformVector(Vec3.FORWARD, new Vec3());
-          const headYaw = Math.atan2(-headForward.x, -headForward.z);
-          rig.setEulerAngles(0, (Math.atan2(-directionX, -directionZ) - headYaw) * 180 / Math.PI, 0);
-        }
-        const offset = rig.getRotation().transformVector(local, new Vec3());
-        rig.setPosition(pose.position[0] - offset.x, pose.position[1] - offset.y, pose.position[2] - offset.z);
-        this.xrSpawnStatus = 'applied';
-      } finally {
-        // 一次性对齐：施加后（无论 setEulerAngles/setPosition 是否抛错）注销。
-        cancel();
+        applied = applyRigPose(nodes, pose);
+      } catch (error) {
+        failed = true;
+        console.warn('[xr] Rig 出生对齐失败', error);
       }
+      if (applied) this.xrSpawnStatus = 'applied';
+      if (applied || failed) cancel();
     }));
   }
 
@@ -720,6 +826,287 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     this.cancelXRSpawn?.();
     this.xrInitialCamera = pose;
     this.xrSpawnStatus = pose ? 'not-entered' : 'not-authored';
+  }
+
+  // ------------------------------------------------------------------ #
+  // GS-NEXT-05：会话内导览（官方 XrMenu 目的地切换 + 官方 XrNavigation 仲裁）
+  // ------------------------------------------------------------------ #
+
+  /**
+   * 安装官方 XrMenu 并接上仲裁（**只在 XR 模式、创建时调用一次**）。
+   *
+   * 幂等：重复调用不会重复订阅 / 重复建菜单。任何一步失败都只是把
+   * {@link xrMenuInfo} 的 state 打成一个非 `installed` 值 —— 绝不抛错，
+   * 因为"菜单不可用"不该让"进入 VR"和桌面导航一起挂掉。
+   *
+   * 订阅一律在此处注册一次（不在每次开关菜单时注册）：官方 XrMenu 是**唯一实例**，
+   * 反复用 Y 键开关不会新增订阅 —— 这正是验收项「菜单重复开关不产生多重事件订阅」。
+   */
+  private initXRNavigation(): void {
+    if (this.mode !== 'xr' || this.destroyed) return;
+    const xr = this.immersiveXR();
+    // 官方 AppBase 一定是 EventHandler；这里做一道防御：没有事件总线就没有菜单
+    // 事件可用（不可用 ≠ 抛错，桌面导航与进入 VR 必须照常）。
+    const hasBus =
+      typeof (this.app as unknown as { on?: unknown }).on === 'function' &&
+      typeof (this.app as unknown as { off?: unknown }).off === 'function';
+    if (!xr || !hasBus) {
+      this.xrMenuState = 'unavailable';
+      return;
+    }
+    // 官方菜单点击 → 导览动作（官方 XrMenu 用 app.fire(eventName) 派发）。
+    this.subscribeEngine(this.app, XR_MENU_EVENTS.prev, () => this.stepXrDestination(-1));
+    this.subscribeEngine(this.app, XR_MENU_EVENTS.next, () => this.stepXrDestination(1));
+    this.subscribeEngine(this.app, XR_MENU_EVENTS.home, () => this.gotoXrDestination(`initial:${INITIAL_DESTINATION_ID}`));
+    this.subscribeEngine(this.app, XR_MENU_EVENTS.exit, () => void this.endXR().catch(() => undefined));
+    // 官方菜单显隐 → 重新仲裁 floor teleport（官方注释明确给的协调事件）。
+    this.subscribeEngine(this.app, XR_MENU_ACTIVE_EVENT, (visible: unknown) => {
+      this.xrMenuVisible = visible === true;
+      this.applyFloorTeleportPolicy();
+    });
+    // 会话结束：撤掉黑纱、清菜单可见态、把 floor teleport 重新仲裁回基线。
+    this.subscribeEngine(xr as unknown as EventHandler, 'end', () => {
+      this.xrFade?.reset();
+      this.xrMenuVisible = false;
+      this.applyFloorTeleportPolicy();
+    });
+    // XR 会话可用后再兜一次安装（相机 Rig 在某些时序下创建得比 createViewer 早/晚）。
+    this.subscribeEngine(xr as unknown as EventHandler, 'available', () => this.installOfficialXrMenu());
+    this.installOfficialXrMenu();
+  }
+
+  /**
+   * 创建官方 XrMenu（挂官方 XR Rig = `xr.camera.parent`）+ 舒适过渡黑纱。
+   *
+   * 见 `scene-runtime/xrMenu.ts` 头部：官方 Viewer 的 App 没注册 Element/Screen/
+   * Button 组件系统、也没有任何 font 资产 —— 这两件事不补，官方菜单会"建出来但
+   * 不渲染、不响应"且不报错。
+   */
+  private installOfficialXrMenu(): void {
+    if (this.destroyed || this.xrMenu) return;
+    const app = this.app as unknown as XrUiHostApp & { root: Entity };
+    let rig: Entity | null = null;
+    try {
+      rig = (app.root.findByName('camera')?.parent as Entity | null) ?? null;
+    } catch {
+      rig = null;
+    }
+    if (!rig?.script) {
+      // 官方 XrNavigation / XrControllers 就挂在这个实体上；没有它就没有官方导航可仲裁。
+      this.xrMenuState = 'no-navigation';
+      return;
+    }
+    this.xrNavigation = readNavigationScript(rig);
+    this.applyFloorTeleportPolicy();
+    if (this.xrDestinations().length === 0) {
+      // 没有可作为目的地的位置（无 authored 初始相机 + 无观察点 + 无导览点）：
+      // 不给一个全是死按钮的菜单。
+      this.xrMenuState = 'empty';
+      return;
+    }
+    try {
+      this.xrUiSystemsAdded = ensureXrUiSystems(app);
+      this.xrMenuFont = createXrMenuFont(app);
+      const items = buildXrMenuItems(this.xrDestinations());
+      this.xrMenu = installXrMenu({ app, rig, font: this.xrMenuFont, items });
+      const camera = app.root.findByName('camera') as Entity | null;
+      const surface = camera ? createComfortVeil(camera, uiLayerId(app)) : null;
+      this.xrFade = surface ? createComfortFade(this.app, surface) : null;
+      this.xrMenuState = this.xrMenu ? 'installed' : 'install-failed';
+      this.updateXrMenuLabel();
+    } catch (err) {
+      this.xrMenuState = 'install-failed';
+      console.warn('[xr] XrMenu 安装失败（不影响进入 VR 与桌面导航）', err);
+    }
+  }
+
+  /**
+   * 会话内导览目的地（**已解析过 pose 的**）。
+   *
+   * 与进入 VR 前那个出生位置选择器同一份数据；额外过一道"pose 能否解析" ——
+   * 停用 / 删除 / 无作者化相机（STALE 之类）的目的地在这里被挡掉，
+   * 不会变成一个点了没反应的菜单项。
+   */
+  xrDestinations(): XrDestination[] {
+    const list = buildXrDestinations({
+      hasInitialCamera: this.authoredInitialCamera !== null,
+      viewpoints: this.viewpoints,
+      guidePoints: this.xrGuidePoints,
+    });
+    return list.filter((dest) => this.destinationPose(dest) !== null);
+  }
+
+  /** 指定"当前目的地"（key 来自 {@link xrDestinations}）。仅登记，不移动。 */
+  setXRDestination(key: string | null): void {
+    if (this.xrDestinationKey === key) {
+      // 仍然刷新一次标签（菜单可能在之后才装上）。
+      this.updateXrMenuLabel();
+      return;
+    }
+    this.xrDestinationKey = key;
+    this.updateXrMenuLabel();
+    this.notifyXRDestination(key);
+  }
+
+  /**
+   * 订阅目的地变化（页面据此同步「选中观察点 / 选中导览点」）。
+   *
+   * 必须在 create 的**同一个**订阅集合里注销，destroy 后不留 listener。
+   */
+  onXRDestinationChanged(callback: (key: string | null) => void): () => void {
+    this.xrDestinationListeners.add(callback);
+    const unsubscribe = () => {
+      this.xrDestinationListeners.delete(callback);
+    };
+    this.unsubscribers.add(unsubscribe);
+    return () => {
+      this.unsubscribers.delete(unsubscribe);
+      unsubscribe();
+    };
+  }
+
+  private notifyXRDestination(key: string | null): void {
+    // 拷贝一份再回调：回调里可能增删订阅者。
+    // oxlint-disable-next-line unicorn/no-useless-spread -- 这里的拷贝是语义需要的（迭代期间集合可变）
+    for (const listener of [...this.xrDestinationListeners]) {
+      try {
+        listener(key);
+      } catch (err) {
+        console.warn('[xr] 目的地变化回调异常', err);
+      }
+    }
+  }
+
+  /**
+   * 环形切换目的地（菜单「上一个 / 下一个」）。返回是否真的发起了传送。
+   *
+   * 舒适过渡进行中时的请求会被**丢弃**（不排队）：一次 0.4 秒的过渡里用户不可能
+   * 看清下一个位置，排队只会让传送滞后于按键。
+   */
+  stepXrDestination(step: 1 | -1): boolean {
+    const list = this.xrDestinations();
+    if (list.length < 2) return false;
+    const current = destinationIndexByKey(list, this.xrDestinationKey ?? '');
+    const next = stepDestinationIndex(list.length, current, step);
+    return this.gotoXrDestination(list[next].key);
+  }
+
+  /**
+   * 导航到某个目的地。返回是否成功。
+   *
+   * - **会话内**（immersive-vr 且 tracking 可信）：黑纱淡出 → 移动官方 XR Rig →
+   *   淡入。移动的是 `xr.camera.parent`，头显自身 pose 不写（写了也留不住）。
+   * - **未进入会话**：只登记出生位姿（与 GS-NEXT-03/04 的进入前选择语义一致）。
+   *
+   * 每次成功导航都会把出生位姿一并更新为该目的地 —— 退出再进入 VR 时回到离开的
+   * 位置，与桌面选择器保持同一个真相源。
+   */
+  gotoXrDestination(key: string): boolean {
+    const dest = this.xrDestinations().find((d) => d.key === key);
+    if (!dest) return false;
+    const pose = this.destinationPose(dest);
+    if (!pose) return false;
+    if (!this.isImmersiveVRActive()) {
+      this.setXRDestination(key);
+      this.setXRInitialCamera(pose);
+      return true;
+    }
+    const move = () => this.applyRigPoseForPose(pose);
+    const started = this.xrFade ? this.xrFade.run(move) : (move(), true);
+    if (!started) return false;
+    this.setXRDestination(key);
+    this.setXRInitialCamera(pose);
+    return true;
+  }
+
+  /** 诊断读数（e2e / 真机取证口）。 */
+  xrMenuInfo(): XrMenuInfo {
+    const list = this.xrDestinations();
+    const index = destinationIndexByKey(list, this.xrDestinationKey ?? '');
+    const dest = index >= 0 ? list[index] : list[0] ?? null;
+    return {
+      state: this.xrMenuState,
+      menuInstalled: this.xrMenu !== null,
+      destinationCount: list.length,
+      destinationIndex: index,
+      currentDestination: dest?.key ?? null,
+      currentLabel: dest ? destinationLabel(dest, index, list.length) : '',
+      floorTeleportEnabled: this.xrNavigation?.enableTeleport ?? false,
+      menuVisible: this.xrMenuVisible,
+      fadePending: this.xrFade?.pending ?? false,
+      uiSystemsAdded: this.xrUiSystemsAdded,
+    };
+  }
+
+  /** 目的地 → RUNTIME 空间 pose。**不新建换算**：全部复用既有方法。 */
+  private destinationPose(dest: XrDestination): CameraPose | null {
+    switch (dest.kind) {
+      case 'initial':
+        /*
+         * 必须用**创建时**的 authored initial camera，不能用 `this.xrInitialCamera`
+         * —— 后者每次传送都会被改写成"刚去过的那个目的地"，于是"返回初始位置"
+         * 会变成"回到上一个目的地"（会话内第 2 跳就退化成原地打转）。
+         * 这个坑由 `xr-menu-wiring.test.ts` 的环形用例锁住。
+         */
+        return this.authoredInitialCamera;
+      case 'viewpoint':
+        return this.viewpointRuntimePose(dest.id);
+      case 'guide-point':
+        return this.annotationRuntimePose(dest.id);
+    }
+  }
+
+  /** 更新菜单首行（只读标签）：`序号/总数 · 名称`。 */
+  private updateXrMenuLabel(): void {
+    const list = this.xrDestinations();
+    const index = destinationIndexByKey(list, this.xrDestinationKey ?? '');
+    const dest = index >= 0 ? list[index] : list[0] ?? null;
+    if (!dest || !this.xrMenu) return;
+    this.xrMenu.setCurrentLabel(destinationLabel(dest, index, list.length));
+  }
+
+  /** 会话内传送：把 pose 落到官方 XR Rig（与出生对齐共用同一套数学）。 */
+  private applyRigPoseForPose(pose: CameraPose): boolean {
+    const xr = this.immersiveXR();
+    const camera = xr?.camera;
+    if (!camera) return false;
+    const nodes = rigNodesFrom(camera);
+    if (!nodes) return false;
+    return applyRigPose(nodes, pose);
+  }
+
+  /**
+   * 官方 XrNavigation 的 floor teleport 仲裁（GS-NEXT-05 §4）。
+   *
+   * 官方 `XrNavigation` 的 `handleSelectEnd` 只在 `enableTeleport` 为真时传送
+   * （`xr-navigation.mjs` 源码注释："Otherwise a select/pinch gesture (e.g. used
+   * to click a UI element) would still snap the rig to the floor point under the
+   * ray"）—— 这就是菜单点击与地面传送的冲突点。
+   *
+   * 这里**只关掉 floor teleport 这一个官方开关**，摇杆移动 / snap turn / 垂直
+   * snap 与 6DoF 全部原样保留（官方默认值不动）。
+   */
+  private applyFloorTeleportPolicy(): void {
+    if (!this.xrNavigation) return;
+    const pointerOnMenu = this.xrMenu?.isPointerOverMenu() ?? false;
+    const allowed = XR_FLOOR_TELEPORT_ALLOWED && !this.xrMenuVisible && !pointerOnMenu;
+    this.xrNavigation.enableTeleport = allowed;
+  }
+
+  /** 官方 XrManager 读取（窄类型，避免在方法签名里散播官方内部类型）。 */
+  private immersiveXR(): {
+    active: boolean;
+    type: string;
+    camera: Entity | null;
+    on?: (event: string, fn: (...args: unknown[]) => void) => unknown;
+  } | null {
+    const xr = (this.app as unknown as { xr?: unknown }).xr;
+    return (xr as ReturnType<SuperSplatRuntime['immersiveXR']>) ?? null;
+  }
+
+  private isImmersiveVRActive(): boolean {
+    const xr = this.immersiveXR();
+    return Boolean(xr?.active && xr.type === 'immersive-vr' && xr.camera);
   }
 
   /**
@@ -1152,20 +1539,24 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
 }
 
 /**
- * XR Rig 一次性对齐（GS-NEXT-02 §五）：把已保存的初始视角落到首个**有效
- * tracked head pose** 上。
+ * 官方 XrNavigation 脚本实例读取（GS-NEXT-05 仲裁对象）。
  *
- * WebXR 在会话刚建立、tracking 尚未可用时会给出零值/无效头部位姿。此时若立刻
- * 一次性写入 Rig（此后永不修正），用户会永久停在一个算错的出生点——正是
- * 「进入后仍像站在场景外面鸟瞰」这一类现象。所以必须等到可信位姿：坐标有限
- * 且非零（`local` / `local-floor` 参考空间下头部位姿的高度分量恒 >0，零值即
- * 表示 tracking 原点尚未确定）。等不到就保持 pending，由 `xr.on('end')` 取消。
+ * 官方 Viewer 在相机父实体上 `script.create(XrNavigation)`，脚本名固定为
+ * `xrNavigation`（源码 `static scriptName = 'xrNavigation'`）。
  */
-const isTrackedHeadPose = (camera: { getLocalPosition(): { x: number; y: number; z: number } }): boolean => {
-  const local = camera.getLocalPosition();
-  if (![local.x, local.y, local.z].every(Number.isFinite)) return false;
-  return Math.hypot(local.x, local.y, local.z) > 1e-4;
-};
+function readNavigationScript(rig: Entity): { enableTeleport: boolean } | null {
+  const script = rig.script?.get?.('xrNavigation') as { enableTeleport?: unknown } | null;
+  if (!script || typeof script.enableTeleport !== 'boolean') return null;
+  return script as { enableTeleport: boolean };
+}
+
+/** 菜单首行文本：`序号/总数 · 名称`（作者原文，不翻译）。 */
+function destinationLabel(dest: XrDestination, index: number, total: number): string {
+  // index 为 -1（尚未指定）= 显示第 1 项，不显示 0。
+  const at = index >= 0 ? index + 1 : 1;
+  const prefix = total > 1 ? `${at}/${total} · ` : '';
+  return `${prefix}${dest.label}`;
+}
 
 function clampFov(fov: number): number {
   const value = Number.isFinite(fov) ? fov : DEFAULT_CAMERA_FOV;
@@ -1204,6 +1595,8 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
     // FIX-02 §5-§9 / §10：透传给运行时构造（scene↔runtime 换算 + 视角导航）。
     worldTransform: options.worldTransform ?? null,
     viewpoints: options.viewpoints ?? [],
+    // GS-NEXT-05：会话内导览目的地（与进入 VR 前的出生位置选择器同一份数据）。
+    guidePoints: options.guidePoints ?? [],
     xrInitialCamera: options.xrInitialCamera ?? null,
   } as CreateViewerOptions;
 }

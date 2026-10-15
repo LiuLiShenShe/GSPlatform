@@ -187,6 +187,16 @@ export default function XRViewerPage() {
               )}
             </div>
           )}
+          {/*
+            GS-NEXT-05：进入 VR 后 DOM 层在头显里不可见 —— 目的地切换改由官方
+            XrMenu（手柄 Y 键开关）承担。这里的说明只在**进入前**给 PC 用户看，
+            且只在菜单真的装上时显示（没装上就别承诺）。
+          */}
+          {state.xrMenu.menuInstalled && (
+            <p className="gs-xr__hint" data-testid="xr-menu-hint">
+              进入后按手柄 Y 键打开导览菜单：上一个 / 下一个 / 返回初始位置 / 退出 VR
+            </p>
+          )}
           <button
             type="button"
             className="gs-xr__btn gs-xr__btn--enter"
@@ -244,6 +254,9 @@ export default function XRViewerPage() {
           selectedGuidePointId: state.selectedGuidePointId,
           guidePointCount: state.guidePoints.length,
           xrSpawnStatus: state.xrSpawnStatus,
+          // GS-NEXT-05：会话内导览菜单（官方 XrMenu）真实运行态 + Rig 位姿。
+          xrMenu: state.xrMenu,
+          xrRuntimeState: state.xrRuntimeState,
           camera: (() => {
             const pose = state.cameraPose;
             return pose
@@ -266,6 +279,22 @@ export default function XRViewerPage() {
       <span className="gs-xr__diag" data-testid="diag-has-collision">{state.hasCollision ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-walk-allowed">{state.effectiveWalkAllowed ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-collision-stale">{state.collisionStale ? 'true' : 'false'}</span>
+      {/* GS-NEXT-05：会话内导览菜单（官方 XrMenu）诊断 —— 真机/无头显取证口。 */}
+      <span className="gs-xr__diag" data-testid="diag-xr-menu-state">{state.xrMenu.state}</span>
+      <span className="gs-xr__diag" data-testid="diag-xr-menu-installed">{state.xrMenu.menuInstalled ? 'true' : 'false'}</span>
+      <span className="gs-xr__diag" data-testid="diag-xr-menu-destinations">{state.xrMenu.destinationCount}</span>
+      <span className="gs-xr__diag" data-testid="diag-xr-menu-current">{state.xrMenu.currentDestination ?? ''}</span>
+      <span className="gs-xr__diag" data-testid="diag-xr-floor-teleport">{state.xrMenu.floorTeleportEnabled ? 'enabled' : 'disabled'}</span>
+      <span className="gs-xr__diag" data-testid="diag-xr-rig">
+        {state.xrRuntimeState
+          ? JSON.stringify({
+              active: state.xrRuntimeState.active,
+              rigPosition: state.xrRuntimeState.rigPosition,
+              headWorld: state.xrRuntimeState.headWorldPosition,
+              spawnStatus: state.xrRuntimeState.spawnStatus,
+            })
+          : '—'}
+      </span>
       <span className="gs-xr__diag" data-testid="diag-scene-url">{state.descriptor?.content.url ?? ''}</span>
       <span className="gs-xr__diag" data-testid="diag-navigator-xr">{state.diagnostics.navigatorXR ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-camera">

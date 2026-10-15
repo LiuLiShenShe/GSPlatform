@@ -30,10 +30,12 @@ import {
   runtimeRenderer,
   SuperSplatRuntime,
   type GsplatformAnnotationRef,
+  type XrMenuInfo,
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 import { hasAuthoredInitialCamera, shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
 import { eligibleGuidePoints } from '../../scene-runtime/guidePoints';
+import { destinationKey, INITIAL_DESTINATION_ID } from '../../scene-runtime/xrDestinations';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { RuntimeAnnotation, RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
@@ -119,6 +121,22 @@ export interface OfficialXRViewerState {
   /** XR 出生位姿状态（诊断用）：not-authored / not-entered / pending / applied / unavailable。 */
   xrSpawnStatus: string;
   /**
+   * GS-NEXT-05：会话内导览（官方 XrMenu）诊断读数。
+   *
+   * 真相来自 {@link SuperSplatRuntime.xrMenuInfo} —— 页面只读不写；菜单本身在
+   * 沉浸会话里由官方手柄按键开关，页面上的 DOM 层在头显内不可见。
+   */
+  xrMenu: XrMenuInfo;
+  /**
+   * GS-NEXT-05：官方 XR 运行态读数（`SuperSplatRuntime.getXRState()`）：会话是否
+   * 进行中、**Rig 世界位姿**、头显局部/世界位姿、出生对齐状态、菜单诊断。
+   *
+   * 真机取证口：切换目的地后对照 `rigPosition` / `headWorldPosition` 与期望落点。
+   */
+  xrRuntimeState: Record<string, unknown> | null;
+  /** 会话内切换到某个目的地（key = `kind:id`）；未进入 VR 时只登记出生位姿。 */
+  selectXrDestination: (key: string) => boolean;
+  /**
    * 当前相机 pose（FIX-02 §16 —— 进入 VR 前的初始构图可读，与 Desktop
    * `ov-diagnostics.camera` 同源，用于核对 XR 与 Desktop 使用同一 authored
    * Initial Camera / 世界变换）。经 SuperSplatRuntime 封装读取（页面不碰 app）。
@@ -183,6 +201,10 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
    * 同时选中会让「选了哪个出生点」变得不可知。 */
   const [selectedGuidePointId, setSelectedGuidePointId] = useState<string | null>(null);
   const [xrSpawnStatus, setXrSpawnStatus] = useState<string>('not-authored');
+  /* GS-NEXT-05：会话内导览菜单诊断（官方 XrMenu 的真实运行态）。 */
+  const [xrMenuInfo, setXrMenuInfo] = useState<XrMenuInfo>(() => emptyXrMenuInfo());
+  /* GS-NEXT-05：官方 XR 运行态（含 Rig 位姿，真机落点核对用）。 */
+  const [xrRuntimeState, setXrRuntimeState] = useState<Record<string, unknown> | null>(null);
   const recorderRef = useRef<RuntimePerformanceDiagnostics | null>(null);
   const [diagnostics, setDiagnostics] = useState<OfficialXRViewerState['diagnostics']>({
     secureContext: false,
@@ -295,6 +317,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           // FIX-02 §5/§16：世界变换与已保存视角在 Desktop/XR 走同一 runtime 逻辑。
           worldTransform: desc.presentation.worldTransform,
           viewpoints: desc.viewpoints,
+          // GS-NEXT-05：会话内导览目的地 = 与桌面上拉**同一份**导览点数据。
+          guidePoints: eligibleGuidePoints(desc.annotations),
           xrInitialCamera: hasAuthoredInitialCamera(desc) ? settings.cameras[0]?.initial ?? null : null,
         });
         if (cancelled) {
@@ -307,8 +331,28 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           : null;
         setSelectedViewpointId(null);
         setSelectedGuidePointId(null);
+        setXrMenuInfo(emptyXrMenuInfo());
+        setXrRuntimeState(null);
         runtimeRef.current = runtime;
         recorder?.attach(runtime);
+        // GS-NEXT-05：会话内用手柄菜单切换目的地后，页面的选中态也要跟着走
+        // （否则 DOM 显示的选中项与实际所在位置不一致 = 假状态）。
+        unsubsRef.current.push(
+          runtime.onXRDestinationChanged((key) => {
+            if (cancelled) return;
+            const [kind, ...rest] = (key ?? '').split(':');
+            const id = rest.join(':');
+            setSelectedViewpointId(kind === 'viewpoint' ? id : null);
+            setSelectedGuidePointId(kind === 'guide-point' ? id : null);
+            setXrMenuInfo(runtime.xrMenuInfo());
+          }),
+        );
+        // DEV-only 调试把柄（生产构建 import.meta.env.DEV=false，不输出）。
+        // e2e / 真机取证用 window.__gsxrruntime 直接探查官方 app（XrMenu 实体、
+        // 组件系统、XrNavigation 开关）—— 与 Desktop 的 __gsruntime 同一做法。
+        if (import.meta.env.DEV) {
+          (window as unknown as { __gsxrruntime?: unknown }).__gsxrruntime = runtime;
+        }
         // FIX-XR-01: 官方 loaded=true 而页面仍 loading → 收敛 ready。
         // 只从 loading 单向迁移；绝不覆盖 xr-active / xr-ended / error。
         // 依据 = 官方 runtime 实际加载状态（runtime.state.loaded），不是浏览器
@@ -339,6 +383,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           setCameraPoseState(runtime.getCameraPose());
           // GS-NEXT-03：XR 出生位姿状态（not-authored = 未指定出生点）。
           setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
+          // GS-NEXT-05：官方菜单运行态（目的地 / 地板传送开关 / 过渡中）。
+          setXrMenuInfo(runtime.xrMenuInfo());
+          setXrRuntimeState(runtime.getXRState() as Record<string, unknown>);
           // FIX-XR-01: 轮询兜底 —— 若加载完成事件未被组件接收到（真实设备上
           // 存在事件与 state 竞态），状态轮询观察到 loaded=true 时也收敛 ready。
           syncReady();
@@ -459,6 +506,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     if (viewpointId === null) {
       runtime.setXRInitialCamera(authoredInitialRef.current);
       if (authoredInitialRef.current) runtime.resetCamera();
+      // GS-NEXT-05：把"当前目的地"同步给会话内菜单（同一批 ID，不是下标）。
+      runtime.setXRDestination(destinationKey('initial', INITIAL_DESTINATION_ID));
       setSelectedViewpointId(null);
       setSelectedGuidePointId(null);
       setCameraPoseState(runtime.getCameraPose());
@@ -470,6 +519,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     if (!pose) return false;
     if (!runtime.selectViewpoint(viewpointId)) return false;
     runtime.setXRInitialCamera(pose);
+    runtime.setXRDestination(destinationKey('viewpoint', viewpointId));
     setSelectedViewpointId(viewpointId);
     // GS-NEXT-04：与导览点互斥（同一个出生位姿槽位）。
     setSelectedGuidePointId(null);
@@ -495,6 +545,7 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     if (annotationId === null) {
       runtime.setXRInitialCamera(authoredInitialRef.current);
       if (authoredInitialRef.current) runtime.resetCamera();
+      runtime.setXRDestination(destinationKey('initial', INITIAL_DESTINATION_ID));
       setSelectedGuidePointId(null);
       setSelectedViewpointId(null);
       setCameraPoseState(runtime.getCameraPose());
@@ -506,8 +557,27 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     // 官方导航路径：selectAnnotation 走官方 CameraManager 过渡，并置位官方选中态。
     if (!runtime.selectGsplatformAnnotation(annotationId)) return false;
     runtime.setXRInitialCamera(pose);
+    runtime.setXRDestination(destinationKey('guide-point', annotationId));
     setSelectedGuidePointId(annotationId);
     setSelectedViewpointId(null); // 与视点互斥
+    setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
+    return true;
+  }, []);
+
+  /**
+   * GS-NEXT-05：会话内切换目的地（官方 XrMenu 的「上一个 / 下一个 / 返回初始
+   * 位置」最终都落到这个方法）。
+   *
+   * 已在会话内 → 走舒适过渡 + Rig 定位；未进入 VR → 只登记出生位姿（与桌面上
+   * 拉选择器同一套语义）。页面只在调试/取证时调用；用户操作走手柄菜单。
+   */
+  const selectXrDestination = useCallback((key: string): boolean => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return false;
+    const ok = runtime.gotoXrDestination(key);
+    if (!ok) return false;
+    // 选中态由 runtime 的 onXRDestinationChanged 回调统一同步（避免两套状态）。
+    setXrMenuInfo(runtime.xrMenuInfo());
     setXrSpawnStatus((runtime.getXRState() as { spawnStatus?: string }).spawnStatus ?? 'unavailable');
     return true;
   }, []);
@@ -589,11 +659,30 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     selectedGuidePointId,
     selectGuidePoint,
     xrSpawnStatus,
+    xrMenu: xrMenuInfo,
+    xrRuntimeState,
+    selectXrDestination,
     getCameraPose,
     cameraPose,
     startVR,
     endXR,
     selectedGsplatformAnnotation,
+  };
+}
+
+/** 菜单诊断的空读数（runtime 尚未创建 / 创建中）。 */
+function emptyXrMenuInfo(): XrMenuInfo {
+  return {
+    state: 'unavailable',
+    menuInstalled: false,
+    destinationCount: 0,
+    destinationIndex: -1,
+    currentDestination: null,
+    currentLabel: '',
+    floorTeleportEnabled: false,
+    menuVisible: false,
+    fadePending: false,
+    uiSystemsAdded: [],
   };
 }
 

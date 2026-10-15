@@ -176,6 +176,29 @@ export default function XRTestPage() {
             </td>
           </tr>
           <tr>
+            <td>GS-NEXT-05 XrMenu</td>
+            <td data-testid="diag-xr-menu">
+              {state.xrMenu.state} / installed={state.xrMenu.menuInstalled ? 'true' : 'false'} /
+              dests={state.xrMenu.destinationCount} / current={state.xrMenu.currentLabel || '—'}
+            </td>
+          </tr>
+          <tr>
+            <td>GS-NEXT-05 floor teleport</td>
+            <td data-testid="diag-xr-floor-teleport">{state.xrMenu.floorTeleportEnabled ? 'enabled' : 'disabled'}</td>
+          </tr>
+          <tr>
+            <td>GS-NEXT-05 rig (session)</td>
+            <td data-testid="diag-xr-rig">
+              {state.xrRuntimeState
+                ? `rig=${JSON.stringify(state.xrRuntimeState.rigPosition)} euler=${JSON.stringify(
+                    state.xrRuntimeState.rigEuler,
+                  )} head=${JSON.stringify(state.xrRuntimeState.headWorldPosition)} spawn=${
+                    state.xrRuntimeState.spawnStatus ?? '—'
+                  }`
+                : '—'}
+            </td>
+          </tr>
+          <tr>
             <td>Frame Scene runs</td>
             <td data-testid="diag-frame-scene-count">{frameSceneCount}</td>
           </tr>

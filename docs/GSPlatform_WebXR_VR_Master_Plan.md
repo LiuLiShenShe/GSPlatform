@@ -340,6 +340,10 @@ V1.0 主计划 §5/§2 存在两处**与固定版本官方源码不符**的表�
 | 初始视角修复与默认性能模式 | `docs/reports/GS_NEXT_02_INITIAL_CAMERA_FIX.md` |
 | 视点快速切换（官方能力编排） | `docs/reports/GS_NEXT_03_VIEWPOINT.md` |
 | 标注导览（Desktop 官方导览器 + XR 出生导览点） | `docs/reports/GS_NEXT_04_ANNOTATION_NAVIGATION.md` |
+| 会话内 XR 菜单（官方 XrMenu 适配层） | `apps/web/src/scene-runtime/xrMenu.ts`、`apps/web/src/types/playcanvas-xr-scripts.d.ts` |
+| XR 会话内目的地规则（`kind:id`，非下标） | `apps/web/src/scene-runtime/xrDestinations.ts` |
+| XR Rig 定位数学（出生对齐 + 会话内传送，**单一实现**） | `apps/web/src/scene-runtime/xrRigPose.ts` |
+| 沉浸式导览验收（GS-NEXT-05，含 PICO 真机 11 步） | `docs/reports/GS_NEXT_05_IMMERSIVE_NAVIGATION.md` |
 | XR 出生视点/导览点选择 | `apps/web/src/features/viewer-official/useSuperSplatXR.ts`、`apps/web/src/pages/XRViewerPage.tsx` |
 | 导览点准入规则 | `apps/web/src/scene-runtime/guidePoints.ts` |
 | 官方 UI 作用域兼容层（放行导览器） | `apps/web/src/scene-runtime/superSplatUiCompatibility.ts` |
@@ -427,6 +431,46 @@ gitignored 的 `apps/web/.env.development.local` 用 `VITE_API_BASE_URL=/api/v1`
 本机无头显 / 无 OpenXR runtime / 无 adb，immersive-vr 会话只能在真机上验证；
 除该次会话外的全部链路已在**真实公网 HTTPS** 上实测通过（secure context、
 navigator.xr、官方 WebGL2 runtime、authored 初始视角、观察点 1 / 导览点 3、0 条 4xx）。
+
+**GS-NEXT-05（2026-10-15，SOFTWARE VERIFIED / HARDWARE PENDING）**：官方 XR Menu +
+沉浸式导览点切换，见 [报告](../reports/GS_NEXT_05_IMMERSIVE_NAVIGATION.md)。
+先按"不得假设新版 API 在固定版本里存在"逐条读 `playcanvas@2.22.4`
+`scripts/esm/xr/xr-menu.mjs`（1622 行）与 `xr-navigation.mjs` 源码，再动手。结论与做法：
+
+1. **官方 `XrMenu` 直接复用，0 行自绘 UI**（左摇杆上推开关、射线拾取、扳机点击、
+   中文文字、生命周期全由官方负责）。但它有三个**文档没写、必须自己补**的适配：
+   (a) 官方 viewer 的 `App` 只注册了 5 个组件系统（Camera/Light/Render/GSplat/Script），
+   **没有 Element/Screen/Button**，而 `Entity.addComponent` 在系统缺失时**静默返回 null**
+   ⇒ 菜单"装上了却不渲染不响应"；本层注册官方 UI 组件系统（幂等，不改 viewer 配置）。
+   (b) 官方菜单需要 fontAsset，锁定版里没有 ⇒ 用官方 `CanvasFont` + **系统字体栈**
+   注册一个 font asset，**零字节字体成本**（打包 CJK 子集实测 2.79 MB）。
+   (c) 2.22.4 **没有** camera fade ⇒ 用与 `XrMenu` 同样的官方 Screen+Element 原语做
+   全屏黑纱，0.14 s 淡出 → 全黑那帧定位 → 0.24 s 淡入，只订阅一次 `app.on('update')`。
+2. **传送只移动官方 XR Camera 的父 Rig**，目标是保存的 **eye position**，
+   头显自身 tracking pose 一律不写（6DoF/摇杆/snap turn 不受影响）；
+   Rig 数学与 GS-NEXT-03 的出生对齐**共用 `xrRigPose.ts` 这一份实现**（不新建第二套）。
+   目的地用 `${kind}:${数据库ID}`，**不用数组下标**；数据与进入 VR 前的出生位置
+   选择器**同一批 ID**（观察点 + 带 authored camera 的标注 + authored 初始视角）。
+3. **官方地面传送按产品门禁关掉**（`enableTeleport=false`）：官方地面是 `groundHeight=0`
+   的平面，且后端 `physicalWalkAllowed` 要求 VERIFIED 校准而 `SceneProcessingPatch`
+   根本不允许 VERIFIED —— 今天没有任何场景能证明地面可信。官方 `handleSelectEnd`
+   源码注释本身就写明"否则点 UI 也会被贴到地面"，所以这是**用官方配置解决官方冲突**，
+   不改官方源码；菜单仲裁仍监听官方 `xr:menu:active` + `isPointerOverMenu`。
+4. **不做动态目的地列表**：2.22.4 的 `XrMenu` 只有 `setItemLabel`，没有官方"按数据
+   重建菜单"的路径，动列表结构属于"改官方行为"，故只做稳定的上一点/下一点 + 返回初始
+   位置 + 退出 VR（退出走现有 `handle.endXR()`）。2.22.4 的 `XrMenu` 继承旧版 `Script`
+   而 `create()` 要 `ScriptType`，用一次显式断言并在注释写明原因。
+
+验证：GS-NEXT-05 专项单测 **48 例**（目的地准入 10 / Rig 数学 8 含真实 Entity 的
+20 次不漂移 / 菜单与过渡 12 / 接线 18）+ 专项 e2e **7 例**（真实浏览器直读官方引擎
+状态：组件系统齐、5 行菜单、4 个可交互按钮带 element、5 个文字元素、30 个字形、
+`enableTeleport=false` 且其余导航开关保持官方默认、环形切换 + 出生位姿同步、
+Desktop 不装 xrMenu）；web vitest 374、tsc 0、oxlint 0；api ruff/mypy/pytest 全绿。
+全量 e2e **38 passed / 3 failed**，3 条失败全在 SSV-08 streamed-sog，其根因是本机
+**git-ignored 的 `apps/web/scenes/` 夹具目录整体不存在**（`/local-scenes/ssv08-large/...`
+返回 403），与本任务无关，已在报告 §5.4 如实登记。
+**真机的菜单可见性、手柄输入、切换后的舒适度、进出 VR 三次全部 HARDWARE PENDING**
+（11 步真机验收清单见报告 §7）。后续"VR 热点射线交互"**暂不做**，理由见报告 §8。
 
 ---
 
