@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const BASE = process.argv[2];
+const browser = await chromium.launch({ headless: true, args: ['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader','--no-sandbox','--disable-dev-shm-usage'] });
+const page = await browser.newPage();
+page.on('console', (m) => console.log(`[console:${m.type()}]`, m.text().slice(0, 200)));
+page.on('pageerror', (e) => console.log('[pageerror]', String(e).slice(0, 300)));
+page.on('requestfailed', (r) => console.log('[reqfail]', r.url().slice(0, 120), r.failure()?.errorText));
+page.on('response', (r) => { if (r.status() >= 400) console.log('[http]', r.status(), r.url().slice(0, 120)); });
+await page.goto(`${BASE}/xr/fix02-semantics`, { waitUntil: 'commit', timeout: 120000 });
+await page.waitForTimeout(60000);
+console.log('URL=', page.url());
+console.log('TITLE=', await page.title());
+const html = await page.evaluate(() => document.documentElement.outerHTML.slice(0, 800));
+console.log('HTML=', html.replace(/\n/g, ' '));
+await browser.close();
