@@ -216,7 +216,7 @@ GS-NEXT-03 的出生对齐与会话内传送**共用这一份**（两处各写�
 | web e2e | `npx playwright test --workers=1` | **38 passed / 3 failed / 19 skipped**（失败项见 §5.4） |
 | api lint | `apps/api/.venv/bin/ruff check .` | **All checks passed** |
 | api 类型 | `apps/api/.venv/bin/python -m mypy app` | **no issues in 94 source files** |
-| api 单测 | `apps/api/.venv/bin/python -m pytest tests -q` | **通过（exit 0）**（本轮后端未改代码） |
+| api 单测 | `apps/api/.venv/bin/python -m pytest tests -q` | **570 tests 全过（0 F/0 E，exit 0）**（仓库 pytest 配置把汇总行吞了，用进度点计数核对；本轮后端未改代码） |
 
 ### 5.2 GS-NEXT-05 专项单测（48 例，4 个新文件）
 
