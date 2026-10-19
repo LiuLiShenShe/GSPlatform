@@ -1,0 +1,19 @@
+{
+  "scene": "u-a68b94d84538",
+  "route": "/xr/diagnostics/u-a68b94d84538",
+  "capturedBy": "apps/web/e2e/gsnext09-xrdiag-probe.spec.ts (headless Chromium, WebGL forced)",
+  "diag-secure-context": "true",
+  "diag-navigator-xr": "true",
+  "diag-immersive-vr": "unsupported",
+  "diag-immersive-ar": "unsupported",
+  "diag-renderer": "webgl2",
+  "diag-state-loaded": "true",
+  "diag-can-start-vr": "false",
+  "diag-gsplats": "1788",
+  "diag-has-collision": "false",
+  "diag-walk-allowed": "false",
+  "diag-camera": "4.817, 2.854, 16.148 / -0.386, 0.253, 10.945 / 85",
+  "diag-xr-menu": "empty / installed=false / dests=0 / current=—",
+  "diag-xr-floor-teleport": "disabled",
+  "diag-xr-rig": "rig=\"unavailable\" euler=\"unavailable\" head=\"unavailable\" spawn=not-authored"
+}

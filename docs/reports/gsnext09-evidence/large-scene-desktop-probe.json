@@ -1,0 +1,14 @@
+{
+  "scene": "u-c71ec45417a0",
+  "route": "/scene/u-c71ec45417a0",
+  "note": "13,090,324-Gaussian streamed-sog Building, headless SwiftShader WebGPU",
+  "elapsedMs": 3836,
+  "chunkRequests": 33,
+  "lodMetaRequested": true,
+  "badResponses": ["401 /api/v1/auth/me (anonymous viewer, expected)"],
+  "diag": {
+    "renderer": "webgpu", "gsplats": 131632, "format": "lod-meta",
+    "progress": 50, "loaded": false, "error": null, "performanceMode": true,
+    "cameraPosition": [240, 80, 400]
+  }
+}
