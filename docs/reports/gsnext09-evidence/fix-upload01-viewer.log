@@ -1,0 +1,34 @@
+
+Running 1 test using 1 worker
+
+[page-error] Failed to load resource: the server responded with a status of 401 (Unauthorized)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 403 (Forbidden)
+[page-error] [viewer] boot failed ManifestFallbackError: 场景不存在（DB 与本地 manifest 均未找到）: u-48d08a87c1c1（HTTP 403）
+    at USe (http://127.0.0.1:5174/assets/index-C4lqZcjs.js:4546:35814)
+    at async VW (http://127.0.0.1:5174/assets/index-C4lqZcjs.js:4546:35091)
+    at async http://127.0.0.1:5174/assets/index-C4lqZcjs.js:22797:36691
+  ✘  1 e2e/fix-upload01-viewer.spec.ts:14:3 › FIX-UPLOAD-01 Viewer load（DB 发布场景） › 真实 E2E 发布的 streamed-sog 场景被官方 viewer 加载并渲染 (1.5m)
+
+
+  1) e2e/fix-upload01-viewer.spec.ts:14:3 › FIX-UPLOAD-01 Viewer load（DB 发布场景） › 真实 E2E 发布的 streamed-sog 场景被官方 viewer 加载并渲染 
+
+    TimeoutError: page.waitForSelector: Timeout 90000ms exceeded.
+    Call log:
+      - waiting for locator('canvas') to be visible
+
+
+      28 |       timeout: 60000,
+      29 |     });
+    > 30 |     await page.waitForSelector('canvas', { state: 'visible', timeout: 90000 });
+         |                ^
+      31 |
+      32 |     // 进入流式：progress ≥ 1 且 gsplats > 0（headless SwiftShader 软件渲染下
+      33 |     // 59,400 gaussians 真实渲染，非 mock）。
+        at /fj/GSPlatform/apps/web/e2e/fix-upload01-viewer.spec.ts:30:16
+
+    Error Context: test-results/fix-upload01-viewer-FIX-UP-1d5c5-amed-sog-场景被官方-viewer-加载并渲染/error-context.md
+
+  1 failed
+    e2e/fix-upload01-viewer.spec.ts:14:3 › FIX-UPLOAD-01 Viewer load（DB 发布场景） › 真实 E2E 发布的 streamed-sog 场景被官方 viewer 加载并渲染 

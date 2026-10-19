@@ -1,0 +1,6 @@
+
+Running 1 test using 1 worker
+
+  -  1 e2e/pc-integration03-editor.spec.ts:3:1 › real exported edit resumes in platform, publishes under same Scene, renders official Viewer
+
+  1 skipped

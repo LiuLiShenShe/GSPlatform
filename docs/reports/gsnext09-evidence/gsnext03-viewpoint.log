@@ -1,0 +1,88 @@
+
+Running 5 tests using 1 worker
+
+[err] Warning: [antd: Spin] `tip` is deprecated. Please use `description` instead.
+[err] Warning: [antd: Space] `direction` is deprecated. Please use `orientation` instead.
+[err] Warning: [antd: List] The `List` component is deprecated and will be removed in the next major version. If you're using version 6.6.0 or lat
+[err] Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+[err] Failed to load resource: the server responded with a status of 403 (Forbidden)
+[err] Failed to load resource: the server responded with a status of 404 (Not Found)
+[err] Failed to load resource: the server responded with a status of 403 (Forbidden)
+[err] Failed to load resource: the server responded with a status of 404 (Not Found)
+  ✘  1 e2e/gsnext03-viewpoint.spec.ts:157:3 › GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（Desktop） › Case 1：创作页把当前相机存为视点 → 刷新 → 点击 Saved View → 相机恢复到该位置 (4.4m)
+  ✓  2 e2e/gsnext03-viewpoint.spec.ts:225:3 › GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（Desktop） › Case 3：Desktop Saved Views 列出全部 enabled 视点，disabled 视点不出现 (29.1s)
+  ✘  3 e2e/gsnext03-viewpoint.spec.ts:246:3 › GS-NEXT-03 Case 2 —— A/B/C 依次切换：动画正常、无跳飞、无鸟瞰 › 依次切换三个视点，逐个精确落位，过渡轨迹连续且不离开邻域 (1.3m)
+XR before: {"position":[2.5,1.8,6],"target":[-0.0157,0.5925,-0.0377],"fov":47} not-entered
+  ✘  4 e2e/gsnext03-viewpoint.spec.ts:299:3 › GS-NEXT-03 Case 4 —— XR 进入 VR 前选择视点 › 选择视点 → 桌面模式相机导航到该视点，且 XR 出生位姿随之改变 (1.3m)
+  ✘  5 e2e/gsnext03-viewpoint.spec.ts:370:3 › GS-NEXT-03 Case 4 —— XR 进入 VR 前选择视点 › Case 4：无 authored 相机的场景 —— 选中视点才产生出生位姿（not-authored → not-entered） (1.4m)
+
+
+  1) e2e/gsnext03-viewpoint.spec.ts:157:3 › GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（Desktop） › Case 1：创作页把当前相机存为视点 → 刷新 → 点击 Saved View → 相机恢复到该位置 
+
+    Test timeout of 240000ms exceeded.
+
+    Error: mouse.move: Target page, context or browser has been closed
+
+      174 |     await page.mouse.move(cx, cy);
+      175 |     await page.mouse.down();
+    > 176 |     await page.mouse.move(cx - 80, cy + 40, { steps: 12 });
+          |                      ^
+      177 |     await page.mouse.up();
+      178 |     await page.waitForTimeout(1500);
+      179 |
+        at /fj/GSPlatform/apps/web/e2e/gsnext03-viewpoint.spec.ts:176:22
+
+    Error Context: test-results/gsnext03-viewpoint-GS-NEXT-c3193--→-点击-Saved-View-→-相机恢复到该位置/error-context.md
+
+  2) e2e/gsnext03-viewpoint.spec.ts:246:3 › GS-NEXT-03 Case 2 —— A/B/C 依次切换：动画正常、无跳飞、无鸟瞰 › 依次切换三个视点，逐个精确落位，过渡轨迹连续且不离开邻域 
+
+    TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.
+
+      58 | /** 等相机稳定在目标位置附近（官方过渡完成后）。 */
+      59 | async function waitCameraNear(page: Page, expected: number[], tol: number, timeout = 20000) {
+    > 60 |   await page.waitForFunction(
+         |              ^
+      61 |     ({ pos, tol: t }) => {
+      62 |       const el = document.querySelector('[data-testid="ov-diagnostics"]');
+      63 |       if (!el) return false;
+        at waitCameraNear (/fj/GSPlatform/apps/web/e2e/gsnext03-viewpoint.spec.ts:60:14)
+        at /fj/GSPlatform/apps/web/e2e/gsnext03-viewpoint.spec.ts:262:11
+
+    Error Context: test-results/gsnext03-viewpoint-GS-NEXT-693f7-次切换三个视点，逐个精确落位，过渡轨迹连续且不离开邻域/error-context.md
+
+  3) e2e/gsnext03-viewpoint.spec.ts:299:3 › GS-NEXT-03 Case 4 —— XR 进入 VR 前选择视点 › 选择视点 → 桌面模式相机导航到该视点，且 XR 出生位姿随之改变 
+
+    TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.
+
+      321 |     // 选中视点 → 相机被导航过去（官方过渡），出生位姿同步改变
+      322 |     await page.getByTestId(`xr-viewpoint-${vp.id}`).click();
+    > 323 |     await page.waitForFunction(
+          |                ^
+      324 |       (target) => {
+      325 |         const d = JSON.parse(document.querySelector('[data-testid="ov-xr-diagnostics"]')!.textContent ?? '{}');
+      326 |         return d.camera && Math.hypot(
+        at /fj/GSPlatform/apps/web/e2e/gsnext03-viewpoint.spec.ts:323:16
+
+    Error Context: test-results/gsnext03-viewpoint-GS-NEXT-71253--桌面模式相机导航到该视点，且-XR-出生位姿随之改变/error-context.md
+
+  4) e2e/gsnext03-viewpoint.spec.ts:370:3 › GS-NEXT-03 Case 4 —— XR 进入 VR 前选择视点 › Case 4：无 authored 相机的场景 —— 选中视点才产生出生位姿（not-authored → not-entered） 
+
+    TimeoutError: page.waitForFunction: Timeout 20000ms exceeded.
+
+      402 |     }, undefined, { timeout: 20000 });
+      403 |     // spawn 状态即时更新，但官方过渡动画约 1s —— 等相机真正到位再比对
+    > 404 |     await page.waitForFunction(
+          |                ^
+      405 |       (target) => {
+      406 |         const d = JSON.parse(document.querySelector('[data-testid="ov-xr-diagnostics"]')!.textContent ?? '{}');
+      407 |         return d.camera && Math.hypot(
+        at /fj/GSPlatform/apps/web/e2e/gsnext03-viewpoint.spec.ts:404:16
+
+    Error Context: test-results/gsnext03-viewpoint-GS-NEXT-101bb-not-authored-→-not-entered）/error-context.md
+
+  4 failed
+    e2e/gsnext03-viewpoint.spec.ts:157:3 › GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（Desktop） › Case 1：创作页把当前相机存为视点 → 刷新 → 点击 Saved View → 相机恢复到该位置 
+    e2e/gsnext03-viewpoint.spec.ts:246:3 › GS-NEXT-03 Case 2 —— A/B/C 依次切换：动画正常、无跳飞、无鸟瞰 › 依次切换三个视点，逐个精确落位，过渡轨迹连续且不离开邻域 
+    e2e/gsnext03-viewpoint.spec.ts:299:3 › GS-NEXT-03 Case 4 —— XR 进入 VR 前选择视点 › 选择视点 → 桌面模式相机导航到该视点，且 XR 出生位姿随之改变 
+    e2e/gsnext03-viewpoint.spec.ts:370:3 › GS-NEXT-03 Case 4 —— XR 进入 VR 前选择视点 › Case 4：无 authored 相机的场景 —— 选中视点才产生出生位姿（not-authored → not-entered） 
+  1 passed (9.0m)

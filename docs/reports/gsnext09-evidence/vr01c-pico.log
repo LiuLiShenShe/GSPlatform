@@ -1,0 +1,9 @@
+
+Running 4 tests using 1 worker
+
+  -  1 e2e/vr01c-pico.spec.ts:44:1 › small real SOG, official performance A/B, preference and local JSON export
+  -  2 e2e/vr01c-pico.spec.ts:73:1 › private scene remains denied; failed load still exports local evidence
+  -  3 e2e/vr01c-pico.spec.ts:84:1 › real small Viewer keeps an authored transformed camera without framing (descriptor fixture only)
+  -  4 e2e/vr01c-pico.spec.ts:107:1 › historical 13M real descriptor and bounded desktop WebGL2 A/B (not PICO performance)
+
+  4 skipped

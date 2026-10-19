@@ -1,0 +1,82 @@
+
+Running 3 tests using 1 worker
+
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] [viewer] boot failed ManifestFallbackError: 场景不存在（DB 与本地 manifest 均未找到）: r-8c4e2264e86a（HTTP 404）
+    at resolveFromManifest (http://127.0.0.1:5199/src/scene-runtime/descriptorResolver.ts:112:9)
+    at async resolveSceneRuntimeDescriptor (http://127.0.0.1:5199/src/scene-runtime/descriptorResolver.ts:44:17)
+    at async boot (http://127.0.0.1:5199/src/features/viewer-official/useSuperSplatDesktop.ts:84:48)
+  ✘  1 e2e/ssv06-media.spec.ts:10:3 › SSV-06 annotation media (real scene r-8c4e2264e86a) › Desktop: 官方 hotspot 层存在；TEXT 用官方 tooltip；点击 IMAGE 热点 → 媒体 Overlay (1.0m)
+  ✘  2 e2e/ssv06-media.spec.ts:96:3 › SSV-06 annotation media (real scene r-8c4e2264e86a) › Desktop: 切换标注 Overlay 自动更新（VIDEO → AUDIO → PANORAMA） (1.0m)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] [xr] boot failed ManifestFallbackError: 场景不存在（DB 与本地 manifest 均未找到）: r-8c4e2264e86a（HTTP 404）
+    at resolveFromManifest (http://127.0.0.1:5199/src/scene-runtime/descriptorResolver.ts:112:9)
+    at async resolveSceneRuntimeDescriptor (http://127.0.0.1:5199/src/scene-runtime/descriptorResolver.ts:44:17)
+    at async boot (http://127.0.0.1:5199/src/features/viewer-official/useSuperSplatXR.ts:140:78)
+  ✘  3 e2e/ssv06-media.spec.ts:147:3 › SSV-06 XR annotation layer › XR: 官方 hotspot 层存在，点击媒体热点 → Overlay 渲染 (4.0m)
+
+
+  1) e2e/ssv06-media.spec.ts:10:3 › SSV-06 annotation media (real scene r-8c4e2264e86a) › Desktop: 官方 hotspot 层存在；TEXT 用官方 tooltip；点击 IMAGE 热点 → 媒体 Overlay 
+
+    TimeoutError: page.waitForSelector: Timeout 60000ms exceeded.
+    Call log:
+      - waiting for locator('canvas') to be visible
+
+
+      14 |     await page.goto('/scene/r-8c4e2264e86a');
+      15 |     await page.waitForSelector('[data-testid="scene-viewer-page"][data-runtime="official"]');
+    > 16 |     await page.waitForSelector('canvas', { state: 'visible', timeout: 60000 });
+         |                ^
+      17 |     await page.waitForFunction(
+      18 |       () => {
+      19 |         const el = document.querySelector('[data-testid="ov-diagnostics"]');
+        at /fj/GSPlatform/apps/web/e2e/ssv06-media.spec.ts:16:16
+
+    Error Context: test-results/ssv06-media-SSV-06-annotat-58d98-ip；点击-IMAGE-热点-→-媒体-Overlay/error-context.md
+
+  2) e2e/ssv06-media.spec.ts:96:3 › SSV-06 annotation media (real scene r-8c4e2264e86a) › Desktop: 切换标注 Overlay 自动更新（VIDEO → AUDIO → PANORAMA） 
+
+    TimeoutError: page.waitForSelector: Timeout 60000ms exceeded.
+    Call log:
+      - waiting for locator('canvas') to be visible
+
+
+       96 |   test('Desktop: 切换标注 Overlay 自动更新（VIDEO → AUDIO → PANORAMA）', async ({ page }) => {
+       97 |     await page.goto('/scene/r-8c4e2264e86a');
+    >  98 |     await page.waitForSelector('canvas', { state: 'visible', timeout: 60000 });
+          |                ^
+       99 |     await page.waitForFunction(
+      100 |       () => {
+      101 |         const el = document.querySelector('[data-testid="ov-diagnostics"]');
+        at /fj/GSPlatform/apps/web/e2e/ssv06-media.spec.ts:98:16
+
+    Error Context: test-results/ssv06-media-SSV-06-annotat-0579e-新（VIDEO-→-AUDIO-→-PANORAMA）/error-context.md
+
+  3) e2e/ssv06-media.spec.ts:147:3 › SSV-06 XR annotation layer › XR: 官方 hotspot 层存在，点击媒体热点 → Overlay 渲染 
+
+    Test timeout of 240000ms exceeded.
+
+    Error: page.waitForFunction: Target page, context or browser has been closed
+
+      152 |     await page.waitForSelector('[data-testid="xr-mount"]');
+      153 |     // 官方 selectAnnotation 需要 state.loaded（XR 页经 diag-state-loaded 暴露）。
+    > 154 |     await page.waitForFunction(
+          |                ^
+      155 |       () =>
+      156 |         document.querySelector('[data-testid="diag-state-loaded"]')?.textContent?.trim() === 'true',
+      157 |       { timeout: 90000 },
+        at /fj/GSPlatform/apps/web/e2e/ssv06-media.spec.ts:154:16
+
+    Error Context: test-results/ssv06-media-SSV-06-XR-anno-be5d6-pot-层存在，点击媒体热点-→-Overlay-渲染/error-context.md
+
+  3 failed
+    e2e/ssv06-media.spec.ts:10:3 › SSV-06 annotation media (real scene r-8c4e2264e86a) › Desktop: 官方 hotspot 层存在；TEXT 用官方 tooltip；点击 IMAGE 热点 → 媒体 Overlay 
+    e2e/ssv06-media.spec.ts:96:3 › SSV-06 annotation media (real scene r-8c4e2264e86a) › Desktop: 切换标注 Overlay 自动更新（VIDEO → AUDIO → PANORAMA） 
+    e2e/ssv06-media.spec.ts:147:3 › SSV-06 XR annotation layer › XR: 官方 hotspot 层存在，点击媒体热点 → Overlay 渲染 

@@ -1,0 +1,9 @@
+
+Running 4 tests using 1 worker
+
+  -  1 e2e/vr01a-public-xr.spec.ts:7:1 › Private scene denied without cookies, including protected assets
+  -  2 e2e/vr01a-public-xr.spec.ts:28:1 › Anonymous public scene returns the formal database descriptor
+  -  3 e2e/vr01a-public-xr.spec.ts:47:1 › Formal XR diagnostics initializes WebGL2 and loads real SOG
+  -  4 e2e/vr01a-public-xr.spec.ts:81:1 › Anonymous formal XR streamed SOG Viewer loads without manifest fallback
+
+  4 skipped

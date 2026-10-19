@@ -1,0 +1,93 @@
+
+Running 6 tests using 1 worker
+
+load diag mode/camera: orbit {"position":[2.5,1.8,6],"target":[-0.0157,0.5925,-0.0377],"fov":47}
+  ✓  1 e2e/fix02-semantics.spec.ts:129:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › 加载即用 authored Initial Camera（position/fov/look 与 DB 一致，未被 frameScene 覆盖） (2.7s)
+after frame cam: {"position":[2.5,1.8,6],"target":[-0.0157,0.5925,-0.0377],"fov":47}
+  ✘  2 e2e/fix02-semantics.spec.ts:142:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › Frame Scene 取景整个场景；Reset 恢复 authored Initial（严格数值） (33.4s)
+  ✘  3 e2e/fix02-semantics.spec.ts:164:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › Saved Viewpoint 被消费：点击下拉 → 相机过渡到已保存视角 (1.3m)
+  ✘  4 e2e/fix02-semantics.spec.ts:182:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › 3 条标注各自相机：A→A / B→B / C→C（互不相同，≠ 场景初始） (28.5s)
+W diag worldTransform: {"position":{"x":0,"y":0,"z":0},"rotation":{"x":0,"y":90,"z":0},"scale":{"x":1,"y":1,"z":1},"isIdentity":false,"boundsAfter":{"min":[-1.678,-1.301,-2.397],"max":[1.822,1.524,2.397]}}
+expected transformed camera: {"position":{"x":6.000000000000001,"y":1.8,"z":-2.4999999999999987},"target":{"x":0,"y":0.6,"z":0},"fov":47}
+  ✘  5 e2e/fix02-semantics.spec.ts:213:3 › FIX-02 §5/§9 World Transform（非恒等 W 真正执行） › rotation y=90：实体/相机/包围盒随 W 统一换算 (2.9s)
+XR renderer: webgl2
+XR pre-VR camera: 2.5, 1.8, 6 / -0.016, 0.592, -0.038 / 47
+  ✓  6 e2e/fix02-semantics.spec.ts:267:3 › FIX-02 §16 XR 预览（进入 VR 前初始构图 = authored initial） › XR 页（强制 WebGL）加载后 camera pose 与 DB authored initial 一致 (16.5s)
+
+
+  1) e2e/fix02-semantics.spec.ts:142:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › Frame Scene 取景整个场景；Reset 恢复 authored Initial（严格数值） 
+
+    Error: frame 应离开初始位置
+
+    expect(received).toBeGreaterThan(expected)
+
+    Expected: > 1
+    Received:   0
+
+      152 |     console.log('after frame cam:', JSON.stringify(frameCam));
+      153 |     expect(frameCam).not.toBeNull();
+    > 154 |     expect(dist(frameCam!.position, DB.initial.position), 'frame 应离开初始位置').toBeGreaterThan(1.0);
+          |                                                                            ^
+      155 |
+      156 |     // Reset：回到 authored initial（orbit 稳定，严格容差）。
+      157 |     await page.click('[data-testid="ov-reset"]');
+        at /fj/GSPlatform/apps/web/e2e/fix02-semantics.spec.ts:154:76
+
+    Error Context: test-results/fix02-semantics-FIX-02-§19-33bd5-t-恢复-authored-Initial（严格数值）/error-context.md
+
+  2) e2e/fix02-semantics.spec.ts:164:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › Saved Viewpoint 被消费：点击下拉 → 相机过渡到已保存视角 
+
+    TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.
+
+       99 |   tol = 0.5,
+      100 | ) {
+    > 101 |   await page.waitForFunction(
+          |              ^
+      102 |     ({ pos, tol: t }) => {
+      103 |       const el = document.querySelector('[data-testid="ov-diagnostics"]');
+      104 |       if (!el) return false;
+        at waitCameraNear (/fj/GSPlatform/apps/web/e2e/fix02-semantics.spec.ts:101:14)
+        at /fj/GSPlatform/apps/web/e2e/fix02-semantics.spec.ts:175:11
+
+    Error Context: test-results/fix02-semantics-FIX-02-§19-a6305-point-被消费：点击下拉-→-相机过渡到已保存视角/error-context.md
+
+  3) e2e/fix02-semantics.spec.ts:182:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › 3 条标注各自相机：A→A / B→B / C→C（互不相同，≠ 场景初始） 
+
+    TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.
+
+       99 |   tol = 0.5,
+      100 | ) {
+    > 101 |   await page.waitForFunction(
+          |              ^
+      102 |     ({ pos, tol: t }) => {
+      103 |       const el = document.querySelector('[data-testid="ov-diagnostics"]');
+      104 |       if (!el) return false;
+        at waitCameraNear (/fj/GSPlatform/apps/web/e2e/fix02-semantics.spec.ts:101:14)
+        at /fj/GSPlatform/apps/web/e2e/fix02-semantics.spec.ts:194:13
+
+    Error Context: test-results/fix02-semantics-FIX-02-§19-f40de-相机：A→A-B→B-C→C（互不相同，≠-场景初始）/error-context.md
+
+  4) e2e/fix02-semantics.spec.ts:213:3 › FIX-02 §5/§9 World Transform（非恒等 W 真正执行） › rotation y=90：实体/相机/包围盒随 W 统一换算 
+
+    Error: expect(received).toBeLessThan(expected)
+
+    Expected: < 0.02
+    Received:   0.696
+
+      250 |     const b = (diag.worldTransform as any).boundsAfter;
+      251 |     expect(b).not.toBeNull();
+    > 252 |     expect(Math.abs(b.min[0] - IDENTITY_BOUNDS.min[2])).toBeLessThan(0.02);
+          |                                                         ^
+      253 |     expect(Math.abs(b.max[0] - IDENTITY_BOUNDS.max[2])).toBeLessThan(0.02);
+      254 |     expect(Math.abs(b.min[2] - IDENTITY_BOUNDS.min[0])).toBeLessThan(0.02);
+      255 |     expect(Math.abs(b.max[2] - IDENTITY_BOUNDS.max[0])).toBeLessThan(0.02);
+        at /fj/GSPlatform/apps/web/e2e/fix02-semantics.spec.ts:252:57
+
+    Error Context: test-results/fix02-semantics-FIX-02-§5--f78e6-tion-y-90：实体-相机-包围盒随-W-统一换算/error-context.md
+
+  4 failed
+    e2e/fix02-semantics.spec.ts:142:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › Frame Scene 取景整个场景；Reset 恢复 authored Initial（严格数值） 
+    e2e/fix02-semantics.spec.ts:164:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › Saved Viewpoint 被消费：点击下拉 → 相机过渡到已保存视角 
+    e2e/fix02-semantics.spec.ts:182:3 › FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint / annotations） › 3 条标注各自相机：A→A / B→B / C→C（互不相同，≠ 场景初始） 
+    e2e/fix02-semantics.spec.ts:213:3 › FIX-02 §5/§9 World Transform（非恒等 W 真正执行） › rotation y=90：实体/相机/包围盒随 W 统一换算 
+  2 passed (2.7m)

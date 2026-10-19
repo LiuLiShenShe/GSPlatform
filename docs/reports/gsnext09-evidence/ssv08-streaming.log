@@ -1,0 +1,18 @@
+
+Running 3 tests using 1 worker
+
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+diag renderer/gsplats/format: webgpu 16802 lod-meta
+chunkRequests: 195 sample: [
+  '/local-scenes/ssv08-large/manifest.json',
+  '/local-scenes/ssv08-large/manifest.json',
+  '/local-scenes/ssv08-large/versions/ffb4584fa2d7/lod-meta.json'
+]
+  ✓  1 e2e/ssv08-streaming.spec.ts:41:3 › SSV-08 Desktop LOD runtime（WebGPU） › streamed-sog 场景经 manifest 回退解析为 lod-meta 并被官方 viewer 消费 (6.8s)
+  ✓  2 e2e/ssv08-streaming.spec.ts:72:3 › SSV-08 Desktop LOD runtime（WebGPU） › 单文件 .sog（同一内容）也经官方 runtime 加载 (32.7s)
+XR renderer: webgl2 gsplats: 39862
+  ✓  3 e2e/ssv08-streaming.spec.ts:82:3 › SSV-08 XR（WebGL，§8 测试对象） › LOD 场景在 XR 页面（强制 WebGL）加载且不破坏会话 (2.9s)
+
+  3 passed (43.0s)

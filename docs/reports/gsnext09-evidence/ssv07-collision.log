@@ -1,0 +1,54 @@
+
+Running 3 tests using 1 worker
+
+descriptor collision: undefined
+  ✘  1 e2e/ssv07-collision.spec.ts:53:3 › SSV-07 Desktop walk（官方碰撞 voxel） › 未校准场景：碰撞资产已构建，但 walk 被诚实拒绝（详见文件头「2026-10-14 修订」） (372ms)
+local-garden walkAllowed/hasCollision: false false
+  ✓  2 e2e/ssv07-collision.spec.ts:96:3 › SSV-07 Desktop walk（官方碰撞 voxel） › 无碰撞场景 → walkAllowed=false 且 Walk 按钮禁用 (2.6s)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] Failed to load resource: the server responded with a status of 404 (Not Found)
+[xr-page-error] [xr] boot failed ManifestFallbackError: 场景不存在（DB 与本地 manifest 均未找到）: r-8c4e2264e86a（HTTP 404）
+    at resolveFromManifest (http://127.0.0.1:5199/src/scene-runtime/descriptorResolver.ts:112:9)
+    at async resolveSceneRuntimeDescriptor (http://127.0.0.1:5199/src/scene-runtime/descriptorResolver.ts:44:17)
+    at async boot (http://127.0.0.1:5199/src/features/viewer-official/useSuperSplatXR.ts:140:78)
+  ✘  3 e2e/ssv07-collision.spec.ts:109:3 › SSV-07 XR（§8：碰撞资产不得破坏 XR 加载） › XR 加载成功且碰撞门控与桌面一致（未校准 → walk 关闭，XR 不受影响） (4.0m)
+
+
+  1) e2e/ssv07-collision.spec.ts:53:3 › SSV-07 Desktop walk（官方碰撞 voxel） › 未校准场景：碰撞资产已构建，但 walk 被诚实拒绝（详见文件头「2026-10-14 修订」） 
+
+    TypeError: Cannot read properties of undefined (reading 'format')
+
+      62 |     console.log('descriptor collision:', JSON.stringify(desc.collision));
+      63 |     expect(desc.collision, '描述符必须带碰撞资产').not.toBeNull();
+    > 64 |     expect(desc.collision.format).toBe('voxel');
+         |                           ^
+      65 |     expect(desc.collision.stale).toBe(false);
+      66 |
+      67 |     // ② 策略侧：未校准 → enabled=false，且原因可解释。
+        at /fj/GSPlatform/apps/web/e2e/ssv07-collision.spec.ts:64:27
+
+    Error Context: test-results/ssv07-collision-SSV-07-Des-527af-被诚实拒绝（详见文件头「2026-10-14-修订」）/error-context.md
+
+  2) e2e/ssv07-collision.spec.ts:109:3 › SSV-07 XR（§8：碰撞资产不得破坏 XR 加载） › XR 加载成功且碰撞门控与桌面一致（未校准 → walk 关闭，XR 不受影响） 
+
+    Test timeout of 240000ms exceeded.
+
+    Error: page.waitForFunction: Target page, context or browser has been closed
+
+      114 |     await page.waitForSelector('[data-testid="xr-mount"]');
+      115 |     // §8 本阶段不做 XR locomotion —— 只确认碰撞资产不破坏 XR 加载：
+    > 116 |     await page.waitForFunction(
+          |                ^
+      117 |       () => document.querySelector('[data-testid="diag-state-loaded"]')?.textContent?.trim() === 'true',
+      118 |       { timeout: 90000 },
+      119 |     );
+        at /fj/GSPlatform/apps/web/e2e/ssv07-collision.spec.ts:116:16
+
+    Error Context: test-results/ssv07-collision-SSV-07-XR（-fbc37-桌面一致（未校准-→-walk-关闭，XR-不受影响）/error-context.md
+
+  2 failed
+    e2e/ssv07-collision.spec.ts:53:3 › SSV-07 Desktop walk（官方碰撞 voxel） › 未校准场景：碰撞资产已构建，但 walk 被诚实拒绝（详见文件头「2026-10-14 修订」） 
+    e2e/ssv07-collision.spec.ts:109:3 › SSV-07 XR（§8：碰撞资产不得破坏 XR 加载） › XR 加载成功且碰撞门控与桌面一致（未校准 → walk 关闭，XR 不受影响） 
+  1 passed (4.1m)

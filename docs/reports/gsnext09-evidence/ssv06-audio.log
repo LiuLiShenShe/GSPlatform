@@ -1,0 +1,26 @@
+
+Running 1 test using 1 worker
+
+  ✘  1 e2e/ssv06-audio.spec.ts:18:1 › FIX-03 background audio: GSPlatform 控制器管理 volume/loop/gesture/ducking/scene-cleanup (1.0m)
+
+
+  1) e2e/ssv06-audio.spec.ts:18:1 › FIX-03 background audio: GSPlatform 控制器管理 volume/loop/gesture/ducking/scene-cleanup 
+
+    TimeoutError: page.waitForSelector: Timeout 60000ms exceeded.
+    Call log:
+      - waiting for locator('canvas') to be visible
+
+
+      44 |
+      45 |   await page.goto('/scene/r-8c4e2264e86a');
+    > 46 |   await page.waitForSelector('canvas', { state: 'visible', timeout: 60000 });
+         |              ^
+      47 |   await page.waitForFunction(() => {
+      48 |     const el = document.querySelector('[data-testid="ov-diagnostics"]');
+      49 |     if (!el) return false;
+        at /fj/GSPlatform/apps/web/e2e/ssv06-audio.spec.ts:46:14
+
+    Error Context: test-results/ssv06-audio-FIX-03-backgro-97697-sture-ducking-scene-cleanup/error-context.md
+
+  1 failed
+    e2e/ssv06-audio.spec.ts:18:1 › FIX-03 background audio: GSPlatform 控制器管理 volume/loop/gesture/ducking/scene-cleanup 

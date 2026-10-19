@@ -1,0 +1,125 @@
+
+Running 1 test using 1 worker
+
+AUTHZ_SAVE_START
+{
+  "loginStatus": 200,
+  "cookies": [
+    "gs_session",
+    "gs_csrf"
+  ],
+  "authoringPage": true,
+  "viewerReady": true,
+  "presentationBefore": {
+    "x": 0.9621247053146362,
+    "y": 1.1653869152069092,
+    "z": 0.7813549637794495
+  },
+  "cameraMoved": true,
+  "canvasFound": true,
+  "saveButtonVisible": true,
+  "presentationAfter": {
+    "x": 0.420299768447876,
+    "y": 0.8961670994758606,
+    "z": 0.12554442882537842
+  },
+  "runtimeInitialCamera": {
+    "position": {
+      "x": 0.420299768447876,
+      "y": 0.8961670994758606,
+      "z": 0.12554442882537842
+    },
+    "target": {
+      "x": -0.26370282691149616,
+      "y": 0.44066099778766477,
+      "z": -0.22117321719812993
+    },
+    "fov": 47
+  },
+  "patches": [
+    {
+      "status": 200,
+      "method": "PATCH",
+      "url": "http://127.0.0.1:5174/api/v1/scenes/fix02-semantics/presentation",
+      "body": "{\"initialCameraPosition\":{\"x\":0.420299768447876,\"y\":0.8961670994758606,\"z\":0.12554442882537842},\"initialCameraTarget\":{\"x\":-0.26370282691149616,\"y\":0.44066099778766477,\"z\":-0.22117321719812993},\"initialCameraFov\":47}"
+    }
+  ],
+  "errorToasts": [
+    "已保存（初始视角已更新，打开场景将采用该视角）"
+  ],
+  "reopenedDiagnostics": {
+    "renderer": "webgpu",
+    "gsplats": 59400,
+    "loaded": true,
+    "progress": 100,
+    "cameraMode": "orbit",
+    "performanceMode": true,
+    "showAnnotations": true,
+    "contentUrl": "/api/v1/scenes/fix02-semantics/assets/current/scene.sog",
+    "format": "sog",
+    "isManifestFallback": false,
+    "error": null,
+    "walkAllowed": false,
+    "effectiveWalkAllowed": false,
+    "collisionStale": false,
+    "hasCollision": false,
+    "collisionFormat": null,
+    "sceneScale": {
+      "status": "ok",
+      "horizontalExtent": 4.794,
+      "verticalExtent": 2.825
+    },
+    "camera": {
+      "position": [
+        0.4203,
+        0.8962,
+        0.1255
+      ],
+      "target": [
+        -0.2637,
+        0.4407,
+        -0.2212
+      ],
+      "fov": 47
+    },
+    "worldTransform": {
+      "position": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "scale": {
+        "x": 1,
+        "y": 1,
+        "z": 1
+      },
+      "isIdentity": true,
+      "boundsAfter": {
+        "min": [
+          -2.397,
+          -1.301,
+          -1.678
+        ],
+        "max": [
+          2.397,
+          1.524,
+          1.822
+        ]
+      }
+    }
+  },
+  "reopenedCamera": [
+    0.4203,
+    0.8962,
+    0.1255
+  ]
+}
+AUTHZ_SAVE_END
+  ✓  1 e2e/gsnext09-authoring-save-probe.spec.ts:26:1 › authoring save → reopen (real session) (3.6m)
+
+  1 passed (3.6m)

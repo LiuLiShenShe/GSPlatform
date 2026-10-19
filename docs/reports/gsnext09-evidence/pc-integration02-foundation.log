@@ -1,0 +1,8 @@
+
+Running 3 tests using 1 worker
+
+  -  1 e2e/pc-integration02-foundation.spec.ts:37:3 › PC-INTEGRATION-02 isolated real foundation › real PLY upload publishes without collision, ends polling, and renders official Streamed SOG
+  -  2 e2e/pc-integration02-foundation.spec.ts:79:3 › PC-INTEGRATION-02 isolated real foundation › same immutable SceneVersion loads through the official WebGL XR software route
+  -  3 e2e/pc-integration02-foundation.spec.ts:89:3 › PC-INTEGRATION-02 isolated real foundation › separate approved nonphysical small ZIP scene builds and rebuilds real version-safe collision
+
+  3 skipped
