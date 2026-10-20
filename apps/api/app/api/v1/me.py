@@ -27,16 +27,27 @@ def my_scenes(
     limit: int = Query(20, ge=1, le=100),
     cursor: str | None = Query(None),
     status: str | None = Query(
-        None, description="按状态筛选：DRAFT/PROCESSING/PUBLISHED/FAILED/ARCHIVED"
+        None,
+        description=(
+            "按状态筛选：DRAFT/PROCESSING/PUBLISHED/FAILED/ARCHIVED；"
+            "DELETED 表示只返回回收站（已软删除）中的作品"
+        ),
     ),
     search: str | None = Query(None, description="标题关键词搜索"),
+    includeDeleted: bool = Query(
+        False, description="是否把回收站（已软删除）的作品一并返回"
+    ),
     sort: str = Query(
         "updated", description="排序：updated/title/created"
     ),
     identity: RequestIdentity = Depends(get_current_user),
     db: Session = Depends(get_db_session),
 ) -> SceneListPage:
-    """当前用户的作品列表（含所有状态和可见性）。"""
+    """当前用户的作品列表（含所有状态和可见性）。
+
+    GS-NEXT-10：默认不含已软删除的作品；``includeDeleted=true`` 或
+    ``status=DELETED`` 可以拿到回收站内容，让用户找回自己被删除的作品。
+    """
     return SceneService(db).list_owner(
         identity.user_id,
         limit=limit,
@@ -44,6 +55,7 @@ def my_scenes(
         status_filter=status,
         search=search,
         sort=sort,
+        include_deleted=includeDeleted,
     )
 
 

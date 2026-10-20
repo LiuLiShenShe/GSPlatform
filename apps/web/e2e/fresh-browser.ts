@@ -15,6 +15,13 @@ export const LAUNCH_ARGS = [
   '--disable-renderer-backgrounding',
   '--disable-background-timer-throttling',
   '--disable-backgrounding-occluded-windows',
+  // GS-NEXT-10: GPU-process compositing with SwiftShader WebGPU stalls the
+  // renderer's frame production (measured: `app.frame` frozen for 10s+ while a
+  // camera transition was in flight; the page eventually crashed). Rendering the
+  // canvas on the CPU keeps the tick loop running so camera transitions can
+  // complete. Without it, every frame/reset/viewpoint/annotation assertion
+  // spuriously fails even though the product logic is correct.
+  '--disable-gpu-compositing',
   '--enable-unsafe-swiftshader',
   '--use-angle=swiftshader',
   '--enable-webgl',
@@ -22,6 +29,27 @@ export const LAUNCH_ARGS = [
   '--enable-unsafe-webgpu',
   '--enable-features=Vulkan',
 ];
+
+/**
+ * Launch with the **full** Chromium build, not Playwright's stripped
+ * `chromium_headless_shell`.
+ *
+ * GS-NEXT-10 root cause (verified): the headless shell freezes the renderer's
+ * `requestAnimationFrame` as soon as the official viewer switches to on-demand
+ * rendering (`app.autoRender = false`, which happens at `state.progress = 100`).
+ * From then on `app.tick` is never scheduled again: measured `rAF = 0/s`,
+ * `app.frame` frozen, so *every* camera transition — frameScene, resetCamera,
+ * saved viewpoints, annotation navigation — silently does nothing. The same
+ * build under the full Chromium runs `rAF` at ~60/s and the camera moves.
+ *
+ * That is a test-harness defect, not a product defect. Do not "fix" a camera
+ * assertion by loosening it — assert against a browser that actually ticks.
+ */
+export const LAUNCH_OPTIONS = {
+  headless: true,
+  channel: 'chromium',
+  args: LAUNCH_ARGS,
+} as const;
 
 interface FreshBrowserFixtures {
   page: Page;
@@ -39,10 +67,7 @@ interface FreshBrowserFixtures {
  */
 export const test = base.extend<FreshBrowserFixtures>({
   page: async ({}, use) => {
-    const browser = await chromium.launch({
-      headless: true,
-      args: LAUNCH_ARGS,
-    });
+    const browser = await chromium.launch(LAUNCH_OPTIONS);
     const context = await browser.newContext({
       baseURL: process.env.PW_BASE_URL ?? 'http://localhost:5173',
     });

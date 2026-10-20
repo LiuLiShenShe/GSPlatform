@@ -106,6 +106,9 @@ def _summary_from_scene(
         manifestUrl=manifest_url,
         publishedAt=scene.published_at,
         updatedAt=scene.updated_at,
+        # GS-NEXT-10: the owner works list needs to tell a soft-deleted scene
+        # (recoverable from the recycle bin) from a missing one.
+        isDeleted=scene.deleted_at is not None,
         isFavorited=is_favorited,
         favoriteCount=favorite_count,
         shareCount=share_count,
@@ -222,6 +225,7 @@ class SceneService:
         status_filter: str | None = None,
         search: str | None = None,
         sort: str = "updated",
+        include_deleted: bool = False,
     ) -> SceneListPage:
         items, next_cursor = self._repo.list_owner(
             owner_id,
@@ -230,6 +234,7 @@ class SceneService:
             status_filter=status_filter,
             search=search,
             sort=sort,
+            include_deleted=include_deleted,
         )
         return SceneListPage(
             items=[_summary_from_scene(self._session, s) for s in items],
@@ -286,29 +291,66 @@ class SceneService:
             raise NotFoundError(f"场景 {slug} 不存在")
         if scene.owner_id != owner_id:
             raise ForbiddenError("只有场景所有者可以归档")
+        if scene.deleted_at is not None:
+            raise ConflictError("场景已删除，无法归档")
         if scene.status not in ("PUBLISHED", "READY"):
             raise ConflictError(f"状态 {scene.status} 不允许归档")
+        # GS-NEXT-10: remember the exact pre-archive status so restore can put
+        # the scene back where it was instead of forcing PUBLISHED.
+        scene.archived_from_status = scene.status
         scene.status = SceneStatus.ARCHIVED.value
-        self._repo.flush()
+        # GS-NEXT-10: commit before returning. The request-scoped session commits
+        # in its dependency teardown, which runs *after* the response is sent —
+        # a client that immediately issues the next call (archive → restore)
+        # would otherwise still read the pre-archive row and get a bogus 409.
+        self._repo.commit()
 
     def restore_scene(self, *, owner_id: uuid.UUID, slug: str) -> None:
+        """Restore an archived **or** soft-deleted scene (GS-NEXT-10).
+
+        - soft-deleted (``deleted_at`` set) → clear the marker; the row keeps
+          whatever status it had, so a deleted PUBLISHED scene comes back
+          PUBLISHED;
+        - archived → return to ``archived_from_status`` (PUBLISHED/READY), never
+          a blanket PUBLISHED.
+
+        Both paths are owner-gated; a scene that is neither archived nor
+        deleted is still a 409, so the endpoint stays idempotent-safe.
+        """
         scene = self._repo.get_by_slug(slug)
         if scene is None:
             raise NotFoundError(f"场景 {slug} 不存在")
         if scene.owner_id != owner_id:
             raise ForbiddenError("只有场景所有者可以恢复")
+
+        if scene.deleted_at is not None:
+            scene.deleted_at = None
+            self._repo.commit()
+            return
+
         if scene.status != SceneStatus.ARCHIVED.value:
-            raise ConflictError("场景不在已归档状态，无法恢复")
-        scene.status = SceneStatus.PUBLISHED.value
-        self._repo.flush()
+            raise ConflictError("场景不在已归档或已删除状态，无法恢复")
+
+        scene.status = scene.archived_from_status or SceneStatus.PUBLISHED.value
+        scene.archived_from_status = None
+        self._repo.commit()
 
     def soft_delete_scene(self, *, owner_id: uuid.UUID, slug: str) -> None:
-        """Soft-delete a scene.  Refuses if active jobs exist."""
+        """Soft-delete a scene.  Refuses if active jobs exist.
+
+        Only the ``deleted_at`` marker is written: the row, its SceneVersions
+        and every published asset stay exactly where they are (GS-NEXT-10 —
+        recovery depends on nothing having been destroyed).
+        """
         scene = self._repo.get_by_slug(slug)
         if scene is None:
             raise NotFoundError(f"场景 {slug} 不存在")
         if scene.owner_id != owner_id:
             raise ForbiddenError("只有场景所有者可以删除")
+        if scene.deleted_at is not None:
+            # Already in the recycle bin — treat as success, do not touch jobs.
+            self._repo.commit()
+            return
         from sqlalchemy import select
 
         from app.db.models.job import Job
@@ -323,4 +365,4 @@ class SceneService:
             raise ConflictError("场景仍有正在运行的任务，无法删除")
 
         scene.deleted_at = datetime.now(UTC)
-        self._repo.flush()
+        self._repo.commit()

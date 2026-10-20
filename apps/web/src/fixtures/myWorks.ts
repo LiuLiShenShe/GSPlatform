@@ -1,11 +1,23 @@
 /**
  * 我的作品 fixture —— Phase 01 仅用于验证 UI，后端接入后由 services 层替换。
+ *
+ * GS-NEXT-10：状态联合新增 `ARCHIVED`（已归档，可恢复）与 `DELETED`
+ * （回收站，可恢复）—— 两者都必须保留恢复入口，否则作品被隐藏后用户
+ * 就找不回来了。
  */
+
+export type WorkStatus =
+  | 'PUBLISHED'
+  | 'DRAFT'
+  | 'PROCESSING'
+  | 'FAILED'
+  | 'ARCHIVED'
+  | 'DELETED';
 
 export interface WorkSummary {
   id: string;
   title: string;
-  status: 'PUBLISHED' | 'DRAFT' | 'PROCESSING' | 'FAILED';
+  status: WorkStatus;
   updatedAt: string;
   progress: number | null;
   sceneId: string | null;

@@ -23,6 +23,8 @@ interface BackendSceneSummary {
   likes: number;
   posterUrl: string | null;
   updatedAt: string | null;
+  /** GS-NEXT-10：软删除（回收站）标记。 */
+  isDeleted?: boolean;
 }
 
 // Deterministic SVG poster fallback (same logic as sceneApi).
@@ -66,9 +68,14 @@ function toWorkSummary(raw: BackendSceneSummary): WorkSummary {
     FAILED: 'FAILED',
     READY: 'PUBLISHED',
     VALIDATING: 'PROCESSING',
-    ARCHIVED: 'FAILED',
+    // GS-NEXT-10：归档是可恢复状态，不能再伪装成「失败」—— 那会让用户以为
+    // 作品坏了，并且恢复提示语也不对。
+    ARCHIVED: 'ARCHIVED',
   };
-  const status = statusMap[raw.status] ?? 'DRAFT';
+  // 软删除优先：回收站里的作品可能仍是 PUBLISHED，但用户看到的是「已删除」。
+  const status: WorkSummary['status'] = raw.isDeleted
+    ? 'DELETED'
+    : (statusMap[raw.status] ?? 'DRAFT');
   const poster = raw.posterUrl ?? fallbackPoster(raw.id, raw.title);
   const updatedAt = raw.updatedAt ?? new Date().toISOString();
 
@@ -78,7 +85,8 @@ function toWorkSummary(raw: BackendSceneSummary): WorkSummary {
     status,
     updatedAt,
     progress: null,
-    sceneId: status === 'PUBLISHED' ? raw.id : null,
+    // 已删除的作品不能打开 Viewer（后端 404）；归档的作品所有者仍可预览。
+    sceneId: status === 'PUBLISHED' || status === 'ARCHIVED' ? raw.id : null,
     poster,
   };
 }
@@ -94,6 +102,8 @@ export interface FetchWorksOptions {
   status?: string;
   search?: string;
   sort?: 'updated' | 'title';
+  /** GS-NEXT-10：把回收站（已软删除）的作品一并返回。 */
+  includeDeleted?: boolean;
 }
 
 export async function fetchMyWorks(options?: FetchWorksOptions): Promise<WorkSummary[]> {
@@ -103,6 +113,7 @@ export async function fetchMyWorks(options?: FetchWorksOptions): Promise<WorkSum
   if (options?.status) params.status = options.status;
   if (options?.search) params.search = options.search;
   if (options?.sort) params.sort = options.sort;
+  if (options?.includeDeleted) params.includeDeleted = 'true';
 
   const response = await httpClient.get<{ items: BackendSceneSummary[] }>(
     '/me/scenes',

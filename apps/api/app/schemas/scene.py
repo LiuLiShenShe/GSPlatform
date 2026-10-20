@@ -40,6 +40,9 @@ class SceneSummaryOut(BaseModel):
     posterUrl: str | None = Field(default=None, alias="posterUrl")
     manifestUrl: str | None = Field(default=None, alias="manifestUrl")
     publishedAt: datetime | None = Field(default=None, alias="publishedAt")
+    # GS-NEXT-10: soft-deleted (recycle bin). The row and its assets still
+    # exist; the owner can restore it. Never true for public listings.
+    isDeleted: bool = Field(default=False, alias="isDeleted")
     isFavorited: bool = Field(default=False, alias="isFavorited")
     favoriteCount: int | None = Field(default=None, alias="favoriteCount")
     shareCount: int | None = Field(default=None, alias="shareCount")

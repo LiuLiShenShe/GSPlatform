@@ -1,0 +1,86 @@
+
+Running 1 test using 1 worker
+
+[1/1] e2e/gsnext10-vp-probe.spec.ts:6:1 › vp landing probe
+e2e/gsnext10-vp-probe.spec.ts:6:1 › vp landing probe
+PROBE created A/B
+
+PROBE loaded after 16 s
+
+PROBE raf/s = 58
+
+PROBE PROBE-A before {"pos":[2.5,1.8,6],"mode":"orbit","frame":null}
+
+PROBE CLICK FAIL PROBE-A TimeoutError: locator.click: Timeout 10000ms exceeded.
+Call log:
+  - waiting for getByText('PROB
+
+PROBE PROBE-A t=3s d=3.732 mode=orbit frame=null
+
+PROBE PROBE-A t=6s d=3.589 mode=orbit frame=null
+
+PROBE PROBE-A t=9s d=3.589 mode=orbit frame=null
+
+PROBE PROBE-A t=12s d=2.919 mode=orbit frame=null
+
+PROBE PROBE-A t=15s d=2.499 mode=orbit frame=null
+
+PROBE PROBE-A t=18s d=2.499 mode=orbit frame=null
+
+PROBE PROBE-A t=21s d=1.671 mode=orbit frame=null
+
+PROBE PROBE-A t=24s d=1.671 mode=orbit frame=null
+
+PROBE PROBE-A t=27s d=0.988 mode=orbit frame=null
+
+PROBE PROBE-A t=30s d=0.988 mode=orbit frame=null
+
+PROBE PROBE-B before {"pos":[1.7223,1.4544,2.8892],"mode":"orbit","frame":null}
+
+PROBE CLICK FAIL PROBE-B TimeoutError: locator.click: Timeout 10000ms exceeded.
+Call log:
+  - waiting for getByText('PROB
+
+PROBE PROBE-B t=3s d=3.499 mode=orbit frame=null
+
+PROBE PROBE-B t=6s d=3.383 mode=orbit frame=null
+
+PROBE PROBE-B t=9s d=3.383 mode=orbit frame=null
+
+PROBE PROBE-B t=12s d=2.827 mode=orbit frame=null
+
+PROBE PROBE-B t=15s d=2.469 mode=orbit frame=null
+
+PROBE PROBE-B t=18s d=2.469 mode=orbit frame=null
+
+PROBE PROBE-B t=21s d=1.740 mode=orbit frame=null
+
+PROBE PROBE-B t=24s d=1.405 mode=orbit frame=null
+
+PROBE PROBE-B t=27s d=1.405 mode=orbit frame=null
+
+PROBE PROBE-B t=30s d=0.845 mode=orbit frame=null
+
+PROBE PROBE-B t=33s d=0.845 mode=orbit frame=null
+
+PROBE PROBE-B t=36s d=0.449 mode=orbit frame=null
+
+PROBE PROBE-B t=39s d=0.310 mode=orbit frame=null
+
+PROBE PROBE-B t=42s d=0.204 mode=orbit frame=null
+
+PROBE PROBE-B t=45s d=0.204 mode=orbit frame=null
+
+PROBE PROBE-B t=48s d=0.075 mode=orbit frame=null
+
+PROBE PROBE-B t=51s d=0.041 mode=orbit frame=null
+
+PROBE PROBE-B t=54s d=0.041 mode=orbit frame=null
+
+PROBE PROBE-B t=57s d=0.008 mode=orbit frame=null
+
+PROBE PROBE-B t=60s d=0.003 mode=orbit frame=null
+
+  Slow test file: e2e/gsnext10-vp-probe.spec.ts (8.2m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 passed (8.2m)

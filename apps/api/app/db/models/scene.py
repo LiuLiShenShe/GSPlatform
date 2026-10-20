@@ -74,6 +74,13 @@ class Scene(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # GS-NEXT-10: the status the scene held immediately before it was archived.
+    # ``archive`` refuses anything but PUBLISHED/READY, and restoring must return
+    # the scene to *its* pre-archive state — never to a blanket PUBLISHED (a
+    # READY scene must not be silently promoted to the public catalogue).
+    archived_from_status: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )
 
     owner: Mapped[User] = relationship(foreign_keys=[owner_id], lazy="joined")
     current_version: Mapped[SceneVersion | None] = relationship(

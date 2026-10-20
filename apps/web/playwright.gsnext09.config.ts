@@ -8,16 +8,19 @@
  * config. Nothing here changes product behaviour.
  */
 import { defineConfig } from '@playwright/test';
-import { LAUNCH_ARGS } from './e2e/fresh-browser';
+import { LAUNCH_OPTIONS } from './e2e/fresh-browser';
 
 const BASE = process.env.PW_BASE_URL ?? 'http://127.0.0.1:5199';
 
 export default defineConfig({
   testDir: './e2e',
-  timeout: 240_000,
+  timeout: 420_000,
   retries: 0,
   use: {
     baseURL: BASE,
-    launchOptions: { args: LAUNCH_ARGS },
+    // GS-NEXT-10: full Chromium (channel) — the headless shell freezes rAF once
+    // the official viewer switches to on-demand rendering, which silently kills
+    // every camera transition. See e2e/fresh-browser.ts.
+    launchOptions: LAUNCH_OPTIONS,
   },
 });

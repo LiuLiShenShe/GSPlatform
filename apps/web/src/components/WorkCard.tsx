@@ -36,7 +36,13 @@ const STATUS_META: Record<
   DRAFT: { label: '草稿', color: 'default' },
   PROCESSING: { label: '处理中', color: 'processing' },
   FAILED: { label: '失败', color: 'error' },
+  // GS-NEXT-10：归档与回收站都是**可恢复**状态，必须有恢复入口。
+  ARCHIVED: { label: '已归档', color: 'warning' },
+  DELETED: { label: '回收站', color: 'default' },
 };
+
+/** 可以恢复的状态：已归档（回到归档前状态）与回收站（清除软删除标记）。 */
+const RESTORABLE: ReadonlySet<WorkSummary['status']> = new Set(['ARCHIVED', 'DELETED']);
 
 const CATEGORY_OPTIONS = [
   { value: 'urban', label: '城市' },
@@ -146,7 +152,8 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
     setActing(true);
     try {
       await deleteScene(work.id);
-      message.success('已删除（延迟清理）');
+      // GS-NEXT-10：只做软删除（进回收站），不承诺任何清除动作。
+      message.success('已移入回收站，可随时恢复');
       onChanged();
     } catch {
       message.error('删除失败，请重试。');
@@ -197,26 +204,32 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
           />
         )}
         <div className="gs-works-card__actions">
-          <Button size="small" icon={<EyeOutlined aria-hidden />} onClick={openScene}>
-            查看
-          </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined aria-hidden />}
-            onClick={openEdit}
-            disabled={acting}
-          >
-            编辑
-          </Button>
-          <Tooltip title="查看处理任务（Phase 08 已接入服务端任务查询）">
-            <Button
-              size="small"
-              icon={<HistoryOutlined aria-hidden />}
-              onClick={viewJobs}
-            >
-              任务
-            </Button>
-          </Tooltip>
+          {/* GS-NEXT-10：回收站作品只能「恢复」。查看/编辑会打到 404 的已删除
+             场景（detail/PATCH 均按 deleted_at 过滤），不给用户死按钮。 */}
+          {work.status !== 'DELETED' && (
+            <>
+              <Button size="small" icon={<EyeOutlined aria-hidden />} onClick={openScene}>
+                查看
+              </Button>
+              <Button
+                size="small"
+                icon={<EditOutlined aria-hidden />}
+                onClick={openEdit}
+                disabled={acting}
+              >
+                编辑
+              </Button>
+              <Tooltip title="查看处理任务（Phase 08 已接入服务端任务查询）">
+                <Button
+                  size="small"
+                  icon={<HistoryOutlined aria-hidden />}
+                  onClick={viewJobs}
+                >
+                  任务
+                </Button>
+              </Tooltip>
+            </>
+          )}
           {work.status === 'PUBLISHED' && (
             <Popconfirm
               title={`归档「${work.title}」？`}
@@ -230,36 +243,47 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
               </Button>
             </Popconfirm>
           )}
-          {work.status === 'FAILED' && (
+          {RESTORABLE.has(work.status) && (
             <Popconfirm
               title={`恢复「${work.title}」？`}
-              description="恢复到草稿状态继续处理。"
+              description={
+                work.status === 'DELETED'
+                  ? '从回收站恢复到删除前的状态，作品与资产都还在。'
+                  : '恢复到归档前的状态，作品会重新出现在列表里。'
+              }
               okText="恢复"
               cancelText="取消"
               onConfirm={doRestore}
             >
-              <Button size="small" icon={<UndoOutlined aria-hidden />} disabled={acting}>
+              <Button
+                size="small"
+                icon={<UndoOutlined aria-hidden />}
+                disabled={acting}
+                data-testid={`works-restore-${work.id}`}
+              >
                 恢复
               </Button>
             </Popconfirm>
           )}
-          <Popconfirm
-            title={`确认删除「${work.title}」？`}
-            description="删除后进入回收站，无法在列表看到。此操作不可直接撤销。"
-            okText="确认删除"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            onConfirm={doDelete}
-          >
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined aria-hidden />}
-              disabled={acting}
+          {work.status !== 'DELETED' && (
+            <Popconfirm
+              title={`确认删除「${work.title}」？`}
+              description="删除后进入回收站，可在「回收站」标签页恢复。"
+              okText="确认删除"
+              cancelText="取消"
+              okButtonProps={{ danger: true }}
+              onConfirm={doDelete}
             >
-              删除
-            </Button>
-          </Popconfirm>
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined aria-hidden />}
+                disabled={acting}
+              >
+                删除
+              </Button>
+            </Popconfirm>
+          )}
         </div>
       </div>
 

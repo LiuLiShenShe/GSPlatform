@@ -49,8 +49,10 @@ describe('我的作品页', () => {
       await screen.findByText('确认删除「我的街拍作品 A」？'),
     ).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: '确认删除' }));
+    // GS-NEXT-10：软删除的提示语改为「已移入回收站，可随时恢复」——
+    // 明确这是一步可撤销的软删除，不再暗示存在延迟物理清理。
     expect(
-      await screen.findByText(/已删除/),
+      await screen.findByText(/已移入回收站/),
     ).toBeInTheDocument();
   });
 

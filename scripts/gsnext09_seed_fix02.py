@@ -104,6 +104,16 @@ def main() -> None:
                 "scene_presentations",
                 "scene_spatial_states",
                 "scene_versions",
+                # 其余指向 scenes 的外键行（作业/资产/分享/收藏…）必须一起清掉，
+                # 否则删 scenes 会被外键拒绝，夹具无法重复播种。
+                "assets",
+                "collision_assets",
+                "favorites",
+                "jobs",
+                "scene_edit_sessions",
+                "scene_processing_settings",
+                "share_links",
+                "upload_sessions",
             ):
                 conn.execute(text(f"delete from {table} where scene_id = :s"), {"s": existing})
             conn.execute(text("delete from scenes where id = :s"), {"s": existing})

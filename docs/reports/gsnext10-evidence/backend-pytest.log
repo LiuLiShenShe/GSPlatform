@@ -1,0 +1,479 @@
+........................................................................ [ 12%]
+....................F................................................... [ 24%]
+..................................................FFFF.................. [ 36%]
+........................................................................ [ 49%]
+........................................................................ [ 61%]
+........................................................................ [ 73%]
+........................................................................ [ 85%]
+........................................................................ [ 98%]
+...........                                                              [100%]
+=================================== FAILURES ===================================
+_____________ test_export_retention_preserves_current_and_history ______________
+
+owner = (<starlette.testclient.TestClient object at 0x70243db02c50>, <Scene id=f418759d-22af-45d3-821a-bfefc6fc2873 slug='scene-7e119f1f' status=PUBLISHED>, {'X-CSRF-Token': 'CjXJcf1HlgH1wVsz9e4mvKi1rkIdMDQ8'})
+db = <sqlalchemy.orm.session.Session object at 0x70243db01590>
+
+    def test_export_retention_preserves_current_and_history(owner, db):
+        from app.services.editor_session import EditorSessionService
+    
+        _, scene, _ = owner
+        edit = create_edit(owner)
+        _, upload = upload_export(owner, edit)
+        record = db.get(SceneEditSession, edit["id"])
+        record.created_at = datetime.now(UTC) - timedelta(days=10)
+        record.expires_at = datetime.now(UTC) - timedelta(days=8)
+        db.commit()
+        current = scene.current_version_id
+>       assert EditorSessionService(db, settings).cleanup_exports() == 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = cleanup_exports()
+E        +    where cleanup_exports = <app.services.editor_session.EditorSessionService object at 0x70243dcf7910>.cleanup_exports
+E        +      where <app.services.editor_session.EditorSessionService object at 0x70243dcf7910> = <class 'app.services.editor_session.EditorSessionService'>(<sqlalchemy.orm.session.Session object at 0x70243db01590>, Settings(app_name='gsplatform-api', api_host='0.0.0.0', api_port=8001, env='development', database_url='postgresql+psy...dis://127.0.0.1:16384/8', rate_limit_backend='memory', cors_origins=['http://localhost:5173', 'http://127.0.0.1:5173']))
+
+tests/test_editor_publication.py:770: AssertionError
+____________ TestReleasePreflightCwd.test_from_release_root_passes _____________
+
+self = <tests.test_fix0621.TestReleasePreflightCwd object at 0x70244058a510>
+release_tree = ReleaseFixture(release=PosixPath('/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1'), deploy_roo...8/fix0621-release0/storage/scene-origin', 'GS_ENV_FILE': '/tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env'})
+
+    def test_from_release_root_passes(self, release_tree):
+        """§6 Case A — cwd = <release root> → PASS."""
+        res = _run_release_preflight(release_tree, release_tree.release)
+>       assert res.returncode == 0, res.stdout + res.stderr
+E       AssertionError: GSPlatform Preflight — mode=release environment=staging dry-run=0
+E         ================================================================================
+E         [A] Host & filesystem
+E           ✓ nginx available (/home/test/bin/nginx)
+E           ✓ python3 available (/home/test/biosoft/enter/bin/python3)
+E           ✓ node available (/home/test/bin/node)
+E           ✓ pnpm available (/home/test/.nvm/versions/node/v24.16.0/bin/pnpm)
+E           ✓ ffmpeg available (/usr/bin/ffmpeg)
+E         
+E         Directories
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/staging
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/published
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/quarantine
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/logs
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/scene-origin
+E           ✓ Storage root has 363 GB free
+E         
+E         Env file
+E           ⚠ env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         [B] PostgreSQL connectivity
+E           ✓ PostgreSQL reachable (pg_isready, GS_DATABASE_URL)
+E         
+E         [C] Redis connectivity
+E           ✓ Redis PING OK
+E         
+E         [D] Production configuration
+E           ✓ rate-limiter backend policy only enforced in production
+E         
+E         [E] NVIDIA host runtime
+E           ✓ NVIDIA GPU visible: 2 device(s) (nvidia-smi)
+E         
+E         [F] Release root & metadata
+E           ✓ current symlink points to /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1
+E           ✓ release commit hash recorded (a301ef8dd83fb3d90d1dcce3f5723c4b66739c1b)
+E         
+E         [G] Build artifacts & release integrity
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/web/dist/index.html exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/main.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/nginx/gsplatform.conf exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/systemd/gsplatform-api.service exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/uvicorn exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/__init__.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/base.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/local_disk.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/paths.py exists
+E         
+E         [H] Nginx configuration syntax
+E         /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+E         /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+E         10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf is not a file or does not exist
+E         /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+E         /docker-entrypoint.sh: Configuration complete; ready for start up
+E           ✗ nginx -t failed (see log above)
+E         
+E         [I] Python API venv health (shared venv = apps/api/.venv)
+E         release imports OK
+E           ✓ release import closure (cwd=/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1): deps + app.storage + app.main + workers.celery_app + tasks
+E           ✓ celery executable present: /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/celery
+E         
+E         [J] systemd unit ExecStart path existence
+E           ✓ gsplatform-api ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/uvicorn)
+E           ✓ gsplatform-celery-cpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-celery-gpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-cleanup ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E         
+E         [K] Reconstruction runtime (GPU worker) — BLOCKING when GPU unit is present
+E           ✓ reconstruction runtime verified (torch/gsplat versions + trainer --help + CUDA rasterization)
+E         
+E         [L] Alembic migration state
+E           ✗ alembic current () != head (cd03ef05ab06) — DB needs upgrade
+E         
+E         ================================================================================
+E         Preflight summary (release): 35 passed, 2 failed, 1 warnings
+E         
+E         Warnings:
+E         env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         RESULT: FAIL — 2 blocking issue(s) found (release).  Fix before deploying.
+E         2026/10/20 05:09:27 [emerg] 1#1: open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: [emerg] open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: configuration file /etc/nginx/nginx.conf test failed
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/bin/bash', '/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1/deploy...ginx/nginx.conf" failed (2: No such file or directory)\nnginx: configuration file /etc/nginx/nginx.conf test failed\n').returncode
+
+tests/test_fix0621.py:170: AssertionError
+__ TestReleasePreflightCwd.test_from_release_apps_api_passes_pythonpath_unset __
+
+self = <tests.test_fix0621.TestReleasePreflightCwd object at 0x702440595350>
+release_tree = ReleaseFixture(release=PosixPath('/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1'), deploy_roo...8/fix0621-release0/storage/scene-origin', 'GS_ENV_FILE': '/tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env'})
+
+    def test_from_release_apps_api_passes_pythonpath_unset(self, release_tree):
+        """§6 Case B — cwd = <release>/apps/api (deploy step 5 leaves the shell
+        here) + PYTHONPATH explicitly absent → workers import PASS."""
+        assert "PYTHONPATH" not in release_tree.env  # §27: must be documented
+        res = _run_release_preflight(release_tree, release_tree.release / "apps" / "api")
+>       assert res.returncode == 0, res.stdout + res.stderr
+E       AssertionError: GSPlatform Preflight — mode=release environment=staging dry-run=0
+E         ================================================================================
+E         [A] Host & filesystem
+E           ✓ nginx available (/home/test/bin/nginx)
+E           ✓ python3 available (/home/test/biosoft/enter/bin/python3)
+E           ✓ node available (/home/test/bin/node)
+E           ✓ pnpm available (/home/test/.nvm/versions/node/v24.16.0/bin/pnpm)
+E           ✓ ffmpeg available (/usr/bin/ffmpeg)
+E         
+E         Directories
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/staging
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/published
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/quarantine
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/logs
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/scene-origin
+E           ✓ Storage root has 363 GB free
+E         
+E         Env file
+E           ⚠ env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         [B] PostgreSQL connectivity
+E           ✓ PostgreSQL reachable (pg_isready, GS_DATABASE_URL)
+E         
+E         [C] Redis connectivity
+E           ✓ Redis PING OK
+E         
+E         [D] Production configuration
+E           ✓ rate-limiter backend policy only enforced in production
+E         
+E         [E] NVIDIA host runtime
+E           ✓ NVIDIA GPU visible: 2 device(s) (nvidia-smi)
+E         
+E         [F] Release root & metadata
+E           ✓ current symlink points to /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1
+E           ✓ release commit hash recorded (a301ef8dd83fb3d90d1dcce3f5723c4b66739c1b)
+E         
+E         [G] Build artifacts & release integrity
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/web/dist/index.html exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/main.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/nginx/gsplatform.conf exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/systemd/gsplatform-api.service exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/uvicorn exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/__init__.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/base.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/local_disk.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/paths.py exists
+E         
+E         [H] Nginx configuration syntax
+E         /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+E         /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+E         10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf is not a file or does not exist
+E         /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+E         /docker-entrypoint.sh: Configuration complete; ready for start up
+E           ✗ nginx -t failed (see log above)
+E         
+E         [I] Python API venv health (shared venv = apps/api/.venv)
+E         release imports OK
+E           ✓ release import closure (cwd=/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1): deps + app.storage + app.main + workers.celery_app + tasks
+E           ✓ celery executable present: /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/celery
+E         
+E         [J] systemd unit ExecStart path existence
+E           ✓ gsplatform-api ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/uvicorn)
+E           ✓ gsplatform-celery-cpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-celery-gpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-cleanup ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E         
+E         [K] Reconstruction runtime (GPU worker) — BLOCKING when GPU unit is present
+E           ✓ reconstruction runtime verified (torch/gsplat versions + trainer --help + CUDA rasterization)
+E         
+E         [L] Alembic migration state
+E           ✗ alembic current () != head (cd03ef05ab06) — DB needs upgrade
+E         
+E         ================================================================================
+E         Preflight summary (release): 35 passed, 2 failed, 1 warnings
+E         
+E         Warnings:
+E         env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         RESULT: FAIL — 2 blocking issue(s) found (release).  Fix before deploying.
+E         2026/10/20 05:11:52 [emerg] 1#1: open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: [emerg] open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: configuration file /etc/nginx/nginx.conf test failed
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/bin/bash', '/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1/deploy...ginx/nginx.conf" failed (2: No such file or directory)\nnginx: configuration file /etc/nginx/nginx.conf test failed\n').returncode
+
+tests/test_fix0621.py:179: AssertionError
+________ TestReleasePreflightCwd.test_from_tmp_passes_pythonpath_unset _________
+
+self = <tests.test_fix0621.TestReleasePreflightCwd object at 0x702440595710>
+release_tree = ReleaseFixture(release=PosixPath('/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1'), deploy_roo...8/fix0621-release0/storage/scene-origin', 'GS_ENV_FILE': '/tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env'})
+tmp_path = PosixPath('/tmp/pytest-of-test/pytest-68/test_from_tmp_passes_pythonpat0')
+
+    def test_from_tmp_passes_pythonpath_unset(self, release_tree, tmp_path):
+        """§6 Case C — cwd = /tmp + PYTHONPATH absent → workers import PASS."""
+        assert "PYTHONPATH" not in release_tree.env
+        res = _run_release_preflight(release_tree, tmp_path)
+>       assert res.returncode == 0, res.stdout + res.stderr
+E       AssertionError: GSPlatform Preflight — mode=release environment=staging dry-run=0
+E         ================================================================================
+E         [A] Host & filesystem
+E           ✓ nginx available (/home/test/bin/nginx)
+E           ✓ python3 available (/home/test/biosoft/enter/bin/python3)
+E           ✓ node available (/home/test/bin/node)
+E           ✓ pnpm available (/home/test/.nvm/versions/node/v24.16.0/bin/pnpm)
+E           ✓ ffmpeg available (/usr/bin/ffmpeg)
+E         
+E         Directories
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/staging
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/published
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/quarantine
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/logs
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/scene-origin
+E           ✓ Storage root has 363 GB free
+E         
+E         Env file
+E           ⚠ env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         [B] PostgreSQL connectivity
+E           ✓ PostgreSQL reachable (pg_isready, GS_DATABASE_URL)
+E         
+E         [C] Redis connectivity
+E           ✓ Redis PING OK
+E         
+E         [D] Production configuration
+E           ✓ rate-limiter backend policy only enforced in production
+E         
+E         [E] NVIDIA host runtime
+E           ✓ NVIDIA GPU visible: 2 device(s) (nvidia-smi)
+E         
+E         [F] Release root & metadata
+E           ✓ current symlink points to /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1
+E           ✓ release commit hash recorded (a301ef8dd83fb3d90d1dcce3f5723c4b66739c1b)
+E         
+E         [G] Build artifacts & release integrity
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/web/dist/index.html exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/main.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/nginx/gsplatform.conf exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/systemd/gsplatform-api.service exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/uvicorn exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/__init__.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/base.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/local_disk.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/paths.py exists
+E         
+E         [H] Nginx configuration syntax
+E         /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+E         /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+E         10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf is not a file or does not exist
+E         /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+E         /docker-entrypoint.sh: Configuration complete; ready for start up
+E           ✗ nginx -t failed (see log above)
+E         
+E         [I] Python API venv health (shared venv = apps/api/.venv)
+E         release imports OK
+E           ✓ release import closure (cwd=/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1): deps + app.storage + app.main + workers.celery_app + tasks
+E           ✓ celery executable present: /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/celery
+E         
+E         [J] systemd unit ExecStart path existence
+E           ✓ gsplatform-api ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/uvicorn)
+E           ✓ gsplatform-celery-cpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-celery-gpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-cleanup ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E         
+E         [K] Reconstruction runtime (GPU worker) — BLOCKING when GPU unit is present
+E           ✓ reconstruction runtime verified (torch/gsplat versions + trainer --help + CUDA rasterization)
+E         
+E         [L] Alembic migration state
+E           ✗ alembic current () != head (cd03ef05ab06) — DB needs upgrade
+E         
+E         ================================================================================
+E         Preflight summary (release): 35 passed, 2 failed, 1 warnings
+E         
+E         Warnings:
+E         env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         RESULT: FAIL — 2 blocking issue(s) found (release).  Fix before deploying.
+E         2026/10/20 05:14:10 [emerg] 1#1: open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: [emerg] open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: configuration file /etc/nginx/nginx.conf test failed
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/bin/bash', '/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1/deploy...ginx/nginx.conf" failed (2: No such file or directory)\nnginx: configuration file /etc/nginx/nginx.conf test failed\n').returncode
+
+tests/test_fix0621.py:187: AssertionError
+________ TestReleasePreflightCwd.test_deploy_real_cwd_simulation_passes ________
+
+self = <tests.test_fix0621.TestReleasePreflightCwd object at 0x702440595b10>
+release_tree = ReleaseFixture(release=PosixPath('/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1'), deploy_roo...8/fix0621-release0/storage/scene-origin', 'GS_ENV_FILE': '/tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env'})
+
+    def test_deploy_real_cwd_simulation_passes(self, release_tree):
+        """§7 — the actual deploy chain: step 5 cd apps/api → step 6 current →
+        step 6b invoke RELEASE_DIR/deploy/scripts/preflight.sh --mode release
+        from that cwd, PYTHONPATH unset → workers import PASS.  This is the A
+        item's final acceptance basis."""
+        deploy = release_tree
+        # current must resolve to the release (step 6 already done in fixture)
+        assert os.path.realpath(str(deploy.current)) == os.path.realpath(str(deploy.release))
+        res = subprocess.run(  # noqa: S603 - our own tracked script, fixed inputs
+            [BASH, str(deploy.release / "deploy" / "scripts" / "preflight.sh"),
+             "--environment", "staging", "--mode", "release"],
+            cwd=str(deploy.release / "apps" / "api"),
+            env=deploy.env, capture_output=True, text=True, timeout=240,
+        )
+>       assert res.returncode == 0, res.stdout + res.stderr
+E       AssertionError: GSPlatform Preflight — mode=release environment=staging dry-run=0
+E         ================================================================================
+E         [A] Host & filesystem
+E           ✓ nginx available (/home/test/bin/nginx)
+E           ✓ python3 available (/home/test/biosoft/enter/bin/python3)
+E           ✓ node available (/home/test/bin/node)
+E           ✓ pnpm available (/home/test/.nvm/versions/node/v24.16.0/bin/pnpm)
+E           ✓ ffmpeg available (/usr/bin/ffmpeg)
+E         
+E         Directories
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/staging
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/published
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/quarantine
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/logs
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/storage/scene-origin
+E           ✓ Storage root has 363 GB free
+E         
+E         Env file
+E           ⚠ env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         [B] PostgreSQL connectivity
+E           ✓ PostgreSQL reachable (pg_isready, GS_DATABASE_URL)
+E         
+E         [C] Redis connectivity
+E           ✓ Redis PING OK
+E         
+E         [D] Production configuration
+E           ✓ rate-limiter backend policy only enforced in production
+E         
+E         [E] NVIDIA host runtime
+E           ✓ NVIDIA GPU visible: 2 device(s) (nvidia-smi)
+E         
+E         [F] Release root & metadata
+E           ✓ current symlink points to /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1
+E           ✓ release commit hash recorded (a301ef8dd83fb3d90d1dcce3f5723c4b66739c1b)
+E         
+E         [G] Build artifacts & release integrity
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/web/dist/index.html exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/main.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/nginx/gsplatform.conf exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/deploy/systemd/gsplatform-api.service exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/uvicorn exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/__init__.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/base.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/local_disk.py exists
+E           ✓ /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/app/storage/paths.py exists
+E         
+E         [H] Nginx configuration syntax
+E         /docker-entrypoint.sh: /docker-entrypoint.d/ is not empty, will attempt to perform configuration
+E         /docker-entrypoint.sh: Looking for shell scripts in /docker-entrypoint.d/
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/10-listen-on-ipv6-by-default.sh
+E         10-listen-on-ipv6-by-default.sh: info: /etc/nginx/conf.d/default.conf is not a file or does not exist
+E         /docker-entrypoint.sh: Sourcing /docker-entrypoint.d/15-local-resolvers.envsh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+E         /docker-entrypoint.sh: Launching /docker-entrypoint.d/30-tune-worker-processes.sh
+E         /docker-entrypoint.sh: Configuration complete; ready for start up
+E           ✗ nginx -t failed (see log above)
+E         
+E         [I] Python API venv health (shared venv = apps/api/.venv)
+E         release imports OK
+E           ✓ release import closure (cwd=/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1): deps + app.storage + app.main + workers.celery_app + tasks
+E           ✓ celery executable present: /tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/current/apps/api/.venv/bin/celery
+E         
+E         [J] systemd unit ExecStart path existence
+E           ✓ gsplatform-api ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/uvicorn)
+E           ✓ gsplatform-celery-cpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-celery-gpu ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E           ✓ gsplatform-cleanup ExecStart resolves under current (/opt/gsplatform/current/apps/api/.venv/bin/celery)
+E         
+E         [K] Reconstruction runtime (GPU worker) — BLOCKING when GPU unit is present
+E           ✓ reconstruction runtime verified (torch/gsplat versions + trainer --help + CUDA rasterization)
+E         
+E         [L] Alembic migration state
+E           ✗ alembic current () != head (cd03ef05ab06) — DB needs upgrade
+E         
+E         ================================================================================
+E         Preflight summary (release): 35 passed, 2 failed, 1 warnings
+E         
+E         Warnings:
+E         env file missing: /tmp/pytest-of-test/pytest-68/fix0621-release0/no-such.env (non-blocking outside production)
+E         
+E         RESULT: FAIL — 2 blocking issue(s) found (release).  Fix before deploying.
+E         2026/10/20 05:16:38 [emerg] 1#1: open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: [emerg] open() "/etc/nginx/nginx.conf" failed (2: No such file or directory)
+E         nginx: configuration file /etc/nginx/nginx.conf test failed
+E         
+E       assert 1 == 0
+E        +  where 1 = CompletedProcess(args=['/usr/bin/bash', '/tmp/pytest-of-test/pytest-68/fix0621-release0/deploy_root/releases/r1/deploy...ginx/nginx.conf" failed (2: No such file or directory)\nnginx: configuration file /etc/nginx/nginx.conf test failed\n').returncode
+
+tests/test_fix0621.py:204: AssertionError
+=============================== warnings summary ===============================
+.venv/lib/python3.11/site-packages/fastapi/testclient.py:1
+  /fj/GSPlatform/apps/api/.venv/lib/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+.venv/lib/python3.11/site-packages/starlette/testclient.py:53
+  /fj/GSPlatform/apps/api/.venv/lib/python3.11/site-packages/starlette/testclient.py:53: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    _PortalFactoryType = Callable[[], AbstractContextManager[anyio.abc.BlockingPortal]]
+
+tests/test_assistant.py: 1 warning
+tests/test_auth.py: 1 warning
+tests/test_editor_sessions.py: 1 warning
+tests/test_fix_upload011_security.py: 1 warning
+tests/test_scene_processing.py: 10 warnings
+tests/test_scene_runtime.py: 2 warnings
+tests/test_uploads.py: 1 warning
+  /fj/GSPlatform/apps/api/.venv/lib/python3.11/site-packages/starlette/_exception_handler.py:59: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    response = await handler(conn, exc)  # type: ignore[arg-type]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_editor_publication.py::test_export_retention_preserves_current_and_history
+FAILED tests/test_fix0621.py::TestReleasePreflightCwd::test_from_release_root_passes
+FAILED tests/test_fix0621.py::TestReleasePreflightCwd::test_from_release_apps_api_passes_pythonpath_unset
+FAILED tests/test_fix0621.py::TestReleasePreflightCwd::test_from_tmp_passes_pythonpath_unset
+FAILED tests/test_fix0621.py::TestReleasePreflightCwd::test_deploy_real_cwd_simulation_passes
+EXIT=1

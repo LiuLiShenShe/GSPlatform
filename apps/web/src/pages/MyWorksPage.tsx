@@ -12,11 +12,27 @@ type LoadState = 'loading' | 'ready' | 'error';
 
 type TabKey = 'all' | WorkSummary['status'];
 
-const STATUS_COUNTS_DEFAULT = { PUBLISHED: 0, DRAFT: 0, PROCESSING: 0, FAILED: 0 };
+const STATUS_COUNTS_DEFAULT = {
+  PUBLISHED: 0,
+  DRAFT: 0,
+  PROCESSING: 0,
+  FAILED: 0,
+  ARCHIVED: 0,
+  DELETED: 0,
+};
+
+const KNOWN_TABS: readonly WorkSummary['status'][] = [
+  'PUBLISHED',
+  'DRAFT',
+  'PROCESSING',
+  'FAILED',
+  'ARCHIVED',
+  'DELETED',
+];
 
 function toTabKey(value: string): TabKey {
-  if (value === 'PUBLISHED' || value === 'DRAFT' || value === 'PROCESSING' || value === 'FAILED') {
-    return value;
+  if ((KNOWN_TABS as readonly string[]).includes(value)) {
+    return value as WorkSummary['status'];
   }
   return 'all';
 }
@@ -49,6 +65,9 @@ export default function MyWorksPage() {
       signal: controller.signal,
       search: q || undefined,
       sort: sortParam === 'title' ? 'title' : 'updated',
+      // GS-NEXT-10：回收站标签要能看到已软删除的作品；其余标签在下面过滤掉，
+      // 与后端默认「不返回已删除」的语义保持一致。
+      includeDeleted: true,
     })
       .then((data) => {
         setWorks(data);
@@ -72,8 +91,12 @@ export default function MyWorksPage() {
   }, [works]);
 
   const filtered = useMemo(() => {
-    let list = works;
-    if (tab !== 'all') {
+    // 除「回收站」外，所有标签都排除已软删除的作品。
+    const base = tab === 'DELETED'
+      ? works.filter((w) => w.status === 'DELETED')
+      : works.filter((w) => w.status !== 'DELETED');
+    let list = base;
+    if (tab !== 'all' && tab !== 'DELETED') {
       list = list.filter((w) => w.status === tab);
     }
     if (keyword.trim()) {
@@ -122,11 +145,16 @@ export default function MyWorksPage() {
   const reload = useCallback(() => setReloadToken((n) => n + 1), []);
 
   const tabItems = [
-    { key: 'all', label: `全部 ${works.length}` },
+    // 「全部」不含回收站内容 —— 已删除的作品只在「回收站」标签出现。
+    // 用 max(0, …) 是因为列表按 limit 截断时 counts.DELETED 仍可能计入被截断
+    // 之外的条目，直接相减会出现负数。
+    { key: 'all', label: `全部 ${Math.max(0, works.length - counts.DELETED)}` },
     { key: 'DRAFT', label: `草稿 ${counts.DRAFT}` },
     { key: 'PROCESSING', label: `处理中 ${counts.PROCESSING}` },
     { key: 'PUBLISHED', label: `已发布 ${counts.PUBLISHED}` },
     { key: 'FAILED', label: `失败 ${counts.FAILED}` },
+    { key: 'ARCHIVED', label: `已归档 ${counts.ARCHIVED}` },
+    { key: 'DELETED', label: `回收站 ${counts.DELETED}` },
   ];
 
   return (

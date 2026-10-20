@@ -170,14 +170,23 @@ class SceneRepository:
         status_filter: str | None = None,
         search: str | None = None,
         sort: str = "updated",
+        include_deleted: bool = False,
     ) -> tuple[list[Scene], str | None]:
-        """Return owner's scenes ordered by updated_at DESC + keyset cursor."""
-        conditions = [
-            Scene.owner_id == owner_id,
-            Scene.deleted_at.is_(None),
-        ]
-        if status_filter:
-            conditions.append(Scene.status == status_filter)
+        """Return owner's scenes ordered by updated_at DESC + keyset cursor.
+
+        GS-NEXT-10: by default soft-deleted rows stay hidden. ``include_deleted``
+        returns them alongside live scenes, and ``status_filter="DELETED"``
+        returns *only* the recycle bin (deleted rows) so the works page can offer
+        a recovery entry point.
+        """
+        conditions = [Scene.owner_id == owner_id]
+        if status_filter == "DELETED":
+            conditions.append(Scene.deleted_at.is_not(None))
+        else:
+            if not include_deleted:
+                conditions.append(Scene.deleted_at.is_(None))
+            if status_filter:
+                conditions.append(Scene.status == status_filter)
         if search:
             conditions.append(Scene.title.ilike(f"%{search}%"))
 
@@ -247,6 +256,16 @@ class SceneRepository:
 
     def flush(self) -> None:
         self._session.flush()
+
+    def commit(self) -> None:
+        """Commit the unit of work now (see ``get_db_session`` teardown note).
+
+        The request-scoped session commits in the FastAPI dependency teardown,
+        which runs after the response is sent. Owner mutations that a client
+        immediately follows with another read (archive → restore) must be
+        durable before the response, so they commit explicitly here.
+        """
+        self._session.commit()
 
     # ---- favorite / share counters (Phase 08) ----
 
