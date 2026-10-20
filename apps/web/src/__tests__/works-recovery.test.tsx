@@ -20,7 +20,13 @@ vi.mock('../services/worksApi', () => ({
   fetchMyWorks: vi.fn(async () => rows),
   updateScene: vi.fn(async () => ({})),
   archiveScene: vi.fn(async () => {}),
-  restoreScene: vi.fn(async () => {}),
+  restoreScene: vi.fn(async () => ({
+    message: '场景已恢复',
+    status: 'PUBLISHED',
+    legacy: false,
+    fromRecycleBin: true,
+    stillArchived: false,
+  })),
   deleteScene: vi.fn(async () => {}),
 }));
 
@@ -104,6 +110,6 @@ describe('GS-NEXT-10 作品卡恢复入口', () => {
     expect(confirm).toBeTruthy();
     await userEvent.click(confirm as HTMLElement);
     expect(restoreScene).toHaveBeenCalledWith('bin-1');
-    expect(await screen.findByText('已恢复')).toBeInTheDocument();
+    expect(await screen.findByText('已从回收站恢复，作品与资产都还在')).toBeInTheDocument();
   });
 });

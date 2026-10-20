@@ -9,7 +9,13 @@ vi.mock('../services/worksApi', async () => {
     fetchMyWorks: vi.fn(async () => myWorksFixtures),
     updateScene: vi.fn(async () => ({})),
     archiveScene: vi.fn(async () => {}),
-    restoreScene: vi.fn(async () => {}),
+    restoreScene: vi.fn(async () => ({
+    message: '场景已恢复',
+    status: 'PUBLISHED',
+    legacy: false,
+    fromRecycleBin: true,
+    stillArchived: false,
+  })),
     deleteScene: vi.fn(async () => {}),
   };
 });

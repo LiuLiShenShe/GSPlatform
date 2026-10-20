@@ -55,6 +55,119 @@ from app.storage.local_disk import LocalDiskStorage
 logger = logging.getLogger("gsplatform.publish")
 
 
+def scene_origin_slug_dir(scene: Scene) -> Path | None:
+    """``<origin>/<slug>`` — the directory holding the ``current`` alias.
+
+    Returns ``None`` when this deployment intentionally does not maintain a
+    scene-origin tree (production without ``GS_SCENE_ORIGIN_ROOT`` or an
+    unknown env).  Callers use ``None`` to mean "nothing to verify".
+    """
+    if settings.env == "production":
+        if not settings.scene_origin_root:
+            return None
+        return Path(settings.scene_origin_root) / scene.slug
+    if settings.env in {"development", "test"}:
+        # Same rule as ``SceneAssetService.origin_root``: an explicit
+        # GS_SCENE_ORIGIN_ROOT wins (isolated dev/e2e stacks), otherwise the
+        # repo's ``scenes/`` tree.
+        root = (
+            Path(settings.scene_origin_root)
+            if settings.scene_origin_root
+            else get_repo_root() / "scenes"
+        )
+        return root / scene.slug
+    return None
+
+
+def verify_scene_origin_alias(scene: Scene, version_id: str) -> bool | None:
+    """Verify the scene-origin ``current`` alias really serves *version_id*.
+
+    Returns ``None`` when the origin tree is not maintained in this
+    environment (nothing to verify), ``True`` when the alias and the version
+    directory are both present and consistent, ``False`` otherwise.
+    """
+    slug_dir = scene_origin_slug_dir(scene)
+    if slug_dir is None or not slug_dir.parent.is_dir():
+        return None
+    current = slug_dir / "current"
+    if not current.is_symlink():
+        return False
+    if os.readlink(current) != f"versions/{version_id}":
+        return False
+    version_dir = slug_dir / "versions" / version_id
+    return version_dir.exists()
+
+
+def bridge_scene_origin(scene: Scene, version_id: str) -> bool:
+    """Expose one immutable published version through the scene-origin tree.
+
+    The runtime descriptor resolves *immutable* ``versions/<asset_version>/…``
+    URLs, but the scene-origin tree still carries a mutable ``current`` alias
+    that the works-list ``manifestUrl`` and legacy (manifest-less) versions
+    fall back to.  This function keeps that alias pointing at ``version_id``:
+
+    ``scenes/<slug>/current       -> versions/<ver>``   (relative)
+    ``scenes/<slug>/versions/<ver> -> <storage>/published/<uuid>/versions/<ver>``
+
+    Dev (development/test): served by the Vite dev middleware
+    (``/local-scenes/<slug>/<rel>``) and the API asset endpoint.
+    Production: same shape under ``settings.scene_origin_root`` so Nginx's
+    INTERNAL ``/_scene-origin/`` location can serve it. Skipped entirely when
+    env is production and ``scene_origin_root`` is empty.
+
+    Idempotent and safe to re-run: an already-correct link is left alone; a
+    stale link is re-pointed. Returns ``True`` when the alias now points at
+    ``version_id`` (also ``True`` when the tree is intentionally skipped),
+    ``False`` when it could not be updated.
+    """
+    slug_dir = scene_origin_slug_dir(scene)
+    if slug_dir is None:
+        return True
+    if not slug_dir.parent.is_dir():
+        logger.debug("scene origin root missing; skip viewer bridge: %s", slug_dir.parent)
+        return True
+
+    target = Path(settings.storage_root) / "published" / str(scene.id) / "versions" / version_id
+
+    try:
+        slug_dir.mkdir(parents=True, exist_ok=True)
+        # 1) versions/<ver> -> <storage>/published/<uuid>/versions/<ver>
+        versions_dir = slug_dir / "versions"
+        versions_dir.mkdir(exist_ok=True)
+        ver_link = versions_dir / version_id
+        target_exists = target.is_dir()
+        if ver_link.is_symlink():
+            if (
+                target_exists
+                and os.path.realpath(ver_link) != os.path.realpath(target)
+            ):
+                ver_link.unlink()
+                ver_link.symlink_to(target, target_is_directory=True)
+        elif ver_link.exists():
+            # A real directory (legacy/seed layout) already IS this version's
+            # bytes — never delete or replace it.
+            logger.debug("origin version dir is a real directory; kept: %s", ver_link)
+        elif target_exists:
+            ver_link.symlink_to(target, target_is_directory=True)
+        # 2) current -> versions/<ver>   (relative, matching build_streamed_sog.sh)
+        current = slug_dir / "current"
+        expected_rel = f"versions/{version_id}"
+        if current.is_symlink():
+            if os.readlink(current) == expected_rel:
+                return True  # already correct
+            current.unlink()
+        elif current.exists():
+            # A real directory here is a legacy/seed layout we must not delete.
+            logger.warning("origin 'current' path is not a symlink; left as-is: %s", current)
+            return False
+        current.symlink_to(expected_rel, target_is_directory=True)
+        logger.info("scene-origin bridge: %s/current -> %s", slug_dir, ver_link)
+        return True
+    except OSError as exc:
+        logger.warning("scene-origin bridge failed for %s: %s", scene.slug, exc)
+        return False
+
+
 class PublishService:
     """Coordinates publish pipeline with the database."""
 
@@ -415,51 +528,11 @@ class PublishService:
         ``scene_origin_root`` is empty (no publicly served origin).
 
         This method creates that tree so a published scene is immediately
-        visible in the Viewer without copying files.
+        visible in the Viewer without copying files. The tree maintenance is
+        the shared :func:`bridge_scene_origin`, which GS-NEXT-11 version
+        activation re-uses so a rolled-back ``current`` alias never drifts.
         """
-        if settings.env == "production":
-            if not settings.scene_origin_root:
-                return
-            scenes_root = Path(settings.scene_origin_root)
-        elif settings.env in {"development", "test"}:
-            # FIX-05 P1-7：禁止 Path(__file__).parents[N]（文件移动即失效）；
-            # repo root 统一走共享 helper（app.core.paths.get_repo_root）。
-            repo_root = get_repo_root()
-            scenes_root = repo_root / "scenes"
-        else:
-            return
-        if not scenes_root.is_dir():
-            logger.debug("scene origin root missing; skip viewer bridge: %s", scenes_root)
-            return
-
-        slug_dir = scenes_root / scene.slug
-        target = Path(settings.storage_root) / "published" / str(scene.id) / "versions" / version_id
-
-        try:
-            slug_dir.mkdir(parents=True, exist_ok=True)
-            # 1) versions/<ver> -> <storage>/published/<uuid>/versions/<ver>
-            versions_dir = slug_dir / "versions"
-            versions_dir.mkdir(exist_ok=True)
-            ver_link = versions_dir / version_id
-            if ver_link.is_symlink() or ver_link.exists():
-                if ver_link.is_symlink() and os.path.realpath(ver_link) == os.path.realpath(target):
-                    pass
-                else:
-                    ver_link.unlink()
-                    ver_link.symlink_to(target, target_is_directory=True)
-            else:
-                ver_link.symlink_to(target, target_is_directory=True)
-            # 2) current -> versions/<ver>   (relative, matching build_streamed_sog.sh)
-            current = slug_dir / "current"
-            expected_rel = f"versions/{version_id}"
-            if current.is_symlink():
-                if os.readlink(current) == expected_rel:
-                    return  # already correct
-                current.unlink()
-            current.symlink_to(expected_rel, target_is_directory=True)
-            logger.info("dev viewer bridge: %s/current -> %s", slug_dir, ver_link)
-        except OSError as exc:
-            logger.warning("dev viewer bridge failed for %s: %s", scene.slug, exc)
+        bridge_scene_origin(scene, version_id)
 
     def mark_upload_succeeded(self, upload_id: uuid.UUID) -> None:
         self._uploads.update_status(upload_id, UploadSessionStatus.SUCCEEDED)

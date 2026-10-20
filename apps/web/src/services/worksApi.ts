@@ -149,9 +149,28 @@ export async function archiveScene(slug: string): Promise<void> {
   await httpClient.post(`/scenes/${encodeURIComponent(slug)}/archive`);
 }
 
-/** 恢复场景（owner）。 */
-export async function restoreScene(slug: string): Promise<void> {
-  await httpClient.post(`/scenes/${encodeURIComponent(slug)}/restore`);
+export interface SceneRestoreResult {
+  message: string;
+  status: string;
+  /** GS-NEXT-11：存量归档数据（归档前状态不可考）→ 已保守恢复到 READY。 */
+  legacy: boolean;
+  /** 本次只是从回收站出来。 */
+  fromRecycleBin: boolean;
+  /** 出来之后仍处于已归档状态，需要再恢复一次才真正解除归档。 */
+  stillArchived: boolean;
+}
+
+/**
+ * 恢复场景（owner）。
+ *
+ * 返回值用于给出**准确**的提示：删除 + 归档叠加时一次恢复只撤销一个状态位；
+ * 存量归档数据不猜它是 PUBLISHED 还是 READY，而是保守回到 READY 由用户确认。
+ */
+export async function restoreScene(slug: string): Promise<SceneRestoreResult> {
+  const response = await httpClient.post<SceneRestoreResult>(
+    `/scenes/${encodeURIComponent(slug)}/restore`,
+  );
+  return response.data;
 }
 
 /** 软删除场景（owner，延迟清理）。 */

@@ -142,6 +142,14 @@ def main() -> None:
                 "tgt": Json({"x": 0.0, "y": 0.5, "z": 0.0}),
             },
         )
+        # A concurrent manual collision build can land between the DELETE
+        # above and here; the recovery e2e deletes the scene next and
+        # soft-delete deliberately refuses while a job is running. Clear this
+        # fixture's job rows once more so the fixture is deterministic.
+        conn.execute(
+            text("delete from collision_assets where scene_id = :s"), {"s": scene_id}
+        )
+        conn.execute(text("delete from jobs where scene_id = :s"), {"s": scene_id})
         print(f"seeded {SLUG} scene_id={scene_id} version={version_id}")
 
     # Bytes: the official viewer resolves the current asset under this scene's

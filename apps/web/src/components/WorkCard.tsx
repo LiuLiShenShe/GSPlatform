@@ -138,8 +138,17 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
   const doRestore = async (): Promise<void> => {
     setActing(true);
     try {
-      await restoreScene(work.id);
-      message.success('已恢复');
+      const result = await restoreScene(work.id);
+      // GS-NEXT-11：恢复是**两步**语义（删除/归档是两个状态位），提示必须如实。
+      if (result.stillArchived) {
+        message.success('已从回收站恢复；作品仍处于「已归档」状态，请再点一次「恢复」解除归档。');
+      } else if (result.legacy) {
+        message.success('已恢复为「待发布」状态（该作品为历史归档数据，无法确认归档前是否已公开）；确认无误后请重新发布。');
+      } else if (result.fromRecycleBin) {
+        message.success('已从回收站恢复，作品与资产都还在');
+      } else {
+        message.success('已恢复到归档前的状态，作品会重新出现在列表里');
+      }
       onChanged();
     } catch {
       message.error('恢复失败，请重试。');
@@ -248,7 +257,7 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
               title={`恢复「${work.title}」？`}
               description={
                 work.status === 'DELETED'
-                  ? '从回收站恢复到删除前的状态，作品与资产都还在。'
+                  ? '从回收站恢复到删除前的状态，作品与资产都还在。若作品同时处于归档状态，恢复后仍需再点一次「恢复」解除归档。'
                   : '恢复到归档前的状态，作品会重新出现在列表里。'
               }
               okText="恢复"

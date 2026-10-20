@@ -66,7 +66,11 @@ def publication_edit(owner, db, clock, digest):
         (directory / "lod-meta.json").write_bytes(b"{}")
         origin = Path(settings.scene_origin_root) / scene.slug / "versions"
         origin.mkdir(parents=True, exist_ok=True)
-        (origin / source.asset_version).symlink_to(directory, target_is_directory=True)
+        link = origin / source.asset_version
+        # GS-NEXT-11: publish also bridges the origin tree, so this helper's
+        # link may already exist (idempotent fixture).
+        if not link.is_symlink():
+            link.symlink_to(directory, target_is_directory=True)
     response = client.post(f"/api/v1/scenes/{scene.slug}/edit-sessions", headers=headers,
                            json={"expectedCurrentVersion": str(source.id), "selectedLod": 0,
                                  "acknowledgeLodSource": True})

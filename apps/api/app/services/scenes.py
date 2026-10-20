@@ -8,6 +8,7 @@ returned to HTTP layers here.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
@@ -19,6 +20,16 @@ from app.db.models.scene import Scene
 from app.repositories.scenes import SceneRepository
 from app.schemas.common import PageMeta
 from app.schemas.scene import SceneAuthor, SceneDetailOut, SceneListPage, SceneSummaryOut
+
+
+@dataclass(frozen=True)
+class RestoreResult:
+    """Outcome of ``restore_scene`` — drives precise, non-misleading UI copy."""
+
+    status: str
+    legacy: bool = False
+    from_recycle_bin: bool = False
+    still_archived: bool = False
 
 # Business URL prefix for scene assets. FIX-01: private assets are NO LONGER a
 # public static path (/local-scenes was an unauthenticated Nginx alias). All
@@ -305,14 +316,22 @@ class SceneService:
         # would otherwise still read the pre-archive row and get a bogus 409.
         self._repo.commit()
 
-    def restore_scene(self, *, owner_id: uuid.UUID, slug: str) -> None:
-        """Restore an archived **or** soft-deleted scene (GS-NEXT-10).
+    def restore_scene(self, *, owner_id: uuid.UUID, slug: str) -> RestoreResult:
+        """Restore an archived **or** soft-deleted scene (GS-NEXT-10/11).
 
         - soft-deleted (``deleted_at`` set) → clear the marker; the row keeps
           whatever status it had, so a deleted PUBLISHED scene comes back
-          PUBLISHED;
-        - archived → return to ``archived_from_status`` (PUBLISHED/READY), never
-          a blanket PUBLISHED.
+          PUBLISHED. A scene that was *also* archived stays ARCHIVED — the
+          caller must un-archive as a second, explicit step;
+        - archived → return to ``archived_from_status`` (PUBLISHED/READY).
+
+        **Legacy rows** (archived before GS-NEXT-10, so
+        ``archived_from_status IS NULL``) cannot prove their pre-archive
+        status: GS-NEXT-10's blanket ``or PUBLISHED`` would silently promote a
+        READY scene into the public catalogue. GS-NEXT-11 restores them to
+        ``READY`` instead — private to the owner, never publicly listed — and
+        reports ``legacy=True`` so the UI can ask the owner to confirm and
+        re-publish explicitly. Nothing in the historical data is rewritten.
 
         Both paths are owner-gated; a scene that is neither archived nor
         deleted is still a 409, so the endpoint stays idempotent-safe.
@@ -326,14 +345,30 @@ class SceneService:
         if scene.deleted_at is not None:
             scene.deleted_at = None
             self._repo.commit()
-            return
+            if scene.status == SceneStatus.ARCHIVED.value:
+                return RestoreResult(
+                    status=scene.status,
+                    from_recycle_bin=True,
+                    still_archived=True,
+                )
+            return RestoreResult(status=scene.status, from_recycle_bin=True)
 
         if scene.status != SceneStatus.ARCHIVED.value:
             raise ConflictError("场景不在已归档或已删除状态，无法恢复")
 
-        scene.status = scene.archived_from_status or SceneStatus.PUBLISHED.value
+        recorded = scene.archived_from_status
+        if recorded in ("PUBLISHED", "READY"):
+            target = recorded
+            legacy = False
+        else:
+            # NULL (pre-GS-NEXT-10 archive) or an unexpected value: the
+            # pre-archive status is unprovable. Never promote to PUBLISHED.
+            target = SceneStatus.READY.value
+            legacy = True
+        scene.status = target
         scene.archived_from_status = None
         self._repo.commit()
+        return RestoreResult(status=target, legacy=legacy)
 
     def soft_delete_scene(self, *, owner_id: uuid.UUID, slug: str) -> None:
         """Soft-delete a scene.  Refuses if active jobs exist.

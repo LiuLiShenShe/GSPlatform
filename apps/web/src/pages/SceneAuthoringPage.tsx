@@ -27,6 +27,7 @@ import { BackgroundMusicPanel } from '../features/authoring/BackgroundMusicPanel
 import { CollisionPanel } from '../features/authoring/CollisionPanel';
 import { ViewpointPanel } from '../features/authoring/ViewpointPanel';
 import { GaussianEditorPanel } from '../features/authoring/GaussianEditorPanel';
+import { VersionPanel } from '../features/authoring/VersionPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
 import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 import { resolveSceneRuntimeDescriptor } from '../scene-runtime/descriptorResolver';
@@ -68,6 +69,9 @@ export default function SceneAuthoringPage() {
 
   // GS-NEXT-02：当前预览 runtime 使用的描述符（用于「已保存≠运行时采用」提示）。
   const [activeDescriptor, setActiveDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
+
+  // GS-NEXT-11：版本切换成功后递增 —— 描述符/预览必须重新读取（不做乐观假设）。
+  const [versionRevision, setVersionRevision] = useState(0);
 
   const authoring = useSceneAuthoring(effectiveSceneId);
 
@@ -152,7 +156,7 @@ export default function SceneAuthoringPage() {
       runtime?.destroy();
       runtimeRef.current = null;
     };
-  }, [effectiveSceneId, authoring.settingsRevision, annotationRevision]);
+  }, [effectiveSceneId, authoring.settingsRevision, annotationRevision, versionRevision]);
 
   // Load annotations on mount (Phase 11)
   useEffect(() => {
@@ -286,6 +290,25 @@ export default function SceneAuthoringPage() {
     [effectiveSceneId],
   );
 
+  /**
+   * GS-NEXT-11 §6：切换历史版本成功后必须重新读取真实状态，并明确提示
+   * 「哪些空间配置需要重新确认」——空间配置属于场景而不是版本，切换几何体后
+   * 运行时按保守策略停用它们。
+   */
+  const handleVersionSwitched = useCallback(
+    (result: { currentVersionId: string; spatialStale: boolean }) => {
+      setVersionRevision((n) => n + 1);
+      void authoring.refreshPresentation();
+      void listAnnotations(effectiveSceneId)
+        .then((data) => setAnnotations(data))
+        .catch(() => { /* 预览仍可使用，不阻塞版本切换结果 */ });
+      if (result.spatialStale) {
+        message.warning('版本已切换：空间配置（初始视角 / 观察点 / 标注 / 碰撞）需要重新确认。');
+      }
+    },
+    [authoring, effectiveSceneId],
+  );
+
   const handleSaveAll = useCallback(async () => {
     const pose = await getCurrentPose();
     if (!pose) {
@@ -401,6 +424,7 @@ export default function SceneAuthoringPage() {
         </Space>
 
         <GaussianEditorPanel sceneId={effectiveSceneId} />
+        <VersionPanel sceneId={effectiveSceneId} onSwitched={handleVersionSwitched} />
         {initialViewUse.status === 'ignored' && (
           <div style={{ marginBottom: 8 }}>
             <Alert
