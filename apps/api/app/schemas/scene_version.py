@@ -68,6 +68,20 @@ class SpatialBindingOut(BaseModel):
         default=False, description="是否需要所有者重新确认空间配置"
     )
     staleAt: datetime | None = Field(default=None, description="失效时间")
+    revision: int = Field(
+        default=0, description="空间失效代数；每次版本切换递增"
+    )
+    pendingFeatures: list[str] = Field(
+        default_factory=list,
+        description=(
+            "尚未对当前版本重新确认的空间配置项"
+            "（initialCamera / worldTransform / viewpoints / annotations / "
+            "collision / calibration）"
+        ),
+    )
+    confirmedFeatures: list[str] = Field(
+        default_factory=list, description="已绑定到当前版本、运行时可信的空间配置项"
+    )
 
     model_config = {"populate_by_name": True}
 

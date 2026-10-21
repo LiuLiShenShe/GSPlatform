@@ -380,6 +380,7 @@ restart_svc() {
     fi
 }
 restart_svc gsplatform-api
+restart_svc gsplatform-celery-publish
 restart_svc gsplatform-celery-cpu
 restart_svc gsplatform-celery-gpu
 if ! sudo nginx -t >/tmp/gsplatform-nginx-t.log 2>&1; then

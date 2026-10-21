@@ -1,0 +1,48 @@
+[Unit]
+Description=GSPlatform Celery Publish worker (publish/cleanup queue)
+Wants=network-online.target redis-server.service
+After=network-online.target redis-server.service gsplatform-api.service
+# acks_late + broker reconnect make redis short outages survivable; do not
+# hard-fail this unit just because redis restarted.
+RequiresMountsFor=/opt/gsplatform /srv/gsplatform-data
+
+[Service]
+Type=simple
+User=gsplatform
+Group=gsplatform
+WorkingDirectory=/opt/gsplatform/current
+EnvironmentFile=/etc/gsplatform/env
+
+# GS-NEXT-12 §E: publishing used to be a guest on the CPU worker's `gsplatform`
+# queue, so a CPU-bound reconstruction could starve a publish and a publish
+# crash would take the reconstruction worker down with it (Restart=on-failure
+# + KillMode=control-group).  It now has its OWN unit, own queue, own restart
+# policy and own resource limits — exactly like the GPU worker.
+#
+# Contract (unchanged, only the process topology): tasks.publish_scene is
+# idempotent (FIX-UPLOAD-01.1/01.2/01.3): a crashed publish is re-driven by the
+# recovery sweep and re-committing the same (scene, asset_version) reuses the
+# existing immutable version instead of creating a duplicate.
+ExecStart=/opt/gsplatform/current/apps/api/.venv/bin/celery -A workers.celery_app worker -Q gsplatform --concurrency=${CELERY_PUBLISH_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=100 --without-gossip --without-mingle
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=10
+TimeoutStopSec=3600
+KillSignal=SIGTERM
+KillMode=control-group
+
+# --- hardening (mirrors the CPU unit) ---
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/srv/gsplatform-data /opt/gsplatform/current
+PrivateDevices=true
+CapabilityBoundingSet=
+SystemCallFilter=~@mount @swap
+
+LimitNOFILE=65536
+LimitNPROC=8192
+
+[Install]
+WantedBy=multi-user.target

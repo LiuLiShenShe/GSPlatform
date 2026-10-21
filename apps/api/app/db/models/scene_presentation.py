@@ -48,6 +48,17 @@ class ScenePresentation(Base):
     )
     initial_camera_fov: Mapped[float | None] = mapped_column(nullable=True)
 
+    # GS-NEXT-12 — per-feature version binding for re-authored spatial data.
+    # ``None`` means "never explicitly confirmed against a version"; such data
+    # is only served while the scene has no spatial invalidation record at all
+    # (see app.services.spatial_binding).
+    initial_camera_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("scene_versions.id", ondelete="SET NULL"), nullable=True
+    )
+    world_transform_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("scene_versions.id", ondelete="SET NULL"), nullable=True
+    )
+
     # Background
     background_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="color"

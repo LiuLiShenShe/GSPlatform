@@ -212,15 +212,19 @@ class SceneVersionService:
         return scene
 
     def _spatial_binding(self, scene: Scene) -> SpatialBindingOut:
-        row = self._session.get(SceneSpatialState, scene.id)
-        if row is None:
-            return SpatialBindingOut(state="NONE")
-        valid = row.state == "VALID" and row.source_version_id == scene.current_version_id
+        from app.services.spatial_binding import resolve_status
+
+        status = resolve_status(self._session, scene)
         return SpatialBindingOut(
-            state="VALID" if valid else "STALE",
-            boundVersionId=str(row.source_version_id),
-            requiresConfirmation=not valid,
-            staleAt=row.stale_at,
+            state=status.state,
+            boundVersionId=(
+                str(status.bound_version_id) if status.bound_version_id else None
+            ),
+            requiresConfirmation=status.requires_confirmation,
+            staleAt=status.stale_at,
+            revision=status.revision,
+            pendingFeatures=list(status.pending_features),
+            confirmedFeatures=list(status.confirmed_features),
         )
 
     def _to_out(
@@ -481,11 +485,11 @@ class SceneVersionService:
         ground Walk.
         """
         affected = self._affectable_features(scene)
-        if not affected:
-            return []
         now = datetime.now(UTC)
         row = self._session.get(SceneSpatialState, scene.id)
         if row is None:
+            if not affected:
+                return []
             source = previous.id if previous is not None else scene.current_version_id
             if source is None:
                 return affected
@@ -495,13 +499,18 @@ class SceneVersionService:
                     source_version_id=source,
                     state="STALE",
                     stale_at=now,
+                    revision=1,
                 )
             )
             return affected
-        # Keep the recorded binding (historical evidence) — only flip the state.
-        if row.state != "STALE":
-            row.state = "STALE"
-            row.stale_at = now
+        # Keep the recorded binding (historical evidence) — only flip the state
+        # and bump the monotonic revision.  The revision invalidates collision
+        # builds that survived an A→B→A round-trip.  Per-feature (re)bindings on
+        # the presentation / viewpoints / annotations are deliberately left
+        # untouched: they stay bound to the version they were authored against.
+        row.state = "STALE"
+        row.stale_at = now
+        row.revision = (row.revision or 0) + 1
         return affected
 
     def _collision_policy(self, scene: Scene) -> str | None:

@@ -374,18 +374,7 @@ class SceneRuntimeService:
         annotations = self._build_annotations(scene)
         background_audio = self._build_background_audio(scene)
         collision = self._build_collision(scene)
-        from app.db.models.scene_spatial_state import SceneSpatialState
-
-        spatial = self._session.get(SceneSpatialState, scene.id)
-        if spatial is not None and spatial.state == "STALE":
-            presentation.initialCamera = RuntimeInitialCamera()
-            presentation.worldTransform = RuntimeWorldTransform()
-            viewpoints = []
-            annotations = []
-            if collision is not None:
-                collision.enabled = False
-                collision.stale = True
-                collision.url = None
+        self._apply_spatial_bindings(scene, presentation)
 
         return SceneRuntimeDescriptorV1(
             schemaVersion=1,
@@ -397,6 +386,36 @@ class SceneRuntimeService:
             backgroundAudio=background_audio,
             collision=collision,
         )
+
+    def _apply_spatial_bindings(
+        self, scene: Scene, presentation: RuntimePresentation
+    ) -> None:
+        """Drop only the spatial features that are not bound to the current version.
+
+        GS-NEXT-12 §A: a version switch invalidates spatial authoring, but the
+        owner can re-establish trust **per feature** by saving it again while
+        the new version is current.  We therefore no longer blank the whole
+        presentation when ``SceneSpatialState`` is STALE — each feature is
+        checked against the version it was last confirmed for.  Viewpoints and
+        annotations are filtered per row in their builders.
+        """
+        from app.services.spatial_binding import (
+            bound_to_current,
+            is_stale,
+            presentation_for,
+        )
+
+        if not is_stale(self._session, scene):
+            return
+        pres = presentation_for(self._session, scene)
+        if pres is None or not bound_to_current(
+            self._session, scene, pres.initial_camera_version_id
+        ):
+            presentation.initialCamera = RuntimeInitialCamera()
+        if pres is None or not bound_to_current(
+            self._session, scene, pres.world_transform_version_id
+        ):
+            presentation.worldTransform = RuntimeWorldTransform()
 
     def _build_presentation(self, scene: Scene) -> RuntimePresentation:
         pres = self._presentations.get_by_scene(scene.id)
@@ -440,6 +459,20 @@ class SceneRuntimeService:
         )
 
     def _build_viewpoints(self, scene: Scene) -> list[RuntimeViewpoint]:
+        from app.services.spatial_binding import is_stale
+
+        rows = self._viewpoints.list_by_scene(scene.id)
+        if is_stale(self._session, scene):
+            # Only viewpoints authored/confirmed against the CURRENT version.
+            # Old-version rows stay in the database (never deleted) but are not
+            # served until the owner re-saves them.  A scene with no current
+            # version serves none (NULL bindings are not a wildcard).
+            current_id = scene.current_version_id
+            rows = [
+                vp
+                for vp in rows
+                if current_id is not None and vp.source_version_id == current_id
+            ]
         return [
             RuntimeViewpoint(
                 id=str(vp.id),
@@ -450,13 +483,23 @@ class SceneRuntimeService:
                 orderIndex=vp.order_index,
                 enabled=vp.enabled,
             )
-            for vp in self._viewpoints.list_by_scene(scene.id)
+            for vp in rows
         ]
 
     def _build_annotations(self, scene: Scene) -> list[RuntimeAnnotation]:
+        from app.services.spatial_binding import is_stale
+
         base = PRESENTATION_SERVE_BASE.format(slug=scene.slug)
         result: list[RuntimeAnnotation] = []
-        for ann in self._annotations.list_by_scene(scene.id):
+        rows = self._annotations.list_by_scene(scene.id)
+        if is_stale(self._session, scene):
+            current_id = scene.current_version_id
+            rows = [
+                ann
+                for ann in rows
+                if current_id is not None and ann.source_version_id == current_id
+            ]
+        for ann in rows:
             camera_position = None
             camera_target = None
             if (
@@ -565,8 +608,24 @@ class SceneRuntimeService:
             ):
                 stale = True
 
+        # GS-NEXT-12 §A：碰撞构建绑定的空间失效代数与当前不一致 → 该碰撞早于
+        # 最后一次版本切换（包括 A→B→A 的往返），不得自动恢复；只有重新构建
+        # （记录新的 revision）才能再次启用。与旧的全局 STALE 分支同形。
+        # 没有 spatialRevision 的存量构建无法证明自己晚于本次失效 → 同样停用。
+        from app.services.spatial_binding import is_stale, spatial_revision
+
+        served_url: str | None = url
+        if is_stale(self._session, scene):
+            recorded_revision = build_params.get("spatialRevision")
+            if recorded_revision is None or recorded_revision != spatial_revision(
+                self._session, scene
+            ):
+                served_url = None
+                enabled = False
+                stale = True
+
         return RuntimeCollision(
-            url=url,
+            url=served_url,
             format=fmt,
             mode=collision.mode,
             gravity=collision.gravity,

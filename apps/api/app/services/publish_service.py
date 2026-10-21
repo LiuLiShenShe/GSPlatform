@@ -141,8 +141,8 @@ def bridge_scene_origin(scene: Scene, version_id: str) -> bool:
                 target_exists
                 and os.path.realpath(ver_link) != os.path.realpath(target)
             ):
-                ver_link.unlink()
-                ver_link.symlink_to(target, target_is_directory=True)
+                # GS-NEXT-12 §B: same atomic swap as the `current` alias below.
+                _atomic_symlink(ver_link, target)
         elif ver_link.exists():
             # A real directory (legacy/seed layout) already IS this version's
             # bytes — never delete or replace it.
@@ -155,17 +155,53 @@ def bridge_scene_origin(scene: Scene, version_id: str) -> bool:
         if current.is_symlink():
             if os.readlink(current) == expected_rel:
                 return True  # already correct
-            current.unlink()
         elif current.exists():
             # A real directory here is a legacy/seed layout we must not delete.
             logger.warning("origin 'current' path is not a symlink; left as-is: %s", current)
             return False
-        current.symlink_to(expected_rel, target_is_directory=True)
+        # GS-NEXT-12 §B: never unlink-then-symlink.  The old sequence left a
+        # window where `current` did not exist at all, so a concurrent reader
+        # (or the authorized asset endpoint) could get ENOENT mid-switch.
+        # Build the new link under a temporary name in the SAME directory and
+        # rename(2) it over `current`: readers see either the old or the new
+        # target, never nothing.
+        _atomic_symlink(current, expected_rel)
         logger.info("scene-origin bridge: %s/current -> %s", slug_dir, ver_link)
         return True
     except OSError as exc:
         logger.warning("scene-origin bridge failed for %s: %s", scene.slug, exc)
         return False
+
+
+def _atomic_symlink(link: Path, target: str | Path) -> None:
+    """Atomically create/replace *link* so readers never see it missing.
+
+    ``os.replace`` of a symlink is a single ``rename(2)``: concurrent readers
+    resolve either the previous target or the new one.  The temporary link is
+    created in the same directory (same filesystem) with a name that cannot be
+    confused with a scene asset, and is cleaned up on failure.
+    """
+    tmp = link.parent / f".{link.name}.tmp-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    try:
+        tmp.symlink_to(target, target_is_directory=True)
+        os.replace(tmp, link)
+        # Best-effort durability of the directory entry.  A crash between the
+        # rename and the DB commit is detected by the consistency checker.
+        try:
+            fd = os.open(link.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        except OSError:
+            fd = -1
+        if fd >= 0:
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+    finally:
+        if tmp.is_symlink() or tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
 
 
 class PublishService:
@@ -386,12 +422,16 @@ class PublishService:
             if spatial is None:
                 spatial = SceneSpatialState(
                     scene_id=scene.id, source_version_id=edit.source_version_id,
-                    state="STALE", stale_at=now,
+                    state="STALE", stale_at=now, revision=1,
                 )
                 self._session.add(spatial)
             else:
                 spatial.state = "STALE"
                 spatial.stale_at = now
+                # GS-NEXT-12: advance the monotonic revision so a collision
+                # built before this geometry change can never be re-enabled by
+                # a later switch back to the source version.
+                spatial.revision = (spatial.revision or 0) + 1
         edit.result_version_id = version.id
         edit.completed_at = now
         edit.status = "COMPLETED"

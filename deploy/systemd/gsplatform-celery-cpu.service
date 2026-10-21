@@ -1,7 +1,9 @@
-# gsplatform-celery-cpu.service — Celery CPU worker (publish / convert / CPU stages).
+# gsplatform-celery-cpu.service — Celery CPU worker (convert / CPU stages).
 #
 # Install to /etc/systemd/system/gsplatform-celery-cpu.service.
-# Runs all non-GPU queues: gsplatform (publish/cleanup) + cpu (reconstruct pre/post).
+# Runs the CPU queue only (reconstruction pre/post + collision builds).
+# GS-NEXT-12 §E: publish/cleanup moved to gsplatform-celery-publish.service so a
+# long reconstruction can never starve a publish (and vice versa).
 #
 # Phase 09 requirements:
 #   - distinct unit, queues, concurrency and resource policy from the GPU worker
@@ -31,12 +33,13 @@ EnvironmentFile=/etc/gsplatform/env
 # `workers.celery_app` (module-level imports are celery/app only — torch/
 # gsplat live under workers/reconstruction, imported lazily) and all worker
 # deps (numpy/PyYAML declared in pyproject) resolve.
-ExecStart=/opt/gsplatform/current/apps/api/.venv/bin/celery -A workers.celery_app worker -Q gsplatform,cpu --concurrency=${CELERY_CPU_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=100
+ExecStart=/opt/gsplatform/current/apps/api/.venv/bin/celery -A workers.celery_app worker -Q cpu --concurrency=${CELERY_CPU_CONCURRENCY} --loglevel=INFO --max-tasks-per-child=100
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=10
 TimeoutStopSec=3600
-KillSignal=SIGTERM    # celery drains running+prefetched tasks (acks_late)
+# celery drains running+prefetched tasks (acks_late)
+KillSignal=SIGTERM
 KillMode=control-group
 
 # --- hardening ---

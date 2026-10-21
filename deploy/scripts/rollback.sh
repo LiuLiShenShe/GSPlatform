@@ -93,6 +93,7 @@ restart_svc() {
     fi
 }
 restart_svc gsplatform-api
+restart_svc gsplatform-celery-publish
 restart_svc gsplatform-celery-cpu
 restart_svc gsplatform-celery-gpu
 sudo systemctl reload nginx 2>/dev/null && echo "    ✓ reloaded nginx" || \

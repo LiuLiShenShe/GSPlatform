@@ -161,8 +161,8 @@ fi
 
 # ── Retention ─────────────────────────────────────────────────────────────
 echo ""
-echo "[6] Retention (keep last $BACKUP_KEEP_N days)"
 BACKUP_KEEP_N="${BACKUP_KEEP_N:-14}"
+echo "[6] Retention (keep last $BACKUP_KEEP_N days)"
 find "$BACKUP_ROOT" -maxdepth 1 -type d -name '20*' -mtime "+${BACKUP_KEEP_N}" -print0 \
     | xargs -0 -r rm -rf
 echo "    ✓ retention: keeping ${BACKUP_KEEP_N} days"

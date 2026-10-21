@@ -780,6 +780,13 @@ class CollisionService:
             params["sourceVersion"] = current_version.asset_version
             params["sourceVersionId"] = str(current_version.id)
         params["worldTransformHash"] = world_hash
+        # GS-NEXT-12 §A: pin the spatial invalidation revision this build was
+        # dispatched against.  A switch (including A→B→A) bumps the revision,
+        # so a collision built before the round-trip can never be served as if
+        # it had been verified against the current geometry.
+        from app.services.spatial_binding import spatial_revision
+
+        params["spatialRevision"] = spatial_revision(self._session, scene)
         collision.build_params = params
         # FIX-UPLOAD-01.2 PART A: remember the claim we hold so the broker
         # write-back is a compare-and-set — a late success can never overwrite

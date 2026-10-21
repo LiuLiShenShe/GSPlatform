@@ -183,4 +183,29 @@ describe('版本管理面板', () => {
     renderWithRouter(<VersionPanel sceneId="demo" onSwitched={() => {}} />);
     expect(await screen.findByTestId('version-empty')).toBeInTheDocument();
   });
+
+  it('GS-NEXT-12：逐项列出待重新确认 / 已绑定当前版本的空间配置', async () => {
+    listSceneVersions.mockResolvedValue(
+      listing({
+        spatial: {
+          state: 'STALE',
+          boundVersionId: 'v-new',
+          requiresConfirmation: true,
+          staleAt: '2026-10-21T10:00:00Z',
+          revision: 2,
+          pendingFeatures: ['viewpoints', 'annotations', 'collision'],
+          confirmedFeatures: ['initialCamera'],
+        },
+      }),
+    );
+    renderWithRouter(<VersionPanel sceneId="demo" onSwitched={() => {}} />);
+
+    const pending = await screen.findByTestId('version-spatial-pending');
+    expect(pending).toHaveTextContent('观察点');
+    expect(pending).toHaveTextContent('标注');
+    expect(pending).toHaveTextContent('碰撞');
+    expect(pending).not.toHaveTextContent('初始视角');
+    const confirmed = screen.getByTestId('version-spatial-confirmed');
+    expect(confirmed).toHaveTextContent('初始视角');
+  });
 });

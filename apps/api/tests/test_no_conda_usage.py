@@ -32,6 +32,9 @@ SKIP_PREFIXES = (
     "apps/api/uv.lock",
     "apps/web/node_modules/",
     "apps/viewer/",
+    # The guard's own pattern table spells the forbidden strings to detect
+    # them; scanning itself would always fail (eedaefa regression).
+    "apps/api/tests/test_no_conda_usage.py",
 )
 
 

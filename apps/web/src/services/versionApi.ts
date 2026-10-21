@@ -27,6 +27,12 @@ export interface SpatialBinding {
   boundVersionId: string | null;
   requiresConfirmation: boolean;
   staleAt: string | null;
+  /** GS-NEXT-12: monotonic invalidation revision. */
+  revision?: number;
+  /** Features still awaiting re-confirmation on the current version. */
+  pendingFeatures?: string[];
+  /** Features already trusted for the current version. */
+  confirmedFeatures?: string[];
 }
 
 export interface SceneVersionList {

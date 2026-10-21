@@ -37,6 +37,10 @@
 #   GS_REDIS_URL      — Redis URL for the host probe (redis-cli PING)
 #   GS_ENV_FILE       — deployment env file (default /etc/gsplatform/env);
 #                       loaded safely (no shell expansion) when it exists.
+#   NGINX_MAIN_CONF   — path to the real Nginx main config.  When unset the
+#                       conventional /etc/nginx/nginx.conf is used if present;
+#                       otherwise only the shipped site file is validated in an
+#                       isolated prefix (custom/containerised nginx layouts).
 
 set -euo pipefail
 
@@ -59,6 +63,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --environment) ENVIRONMENT="$2"; shift 2 ;;
         --mode)        MODE="$2"; shift 2 ;;
+        --nginx-conf)  NGINX_MAIN_CONF="$2"; shift 2 ;;
         --dry-run)     DRY_RUN=1; shift ;;
         *) echo "Unknown option: $1" >&2; exit 1 ;;
     esac
@@ -100,6 +105,17 @@ check_exec python3
 check_exec node
 check_exec pnpm
 check_exec ffmpeg || true  # optional outside workers
+# Validate the site config the release ships, without assuming the host's main
+# config lives at /etc/nginx/nginx.conf (containers / custom builds).
+HOST_SITE_CONF="${REPO_ROOT}/deploy/nginx/gsplatform.conf"
+if [[ -f "$HOST_SITE_CONF" && -x "${SCRIPT_DIR}/check_nginx_site.sh" ]]; then
+    if "${SCRIPT_DIR}/check_nginx_site.sh" "$HOST_SITE_CONF" 2>/tmp/gsplatform-nginx-host-site.log; then
+        pass "shipped nginx site config parses (isolated prefix)"
+    else
+        cat /tmp/gsplatform-nginx-host-site.log >&2
+        warn "shipped nginx site config did not parse in this environment (see log); release-mode [H] is blocking"
+    fi
+fi
 # pg_isready / redis-cli presence+reachability are probed in [B]/[C] with
 # environment-appropriate severity (production requires them).
 
@@ -264,11 +280,47 @@ done
 # ── [H] RELEASE: Nginx configuration syntax ───────────────────────────────
 echo ""
 echo "[H] Nginx configuration syntax"
-if nginx -t 2>/tmp/gsplatform-nginx-test.log; then
-    pass "nginx -t passed"
+# FIX-06.2/GSNEXT-12: the real host's main config is not necessarily
+# /etc/nginx/nginx.conf (containers, distro packaging, custom builds).  Use an
+# explicit config path when one is known, and verify that the *production site
+# file itself* parses, so a broken release is caught even when the host's main
+# config is unavailable.  Precedence:
+#   1. NGINX_MAIN_CONF       — explicit main config (e.g. /etc/nginx/nginx.conf)
+#   2. /etc/nginx/nginx.conf — the conventional default
+# The production site file is checked standalone in a complete http{} context
+# built by check_nginx_site_file (deploy/scripts/lib_nginx.sh).
+if [[ -n "${NGINX_MAIN_CONF:-}" ]]; then
+    if nginx -t -c "$NGINX_MAIN_CONF" 2>/tmp/gsplatform-nginx-test.log; then
+        pass "nginx -t passed (main config: $NGINX_MAIN_CONF)"
+    else
+        cat /tmp/gsplatform-nginx-test.log >&2
+        fail "nginx -t failed for $NGINX_MAIN_CONF (see log above)"
+    fi
+elif [[ -f /etc/nginx/nginx.conf ]]; then
+    if nginx -t -c /etc/nginx/nginx.conf 2>/tmp/gsplatform-nginx-test.log; then
+        pass "nginx -t passed (main config: /etc/nginx/nginx.conf)"
+    else
+        cat /tmp/gsplatform-nginx-test.log >&2
+        fail "nginx -t failed (see log above)"
+    fi
 else
-    cat /tmp/gsplatform-nginx-test.log >&2
-    fail "nginx -t failed (see log above)"
+    warn "no host main config found (/etc/nginx/nginx.conf missing, NGINX_MAIN_CONF unset) — checking the production site file standalone"
+fi
+# Always validate the site file itself (it is part of the release).
+SITE_CONF="${DEPLOY_ROOT}/current/deploy/nginx/gsplatform.conf"
+if [[ -f "$SITE_CONF" ]] && [[ -x "${SCRIPT_DIR}/check_nginx_site.sh" ]]; then
+    if "${SCRIPT_DIR}/check_nginx_site.sh" "$SITE_CONF" 2>/tmp/gsplatform-nginx-site.log; then
+        pass "production site file parses (${SITE_CONF})"
+    else
+        cat /tmp/gsplatform-nginx-site.log >&2
+        fail "production site file failed to parse: $SITE_CONF (see log above)"
+    fi
+else
+    if [[ -f "$SITE_CONF" ]]; then
+        warn "check_nginx_site.sh not executable — skipped standalone site-file validation"
+    else
+        fail "production site file missing: $SITE_CONF"
+    fi
 fi
 
 # ── [I] RELEASE: Python dependencies & shared worker venv (FIX-06 §3/§4) ───
@@ -308,7 +360,7 @@ fi
 # ── [J] RELEASE: systemd ExecStart paths (FIX-06 §4) ───────────────────────
 echo ""
 echo "[J] systemd unit ExecStart path existence"
-for unit in gsplatform-api gsplatform-celery-cpu gsplatform-celery-gpu gsplatform-cleanup; do
+for unit in gsplatform-api gsplatform-celery-publish gsplatform-celery-cpu gsplatform-celery-gpu gsplatform-cleanup; do
     UNIT_FILE="${DEPLOY_ROOT}/current/deploy/systemd/${unit}.service"
     if [[ -f "$UNIT_FILE" ]]; then
         EXEC=$(grep -E "^ExecStart=" "$UNIT_FILE" | cut -d= -f2- | awk '{print $1}')

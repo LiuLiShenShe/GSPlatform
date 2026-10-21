@@ -74,6 +74,12 @@ class SceneAnnotation(Base):
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # GS-NEXT-12 — the SceneVersion this anchor was authored/confirmed
+    # against. NULL = legacy/unconfirmed (see app.services.spatial_binding).
+    source_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("scene_versions.id", ondelete="SET NULL"), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

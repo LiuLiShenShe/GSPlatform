@@ -282,23 +282,34 @@ class AuthoringService:
 
         if body.worldPosition is not None:
             pres.world_position = _vec3_to_json(body.worldPosition)
+            pres.world_transform_version_id = scene.current_version_id
         elif overwrite:
             pres.world_position = None
+            pres.world_transform_version_id = None
 
         if body.worldRotation is not None:
             pres.world_rotation = _vec3_to_json(body.worldRotation)
+            pres.world_transform_version_id = scene.current_version_id
         elif overwrite:
             pres.world_rotation = None
+            pres.world_transform_version_id = None
 
         if body.worldScale is not None:
             pres.world_scale = _vec3_to_json(body.worldScale)
+            pres.world_transform_version_id = scene.current_version_id
         elif overwrite:
             pres.world_scale = None
+            pres.world_transform_version_id = None
 
         if body.initialCameraPosition is not None:
             pres.initial_camera_position = _vec3_to_json(body.initialCameraPosition)
+            # GS-NEXT-12 §A: the camera pose was just (re)authored against the
+            # scene's CURRENT version — record that binding so the runtime can
+            # serve it again after a rollback.
+            pres.initial_camera_version_id = scene.current_version_id
         elif overwrite:
             pres.initial_camera_position = None
+            pres.initial_camera_version_id = None
 
         if body.initialCameraTarget is not None:
             pres.initial_camera_target = _vec3_to_json(body.initialCameraTarget)
@@ -532,6 +543,9 @@ class AuthoringService:
             fov=body.fov,
             order_index=self._viewpoints.next_order_index(scene.id),
             enabled=True,
+            # GS-NEXT-12 §A: a newly authored viewpoint belongs to the version
+            # that is current right now.
+            source_version_id=scene.current_version_id,
         )
         self._viewpoints.add(vp)
         # GS-NEXT-03：与 update_presentation 同一理由 —— 201 之后紧接着的读
@@ -567,15 +581,24 @@ class AuthoringService:
 
         if body.name is not None:
             vp.name = body.name.strip() or "未命名视角"
+        # GS-NEXT-12 §A: editing the pose (position / target / fov) is an
+        # explicit re-authoring against the CURRENT version.  Renaming or
+        # toggling `enabled` alone is NOT a spatial confirmation.
+        reauthored = False
         if body.position is not None:
             vp.position = _vec3_to_json(body.position)
+            reauthored = True
         if body.target is not None:
             vp.target = _vec3_to_json(body.target)
+            reauthored = True
         if body.fov is not None:
             fov = body.fov
             if fov < 10.0 or fov > 160.0:
                 raise ConflictError("FOV 必须在 10-160 之间")
             vp.fov = fov
+            reauthored = True
+        if reauthored:
+            vp.source_version_id = scene.current_version_id
         if body.orderIndex is not None:
             vp.order_index = body.orderIndex
         if body.enabled is not None:
@@ -743,8 +766,16 @@ class AuthoringService:
             camera_fov=body.cameraFov,
             order_index=self._annotations.next_order_index(scene.id),
             enabled=True,
+            # GS-NEXT-12 §A: authored against the version that is current now.
+            source_version_id=scene.current_version_id,
         )
         self._annotations.add(annotation)
+        # GS-NEXT-12: the same read-your-write contract the viewpoints and the
+        # presentation already honour (GS-NEXT-02/03).  The request-scoped
+        # dependency commits in its teardown — i.e. AFTER the response was
+        # sent — so a client that creates an annotation and immediately
+        # re-reads the runtime descriptor would otherwise not see it.
+        self._session.commit()
 
         return _annotation_out(annotation)
 
@@ -768,12 +799,19 @@ class AuthoringService:
             ann.title = body.title.strip()
         if body.description is not None:
             ann.description = body.description.strip()
+        # GS-NEXT-12 §A: moving the anchor or re-capturing the per-annotation
+        # camera is an explicit re-authoring against the CURRENT version.
+        # Pure text/style/order changes are not spatial confirmations.
+        reauthored = False
         if body.anchorX is not None:
             ann.anchor_x = body.anchorX
+            reauthored = True
         if body.anchorY is not None:
             ann.anchor_y = body.anchorY
+            reauthored = True
         if body.anchorZ is not None:
             ann.anchor_z = body.anchorZ
+            reauthored = True
         if body.style is not None:
             if body.style not in {"LEADER_TEXT", "NUMBER_POPUP", "HIDDEN"}:
                 raise ConflictError(f"无效的注解样式: {body.style}")
@@ -808,18 +846,23 @@ class AuthoringService:
             ann.camera_position_x = body.cameraPosition.x
             ann.camera_position_y = body.cameraPosition.y
             ann.camera_position_z = body.cameraPosition.z
+            reauthored = True
         if body.cameraTarget is not None:
             ann.camera_target_x = body.cameraTarget.x
             ann.camera_target_y = body.cameraTarget.y
             ann.camera_target_z = body.cameraTarget.z
+            reauthored = True
         if body.cameraFov is not None:
             ann.camera_fov = body.cameraFov
+            reauthored = True
         if body.orderIndex is not None:
             ann.order_index = body.orderIndex
         if body.enabled is not None:
             ann.enabled = body.enabled
+        if reauthored:
+            ann.source_version_id = scene.current_version_id
 
-        self._session.flush()
+        self._session.commit()
 
         return _annotation_out(ann)
 
@@ -833,6 +876,8 @@ class AuthoringService:
         if ann is None:
             raise NotFoundError("注解不存在")
         self._annotations.delete(ann)
+        # Read-your-write: the delete must be visible to the very next read.
+        self._session.commit()
 
     def reorder_annotations(
         self, slug_or_id: str, owner_id: uuid.UUID, body: SceneAnnotationReorderRequest
@@ -845,7 +890,7 @@ class AuthoringService:
             raise ConflictError("注解列表不完整，请刷新后重试")
         for index, a_id in enumerate(body.annotationIds):
             existing[a_id].order_index = index + 1
-        self._session.flush()
+        self._session.commit()
         return self.list_annotations(slug_or_id, owner_id)
 
     def set_annotation_media(
@@ -897,7 +942,8 @@ class AuthoringService:
         self._session.flush()
 
         ann.media_asset_id = asset.id
-        self._session.flush()
+        # Read-your-write: the media URL must resolve on the very next read.
+        self._session.commit()
 
         return _annotation_out(ann)
 

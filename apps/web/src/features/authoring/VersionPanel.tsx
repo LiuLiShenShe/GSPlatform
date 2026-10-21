@@ -30,6 +30,21 @@ const FORMAT_LABEL: Record<string, string> = {
   splat: 'SPLAT',
 };
 
+/** GS-NEXT-12: human labels for the per-feature spatial confirmation state. */
+const SPATIAL_FEATURE_LABEL: Record<string, string> = {
+  initialCamera: '初始视角',
+  worldTransform: '世界变换',
+  viewpoints: '观察点',
+  annotations: '标注',
+  collision: '碰撞',
+  calibration: '尺度标定',
+};
+
+function featureLabels(features: string[] | undefined): string {
+  if (!features || features.length === 0) return '';
+  return features.map((f) => SPATIAL_FEATURE_LABEL[f] ?? f).join(' / ');
+}
+
 function formatSize(bytes: number): string {
   if (!bytes) return '—';
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -135,6 +150,7 @@ export function VersionPanel({ sceneId, onSwitched }: Props) {
   );
 
   const spatial = data?.spatial;
+  const pendingCount = spatial?.pendingFeatures?.length ?? 0;
   const items = data?.items ?? [];
   const current = items.find((item) => item.isCurrent) ?? null;
 
@@ -163,8 +179,28 @@ export function VersionPanel({ sceneId, onSwitched }: Props) {
           showIcon
           style={{ marginBottom: 8 }}
           data-testid="version-spatial-stale"
-          message="空间配置需要重新确认"
-          description="切换版本后，已保存的初始视角 / 观察点 / 标注 / 碰撞可能不再对应新的几何体，运行时已按保守策略停用它们。请重新核对并保存初始视角、观察点与标注，碰撞/尺度标定需要重新构建后再启用行走。"
+          message={
+            pendingCount > 0 ? '空间配置需要重新确认' : '版本切换记录：空间配置已重新绑定'
+          }
+          description={
+            <div>
+              <div>
+                {pendingCount > 0
+                  ? '切换版本后，已保存的初始视角 / 观察点 / 标注 / 碰撞可能不再对应新的几何体，运行时已按保守策略停用它们。重新保存某一项后，该项会立即绑定到当前版本并生效；其余旧数据继续保持停用。碰撞 / 尺度标定需要重新构建后再启用行走。'
+                  : '当前已保存的空间配置都已绑定到当前版本，运行时会正常下发。碰撞 / 尺度标定仍需在重新构建并验证后才能启用行走。'}
+              </div>
+              {spatial.pendingFeatures && spatial.pendingFeatures.length > 0 && (
+                <div data-testid="version-spatial-pending" style={{ marginTop: 4 }}>
+                  待重新确认：{featureLabels(spatial.pendingFeatures)}
+                </div>
+              )}
+              {spatial.confirmedFeatures && spatial.confirmedFeatures.length > 0 && (
+                <div data-testid="version-spatial-confirmed" style={{ marginTop: 2 }}>
+                  已绑定当前版本：{featureLabels(spatial.confirmedFeatures)}
+                </div>
+              )}
+            </div>
+          }
         />
       )}
 
