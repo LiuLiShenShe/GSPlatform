@@ -417,8 +417,6 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 
 **没有通过 SKIP 或放宽断言来制造绿色。**
 
-<!--SECTION_7_2-->
-
 ### 7.2 环境与测试预算导致的失败（定性，非产品缺陷）
 
 | 失败 | 定性 | 证据 |
