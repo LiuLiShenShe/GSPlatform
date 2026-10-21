@@ -85,7 +85,42 @@ GSPlatform → SceneRuntimeDescriptor → ExperienceSettings v2
 ```bash
 corepack enable
 pnpm install
+
+# Python environment — managed by uv (conda is NOT used)
+./scripts/bootstrap_python_env.sh              # API + dev tools
+./scripts/bootstrap_python_env.sh --with-recon # + torch/gsplat for the GPU worker
 ```
+
+### Python dependency management (uv)
+
+本仓库的 Python 依赖**不再使用 conda**：
+
+| 文件 / 命令 | 作用 |
+| --- | --- |
+| `apps/api/pyproject.toml` | 声明运行时依赖与 `dev` extra |
+| `apps/api/uv.lock` | 锁定的完整解析结果（提交入库） |
+| `scripts/bootstrap_python_env.sh` | 用 uv 创建/刷新 `apps/api/.venv` |
+| `uv sync --extra dev --python 3.11` | 等价的手动命令（在 `apps/api/` 下执行） |
+| `uv lock` | 修改依赖后重新生成锁文件 |
+
+`apps/api/pyproject.toml` 里的 `[tool.uv] python-preference = "only-managed"`
+强制 venv 使用 uv 自己管理的 CPython，**即使 PATH 里存在 conda 也不会复用**。
+`apps/api/.venv/bin/python` 指向 `~/.local/share/uv/python/…`，不再指向任何
+conda 环境。
+
+GPU 重建运行时（`torch==2.14.0+cu126` / `gsplat==1.5.3`）有两个等价的固定入口：
+
+- 开发机：`scripts/bootstrap_python_env.sh --with-recon`（即
+  `uv sync --extra dev --extra recon`）；torch 由 `[tool.uv.sources]` 指向
+  PyTorch cu126 索引，版本已经写进 `uv.lock`；
+- 生产发布：`deploy/requirements-reconstruction.txt`（pip 自包含 venv，
+  见 `deploy/scripts/deploy_release.sh`），与 `recon` extra 保持同一组版本。
+
+> uv 的 `sync` 会移除未选中的 extra。需要 GPU worker 时请始终带
+> `--with-recon`，否则 torch/gsplat 会被卸载。
+>
+> uv venv 默认不安装 `pip`；请用 `uv pip install …`（自动作用于
+> `apps/api/.venv`），不要依赖 `apps/api/.venv/bin/pip`。
 
 ### Run (Development)
 
@@ -95,10 +130,8 @@ pnpm install
 # Web frontend (Scene 查看就在这里)
 pnpm --filter @gsplatform/web dev
 
-# API backend (separate terminal)
-cd apps/api
-source .venv/bin/activate
-uvicorn app.main:app --reload --port 8001
+# API backend (separate terminal) — 无需 activate
+apps/api/.venv/bin/uvicorn app.main:app --reload --port 8001
 ```
 
 Redis / PostgreSQL / workers 在需要后台任务时再启动（见 `workers/` 与 `deploy/`）。

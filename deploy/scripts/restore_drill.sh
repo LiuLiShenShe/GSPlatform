@@ -28,6 +28,38 @@ PG_PSQL_CMD="${PG_PSQL_CMD:-psql}"
 RPO_RECORDED=""
 RTO_START=""
 
+# Interpreter used by the verification snippets.  Resolution order:
+#   1. $GS_RESTORE_PYTHON (explicit override)
+#   2. the release / repo venv (apps/api/.venv) — uv-managed in dev, pip venv
+#      in production releases
+#   3. python3 from PATH
+# There is deliberately **no** hard-coded interpreter path: the project must
+# run without conda (or any host-specific environment) being present.
+resolve_python() {
+    local candidates=()
+    [[ -n "${GS_RESTORE_PYTHON:-}" ]] && candidates+=("$GS_RESTORE_PYTHON")
+    candidates+=(
+        "${DEPLOY_ROOT:-/opt/gsplatform}/current/apps/api/.venv/bin/python"
+        "${REPO_ROOT}/apps/api/.venv/bin/python"
+        "python3"
+    )
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        command -v "$candidate" >/dev/null 2>&1 || [[ -x "$candidate" ]] || continue
+        if "$candidate" -c "import sqlalchemy" >/dev/null 2>&1; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if ! PYTHON="$(resolve_python)"; then
+    echo "ERROR: no Python interpreter with sqlalchemy found." >&2
+    echo "       Set GS_RESTORE_PYTHON or prepare apps/api/.venv (uv sync)." >&2
+    exit 1
+fi
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --backup)     BACKUP_DIR="$2"; shift 2 ;;
@@ -88,7 +120,7 @@ echo "    ✓ restore finished in ${RTO}s"
 # ── Verify DB integrity ────────────────────────────────────────────────────
 echo ""
 echo "[3] Verifying restored DB"
-VERIFY=$(/home/test/biosoft/enter/envs/gsplatform-api/bin/python - "$RESTORE_DATABASE_URL" <<'PYEOF'
+VERIFY=$("$PYTHON" - "$RESTORE_DATABASE_URL" <<'PYEOF'
 import sys
 from sqlalchemy import create_engine, text
 url = sys.argv[1]
@@ -127,7 +159,7 @@ if [[ -n "$ASSET_BUNDLE" ]]; then
         S_ID=$(echo "$BUNDLE_ENTRY" | cut -d/ -f2)
         S_VER=$(echo "$BUNDLE_ENTRY" | cut -d/ -f4)
         # Resolve the slug from the restored DB; keep the uuid as dir name if absent.
-        S_SLUG=$(/home/test/biosoft/enter/envs/gsplatform-api/bin/python - "$RESTORE_DATABASE_URL" "$S_ID" <<'PYEOF'
+        S_SLUG=$("$PYTHON" - "$RESTORE_DATABASE_URL" "$S_ID" <<'PYEOF'
 import sys
 from sqlalchemy import create_engine, text
 e = create_engine(sys.argv[1])
@@ -142,7 +174,7 @@ PYEOF
 fi
 if [[ -z "${S_SLUG:-}" ]]; then
     # No bundle: fall back to the live published tree via the restored DB.
-    read -r S_SLUG S_ID S_VER <<< "$(/home/test/biosoft/enter/envs/gsplatform-api/bin/python - "$RESTORE_DATABASE_URL" <<'PYEOF'
+    read -r S_SLUG S_ID S_VER <<< "$("$PYTHON" - "$RESTORE_DATABASE_URL" <<'PYEOF'
 import sys
 from sqlalchemy import create_engine, text
 e = create_engine(sys.argv[1])

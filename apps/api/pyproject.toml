@@ -2,6 +2,26 @@
 requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
+# Dependency management: uv (no conda anywhere in the project).
+#   uv sync --extra dev        # create/refresh apps/api/.venv from uv.lock
+#   uv lock                    # regenerate the lockfile
+# `only-managed` forbids uv from reusing a system/conda interpreter: the venv
+# is always built on a uv-managed CPython, even when conda is on PATH.
+[tool.uv]
+# Never reuse a system/conda interpreter: `uv sync --python 3.11` builds the
+# venv on a uv-managed CPython even when conda is on PATH.
+python-preference = "only-managed"
+
+# torch's CUDA build only exists on PyTorch's own index; mark it explicit so it
+# is used for torch alone (all other packages stay on PyPI).
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+
 [project]
 name = "gsplatform-api"
 version = "0.1.0"
@@ -25,6 +45,10 @@ dependencies = [
     "PyYAML>=6.0,<7.0",
     "redis>=5.0,<6.0",
     "numpy>=1.26,<3.0",
+    # Used by workers/reconstruction/train_gsplat_script.py (import PIL). It
+    # must be in the *main* closure, not the recon extra: production installs
+    # apps/api without extras and then adds torch/gsplat.
+    "pillow>=12.3,<13",
 ]
 
 [project.optional-dependencies]
@@ -32,6 +56,14 @@ dev = [
     "ruff>=0.5,<1.0",
     "mypy>=1.10,<2.0",
     "pytest>=8.2,<9.0",
+]
+# GPU reconstruction runtime — the verified contract, identical to
+# deploy/requirements-reconstruction.txt (torch 2.14.0+cu126 / gsplat 1.5.3).
+# `uv sync --extra recon` is the uv-native path; production releases keep using
+# the pinned requirements file (self-contained pip venv).
+recon = [
+    "torch==2.14.0+cu126",
+    "gsplat==1.5.3",
 ]
 
 [tool.hatch.build.targets.wheel]
