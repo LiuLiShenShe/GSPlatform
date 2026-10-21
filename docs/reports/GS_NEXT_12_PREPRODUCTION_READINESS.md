@@ -356,7 +356,31 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 - 一致性检查器对“恢复库 + 恢复资产”运行：7397 个场景均可检查，无异常崩溃
   （问题分布与源库一致，源于开发库历史场景缺目录，而非恢复损坏）。
 
-### 6.4 未做
+### 6.4 仓库自带的 `restore_drill.sh`（修复后实跑）
+
+首次实跑暴露两个脚本缺陷，均已修复并复跑通过：
+
+1. **建库步骤硬编码 `postgres:postgres@127.0.0.1:5432`**：演练目标经常是另一台/另一账号的
+   临时实例（本轮就是 `drill` @ `55433`），因此新增 `RESTORE_ADMIN_URL` 覆盖，
+   默认值保持本地安装兼容。
+2. **入口/校验和判定只认 Streamed SOG**：单文件 `scene.sog` 版本被误报
+   “lod-meta.json missing”“checksums MISMATCH”。现在按“`lod-meta.json` 或 `scene.sog`
+   二者有其一”判定入口；校验和只对 **manifest.json 之外** 的条目报失败
+   （`manifest.json` 在 publish 阶段被重写，源目录本身也如此，已实测确认）。
+
+复跑结果：
+
+```
+[1] created gsn12_drill_script3
+[2] restore finished in 2s
+[3] scenes=7670 assets=6163 versions=8500 users=3345
+[4] scene: gsnext11-versions (b4e8a3cf… / d1b222222222) [from backup bundle]
+    ✓ manifest.json restored
+    ✓ scene.sog (single-file SOG) restored
+    ⚠ checksums.sha256: only manifest.json differs (rewritten at publish)
+```
+
+### 6.5 未做
 
 - 未在生产库执行恢复（任务书禁止破坏性演练作用于历史数据）；
 - 未演练 certbot/nginx 配置回滚与 release previous 切换的真实主机操作

@@ -12,6 +12,9 @@
 # Environment:
 #   GS_DATABASE_URL      — production DB (source of backup, default gsplatform)
 #   RESTORE_DATABASE_URL — target isolated DB URL
+#   RESTORE_ADMIN_URL    — maintenance URL used to CREATE/DROP the isolated DB.
+#                          Must belong to a role with CREATEDB on that server;
+#                          defaults to a local superuser install.
 #   PG_RESTORE_CMD       — pg_restore override (docker wrapper allowed)
 #   PG_PSQL_CMD          — psql override
 
@@ -92,13 +95,18 @@ fi
 echo "  dump:    $DUMP"
 
 # ── Restore into isolated DB ───────────────────────────────────────────────
+# The maintenance connection may legitimately be a DIFFERENT server/user than
+# the restore target (the drill's whole point is to restore into a throw-away
+# database).  `RESTORE_ADMIN_URL` overrides the default superuser URL; the
+# default stays postgres:postgres for a plain local install.
 echo ""
 echo "[1] Creating isolated database $RESTORE_DB"
-$PG_PSQL_CMD "postgresql://postgres:postgres@127.0.0.1:5432/postgres" \
+ADMIN_URL="${RESTORE_ADMIN_URL:-postgresql://postgres:postgres@127.0.0.1:5432/postgres}"
+$PG_PSQL_CMD "$ADMIN_URL" \
     -tc "DROP DATABASE IF EXISTS \"$RESTORE_DB\";" >/dev/null 2>&1 || true
-$PG_PSQL_CMD "postgresql://postgres:postgres@127.0.0.1:5432/postgres" \
+$PG_PSQL_CMD "$ADMIN_URL" \
     -tc "CREATE DATABASE \"$RESTORE_DB\";" >/dev/null 2>&1 \
-    || { echo "ERROR: cannot create $RESTORE_DB" >&2; exit 1; }
+    || { echo "ERROR: cannot create $RESTORE_DB via $ADMIN_URL" >&2; exit 1; }
 echo "    ✓ created $RESTORE_DB"
 
 echo ""
@@ -211,14 +219,33 @@ if [[ -n "${S_SLUG:-}" ]]; then
             # integrity: manifest sha vs bundled scene sha256 file
             [[ -f "$SCENE_DIR/$S_SLUG/current/manifest.json" ]] \
                 && echo "    ✓ manifest.json restored" || echo "    ✗ manifest.json missing"
-            [[ -f "$SCENE_DIR/$S_SLUG/current/lod-meta.json" ]] \
-                && echo "    ✓ lod-meta.json (Streamed SOG) restored" || echo "    ✗ lod-meta.json missing"
+            # A version has exactly one content entry: Streamed SOG uses
+            # lod-meta.json, a single-file SOG uses scene.sog.  Only report a
+            # failure when NEITHER exists.
+            if [[ -f "$SCENE_DIR/$S_SLUG/current/lod-meta.json" ]]; then
+                echo "    ✓ lod-meta.json (Streamed SOG) restored"
+            elif [[ -f "$SCENE_DIR/$S_SLUG/current/scene.sog" ]]; then
+                echo "    ✓ scene.sog (single-file SOG) restored"
+            else
+                echo "    ✗ no scene entry (lod-meta.json / scene.sog) in restored version"
+            fi
             [[ -f "$SCENE_DIR/$S_SLUG/current/poster.webp" ]] \
                 && echo "    ✓ poster.webp restored" || echo "    ⚠ poster.webp missing (optional)"
-            [[ -f "$SCENE_DIR/$S_SLUG/current/checksums.sha256" ]] \
-                && (cd "$SCENE_DIR/$S_SLUG/current" && sha256sum -c checksums.sha256 >/dev/null 2>&1 \
-                     && echo "    ✓ checksums.sha256 verified" || echo "    ✗ checksums.sha256 MISMATCH") \
-                || echo "    ℹ no checksums.sha256 in bundle"
+            if [[ -f "$SCENE_DIR/$S_SLUG/current/checksums.sha256" ]]; then
+                if (cd "$SCENE_DIR/$S_SLUG/current" && sha256sum -c checksums.sha256 >/dev/null 2>&1); then
+                    echo "    ✓ checksums.sha256 verified"
+                elif (cd "$SCENE_DIR/$S_SLUG/current" \
+                        && sha256sum -c checksums.sha256 2>/dev/null | grep -v ': 成功' | grep -qv 'manifest.json'); then
+                    # The publish step rewrites manifest.json AFTER generating
+                    # checksums.sha256, so that single entry can mismatch in
+                    # the SOURCE tree too.  Anything else is a real mismatch.
+                    echo "    ✗ checksums.sha256 MISMATCH"
+                else
+                    echo "    ⚠ checksums.sha256: only manifest.json differs (rewritten at publish)"
+                fi
+            else
+                echo "    ℹ no checksums.sha256 in bundle"
+            fi
             echo "    ✓ scene bytes restored from backup bundle: $SCENE_DIR/$S_SLUG"
         else
             echo "    ✗ failed to extract scene from bundle"
