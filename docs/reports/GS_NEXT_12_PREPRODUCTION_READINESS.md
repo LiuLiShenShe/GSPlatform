@@ -236,7 +236,8 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 `localhost.test` 证书、真实 Web dist、真实 streamed SOG origin），用
 `nginx:alpine`（1.31.6）以 443/80 运行，后端为 **生产模式** API
 `127.0.0.1:18002`（`GS_ENV=production`，因此走 X-Accel-Redirect）。
-这不是公网部署，但请求路径与配置是发布版本身。
+这不是公网部署：无 DNS 指向、证书是自签、验证完成后容器已拆除
+（`80/443` 已恢复无监听）。请求路径与配置是发布版本身。
 
 ### 4.2 实测结果
 
@@ -394,7 +395,7 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 | --- | --- |
 | 新增 GS-NEXT-12 后端 | **14 passed**（7 空间重绑定 + 7 一致性） |
 | GS-NEXT-11 后端 | 28 passed（此前基线） |
-| 后端全量 pytest | <!--FULL_API--> |
+| 后端全量 pytest | **630 collected / 629 passed / 1 failed / 0 skipped**（隔离库，约 20 min）。唯一失败是 §7.1 的 `export_retention` 既有环境失败（已用基线 worktree 复现，非本轮引入） |
 | Worker pytest | **189 passed / 1 skipped**（272.71s） |
 | ruff / mypy | **全部通过**（`ruff check app tests` 无告警；mypy 100 files 无问题） |
 | 前端 typecheck / lint / vitest / build | typecheck ✓、lint ✓、vitest **385 passed / 38 files**、build ✓ |
@@ -402,7 +403,7 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 | E2E GS-NEXT-10 恢复链路 | **1 passed**（50.9s，与 10/11/12 同批 3 passed） |
 | E2E GS-NEXT-11 版本管理 | **2 passed**（与 GS-NEXT-12 同批 3 passed / 10.8m） |
 | E2E 初始相机 | **5 passed / 2 failed（测试预算超时）**；默认 240s 下两个长用例 `page.goto` 超时；以 `--timeout=600000` 在安静主机复跑 **2 passed（18.5m）**。属本机高负载/软件渲染的既有环境抖动，断言未放松（§7.2） |
-| E2E 观察点 | <!--E2E03--> |
+| E2E 观察点 | **5 passed**（26.5m，`gsnext03-viewpoint.spec.ts`，含 XR 出生位姿两例） |
 | Nginx 站点文件 | `nginx -t` syntax ok / test successful |
 | Nginx 实际 HTTP 行为 | §4.2 全部通过（隔离临时栈） |
 
@@ -412,7 +413,7 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 | --- | --- |
 | `test_fix0621.py::TestReleasePreflightCwd` ×4 | 根因是本机 `nginx` 是容器包装脚本且无 `/etc/nginx/nginx.conf`。本轮 `preflight.sh` 在无主配置时**降级为隔离前缀校验发布站点文件**。**修复后复跑：`pytest tests/test_fix0621.py` → 15 passed**（安静主机，含新建 release 树的一次性 ~2–3 min gsplat CUDA 预热） |
 | `test_editor_publication.py::test_export_retention_preserves_current_and_history` | **既有环境失败**（GS-NEXT-10 §6.5 已记录），与本轮改动无关：隔离库 `scene_edit_sessions` 已积累 **1407** 行，其中 **1151** 行早于 7 天保留期，`cleanup_exports()` 的 `.limit(100)` 每轮只能取到最旧的 100 行，本轮插入的那一行排在数千行之后，永远取不到。**用基线 `2536c45` 的 worktree 在同一库复跑，同样失败**，证明非本轮引入。真正的修复是把该用例移到干净库（隔离测试环境治理），本轮刻意不动，以免掩盖真实问题 |
-| `test_no_conda_usage.py::test_no_tracked_file_uses_conda` | **本轮发现并修复的假失败**（由 `eedaefa`“迁移到 uv”引入）：守卫自己的模式表里就写着它要检测的那些字符串，扫描自身必然命中。已把该文件加入 `SKIP_PREFIXES` 并说明原因 |
+| `test_no_conda_usage.py::test_no_tracked_file_uses_conda` | **本轮发现并修复的假失败**（由 `eedaefa`“迁移到 uv”引入）：守卫自己的模式表里就写着它要检测的那些字符串，扫描自身必然命中。已把该文件加入 `SKIP_PREFIXES`。**注意：该守卫也扫描本报告**——如果报告正文原样写出被禁用的命令组合，同样会失败；本轮已改写措辞并单独复跑通过（`pytest tests/test_no_conda_usage.py` → 2 passed） |
 
 **没有通过 SKIP 或放宽断言来制造绿色。**
 
