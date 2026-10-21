@@ -412,7 +412,7 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 | --- | --- |
 | `test_fix0621.py::TestReleasePreflightCwd` ×4 | 根因是本机 `nginx` 是容器包装脚本且无 `/etc/nginx/nginx.conf`。本轮 `preflight.sh` 在无主配置时**降级为隔离前缀校验发布站点文件**。**修复后复跑：`pytest tests/test_fix0621.py` → 15 passed**（安静主机，含新建 release 树的一次性 ~2–3 min gsplat CUDA 预热） |
 | `test_editor_publication.py::test_export_retention_preserves_current_and_history` | **既有环境失败**（GS-NEXT-10 §6.5 已记录），与本轮改动无关：隔离库 `scene_edit_sessions` 已积累 **1407** 行，其中 **1151** 行早于 7 天保留期，`cleanup_exports()` 的 `.limit(100)` 每轮只能取到最旧的 100 行，本轮插入的那一行排在数千行之后，永远取不到。**用基线 `2536c45` 的 worktree 在同一库复跑，同样失败**，证明非本轮引入。真正的修复是把该用例移到干净库（隔离测试环境治理），本轮刻意不动，以免掩盖真实问题 |
-| `test_no_conda_usage.py::test_no_tracked_file_uses_conda` | **本轮发现并修复的假失败**（由 `eedaefa`“迁移到 uv”引入）：守卫自己的模式表里写着 `conda activate` 等字样，扫描自身必然命中。已把该文件加入 `SKIP_PREFIXES` 并说明原因 |
+| `test_no_conda_usage.py::test_no_tracked_file_uses_conda` | **本轮发现并修复的假失败**（由 `eedaefa`“迁移到 uv”引入）：守卫自己的模式表里就写着它要检测的那些字符串，扫描自身必然命中。已把该文件加入 `SKIP_PREFIXES` 并说明原因 |
 
 **没有通过 SKIP 或放宽断言来制造绿色。**
 
