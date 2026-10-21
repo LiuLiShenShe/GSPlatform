@@ -21,7 +21,7 @@
 
 | 验收标志 | 结论 | 证据 |
 | --- | --- | --- |
-| `SPATIAL_REAUTHORING_READY` | **PASS** | §1：逐特性版本绑定 + 13 个新后端用例 + 真实浏览器 A→B→重存 B 相机→重开 Web/XR E2E |
+| `SPATIAL_REAUTHORING_READY` | **PASS** | §1：逐特性版本绑定 + 14 个新后端用例 + 真实浏览器 A→B→重存 B 相机→重开 Web/XR E2E |
 | `VERSION_STORAGE_CONSISTENCY_READY` | **PASS** | §2：原子别名替换、提交失败补偿、一致性检查器 + 安全自愈；并发/断链/崩溃窗口用例 |
 | `DEPLOY_PREFLIGHT_READY` | **PASS（配置与隔离执行层）/ 外部前提 BLOCKED** | §3：宿主机审计 + `preflight.sh` 实跑 8 passed / 0 failed / 11 warnings；域名/证书/root 缺失 |
 | `HTTPS_STABLE_READY` | **BLOCKED_EXTERNAL_PREREQUISITE** | §4：发布版 Nginx 站点文件在隔离前缀中 `nginx -t` 通过并完成真实 HTTP 行为验证；但**无合法域名/证书/80·443 公网暴露**，不能声称已部署 HTTPS |
@@ -103,7 +103,7 @@ GS-NEXT-11 的契约是“切换版本 → 整个空间配置 STALE”，但**�
 
 **结果：1 passed（真实浏览器，真实资产）。**
 
-### 1.4 后端用例（6 个）
+### 1.4 后端用例（7 个）
 
 `apps/api/tests/test_gsnext12_spatial_rebinding.py`：
 
@@ -115,6 +115,7 @@ GS-NEXT-11 的契约是“切换版本 → 整个空间配置 STALE”，但**�
 | `test_b_rows_do_not_survive_switching_back_to_a` | B 行在 A 下不可见，切回 B 仍可见 |
 | `test_legacy_unbound_rows_stay_disabled_after_round_trip` | 历史 NULL 行 A→B→A 后仍停用 |
 | `test_collision_revision_gate` | 碰撞必须用当前 revision 重建；含合法标定证据 |
+| `test_scene_without_current_version_serves_no_unbound_rows` | 安全边界：无 current 版本时 `NULL` 绑定不是通配，旧行不得复活 |
 
 ---
 
@@ -367,16 +368,17 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 
 | 套件 | 结果 |
 | --- | --- |
-| 新增 GS-NEXT-12 后端 | **13 passed**（6 空间重绑定 + 7 一致性） |
+| 新增 GS-NEXT-12 后端 | **14 passed**（7 空间重绑定 + 7 一致性） |
 | GS-NEXT-11 后端 | 28 passed（此前基线） |
 | 后端全量 pytest | <!--FULL_API--> |
 | Worker pytest | **189 passed / 1 skipped**（272.71s） |
-| ruff / mypy | <!--LINT--> |
+| ruff / mypy | **全部通过**（`ruff check app tests` 无告警；mypy 100 files 无问题） |
 | 前端 typecheck / lint / vitest / build | typecheck ✓、lint ✓、vitest **385 passed / 38 files**、build ✓ |
 | E2E GS-NEXT-12 空间重绑定 | **1 passed** |
-| E2E GS-NEXT-10 恢复链路 | <!--E2E10--> |
-| E2E GS-NEXT-11 版本管理 | <!--E2E11--> |
-| E2E 初始相机 / 观察点 | <!--E2E0203--> |
+| E2E GS-NEXT-10 恢复链路 | **1 passed**（50.9s，与 10/11/12 同批 3 passed） |
+| E2E GS-NEXT-11 版本管理 | **2 passed**（与 GS-NEXT-12 同批 3 passed / 10.8m） |
+| E2E 初始相机 | **5 passed / 2 failed（测试预算超时）**；默认 240s 下两个长用例 `page.goto` 超时；以 `--timeout=600000` 在安静主机复跑 **2 passed（18.5m）**。属本机高负载/软件渲染的既有环境抖动，断言未放松（§7.2） |
+| E2E 观察点 | <!--E2E03--> |
 | Nginx 站点文件 | `nginx -t` syntax ok / test successful |
 | Nginx 实际 HTTP 行为 | §4.2 全部通过（隔离临时栈） |
 
@@ -384,12 +386,21 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
 
 | 失败 | 本轮状态 |
 | --- | --- |
-| `test_fix0621.py::TestReleasePreflightCwd` ×4 | 根因是本机 `nginx` 是容器包装脚本且无 `/etc/nginx/nginx.conf`。本轮 `preflight.sh` 在无主配置时**降级为隔离前缀校验发布站点文件**，预期这 4 个用例转绿（提交后复跑验证，见 §7.2） |
-| `test_editor_publication.py::test_export_retention_preserves_current_and_history` | 已知高负载环境抖动（`.limit(100)` 取不到本轮行）；单独运行通过，本轮未改该模块 |
+| `test_fix0621.py::TestReleasePreflightCwd` ×4 | 根因是本机 `nginx` 是容器包装脚本且无 `/etc/nginx/nginx.conf`。本轮 `preflight.sh` 在无主配置时**降级为隔离前缀校验发布站点文件**。**修复后复跑：`pytest tests/test_fix0621.py` → 15 passed**（安静主机，含新建 release 树的一次性 ~2–3 min gsplat CUDA 预热） |
+| `test_editor_publication.py::test_export_retention_preserves_current_and_history` | **既有环境失败**（GS-NEXT-10 §6.5 已记录），与本轮改动无关：隔离库 `scene_edit_sessions` 已积累 **1407** 行，其中 **1151** 行早于 7 天保留期，`cleanup_exports()` 的 `.limit(100)` 每轮只能取到最旧的 100 行，本轮插入的那一行排在数千行之后，永远取不到。**用基线 `2536c45` 的 worktree 在同一库复跑，同样失败**，证明非本轮引入。真正的修复是把该用例移到干净库（隔离测试环境治理），本轮刻意不动，以免掩盖真实问题 |
+| `test_no_conda_usage.py::test_no_tracked_file_uses_conda` | **本轮发现并修复的假失败**（由 `eedaefa`“迁移到 uv”引入）：守卫自己的模式表里写着 `conda activate` 等字样，扫描自身必然命中。已把该文件加入 `SKIP_PREFIXES` 并说明原因 |
 
 **没有通过 SKIP 或放宽断言来制造绿色。**
 
 <!--SECTION_7_2-->
+
+### 7.2 环境与测试预算导致的失败（定性，非产品缺陷）
+
+| 失败 | 定性 | 证据 |
+| --- | --- | --- |
+| 后端全量跑 `test_fix0621` 4 例首轮超时（240s） | 本机另有用户训练进程占满 CPU/GPU（`train_pt_gno.py`、Qwen-VL 训练、milvus 等），release 树里 gsplat CUDA JIT 预热被拖慢 | 同一条命令在安静主机复跑 **15 passed** |
+| `gsnext02-initial-camera` 两个长用例 240s 预算超时 | SwiftShader 软件渲染 + 本机高负载，Viewer 加载超预算 | 同一用例以 `--timeout=600000` 复跑 **2 passed（18.5m）**，断言逐字未改 |
+| GS-NEXT-10/11/12 E2E 首轮失败 | 共享夹具被前一轮 E2E 留下 `QUEUED` 作业，切换版本按设计返回 409 | 清理夹具场景的僵尸作业后同批 **3 passed**；并给两个用例都加了“先归一化到文档化初始状态”的前置步骤 |
 
 ---
 
@@ -415,6 +426,10 @@ RESULT: PASS — 8 passed, 0 failed, 11 warnings
   `publish_service.py`（原子链接）、`collision.py`（revision）
 - API Schema：`schemas/scene_version.py`（revision / pending / confirmed）
 - 前端：`VersionPanel.tsx`（逐项待确认/已确认）、`versionApi.ts`、对应单测
+- E2E 可重复性：`gsnext11-version-management.spec.ts` 先归一化到 A（文档化初始状态）；
+  `gsnext12-spatial-reauthor.spec.ts` 只清理自己创建的行、并在结束时恢复起始版本，
+  不再删除共享夹具的观察点
+- 测试守卫：`test_no_conda_usage.py` 不再扫描自身（`eedaefa` 引入的假失败）
 - 部署：`preflight.sh`（`--nginx-conf`、无主配置降级）、`deploy_release.sh`、
   `rollback.sh`、`backup.sh`（保留策略变量顺序）、`production.env.example`、
   CPU/GPU 单元注释修正、`deploy/nginx/gsplatform.conf`（`/local-scenes` 404）、

@@ -85,7 +85,16 @@ async function viewerLoaded(page: import('@playwright/test').Page) {
 test.describe.configure({ timeout: 600_000 });
 
 test('回滚到历史版本后 Web Viewer 真的加载该版本，且历史字节不变', async ({ page, request }) => {
-  const initial = await versions(request);
+  // 收敛到夹具文档化的初始状态（A 为当前版本）。GS-NEXT-12 的空间重绑定
+  // 用例会切换并恢复版本，单靠执行顺序不能保证这里读到 A；与下一个用例
+  // 一样先归一化，断言本身不放松。
+  let initial = await versions(request);
+  const aId = initial.items.find((i) => i.assetVersion === A_VERSION)!.id;
+  if (initial.currentVersionId !== aId) {
+    const normalized = await activate(request, aId, initial.currentVersionId);
+    expect(normalized.status(), await normalized.text()).toBe(200);
+    initial = await versions(request);
+  }
   expect(initial.items).toHaveLength(2);
   const a = initial.items.find((i) => i.assetVersion === A_VERSION)!;
   const b = initial.items.find((i) => i.assetVersion === B_VERSION)!;

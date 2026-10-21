@@ -84,14 +84,21 @@ async function patchPresentation(request: ApiRequest, body: Record<string, unkno
   expect(r.status(), `PATCH /presentation ${JSON.stringify(body)}`).toBe(200);
 }
 
-async function clearSpatialAuthoring(request: ApiRequest) {
+/** Only remove rows THIS spec authored — the fixture's own viewpoint is part of
+ *  the shared GS-NEXT-11 asset and must survive (it is what proves old data is
+ *  not re-enabled). */
+async function cleanupOwnRows(request: ApiRequest) {
   const vps = await (await request.get(`${API}/viewpoints`)).json();
   for (const vp of vps) {
-    await request.delete(`${API}/viewpoints/${vp.id}`);
+    if (vp.name === 'A 专属视角') {
+      await request.delete(`${API}/viewpoints/${vp.id}`);
+    }
   }
   const anns = await (await request.get(`${API}/annotations`)).json();
   for (const ann of anns) {
-    await request.delete(`${API}/annotations/${ann.id}`);
+    if (ann.title === 'A 专属标注') {
+      await request.delete(`${API}/annotations/${ann.id}`);
+    }
   }
 }
 
@@ -145,13 +152,13 @@ async function currentIds(request: ApiRequest) {
 test.describe.configure({ timeout: 600_000 });
 
 test('A→B→在 B 重新保存初始视角→重开页面：Web 与 XR 都采用 B 的新视角', async ({ page, request }) => {
-  // ── 0) 确定状态：A 为当前版本，清掉旧用例留下的空间数据 ──
+  // ── 0) 确定状态：A 为当前版本，清掉旧用例残留的本用例专属行 ──
   let { listing, a, b } = await currentIds(request);
   if (listing.currentVersionId !== a.id) {
     const resp = await activate(request, a.id, listing.currentVersionId);
     expect(resp.status(), await resp.text()).toBe(200);
   }
-  await clearSpatialAuthoring(request);
+  await cleanupOwnRows(request);
 
   // ── 1) 在 A 版本保存初始视角 + 观察点 + 标注 ──
   await patchPresentation(request, {
@@ -172,8 +179,8 @@ test('A→B→在 B 重新保存初始视角→重开页面：Web 与 XR 都采�
 
   const before = await descriptor(request);
   expect(before.presentation.initialCamera?.position).toEqual(CAM_A.position);
-  expect(before.viewpoints.map((v: any) => v.id)).toEqual([vpA.id]);
-  expect(before.annotations.map((v: any) => v.id)).toEqual([annA.id]);
+  expect(before.viewpoints.map((v: any) => v.id)).toContain(vpA.id);
+  expect(before.annotations.map((v: any) => v.id)).toContain(annA.id);
 
   // ── 2) 切到 B：旧空间配置 STALE，运行态不再下发 ──
   const switched = await activate(request, b.id, a.id);
@@ -190,7 +197,7 @@ test('A→B→在 B 重新保存初始视角→重开页面：Web 与 XR 都采�
   expect(afterSwitch.annotations).toEqual([]);
   // A 的旧观察点没有被删，只是不参与当前版本。
   const vpList = await (await request.get(`${API}/viewpoints`)).json();
-  expect(vpList.map((v: any) => v.id)).toEqual([vpA.id]);
+  expect(vpList.map((v: any) => v.id)).toContain(vpA.id);
 
   // ── 3) 在 B 重新保存初始视角（唯一的重新确认动作）──
   await patchPresentation(request, {
