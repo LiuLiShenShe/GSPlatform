@@ -33,7 +33,7 @@ import {
   type XrMenuInfo,
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
-import { hasAuthoredInitialCamera, shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
+import { hasAuthoredInitialCamera, applyInitialCameraPolicy } from '../../scene-runtime/initialCameraPolicy';
 import { eligibleGuidePoints } from '../../scene-runtime/guidePoints';
 import { destinationKey, INITIAL_DESTINATION_ID } from '../../scene-runtime/xrDestinations';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
@@ -362,9 +362,11 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           if (!runtime.state.loaded) return;
           if (!initialized) {
             initialized = true;
-            runtime.applyWorldTransform();
-            if (shouldFrameSceneOnLoad(desc)) runtime.frameScene();
-            else runtime.resetCamera();
+            // GS-DESKTOP-01：与 Desktop / Authoring 完全同一套起始相机规则 ——
+            // 施加世界变换 + resetCamera()，绝不自动 frameScene()。
+            // XR 出生位姿（xrInitialCamera）不受影响：它只在有 authored 相机时
+            // 传入，无 authored 时保持官方 Y=0 出生语义。
+            applyInitialCameraPolicy(runtime, desc);
           }
           setStatus((prev) => (prev === 'loading' ? 'ready' : prev));
         };
@@ -397,9 +399,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
             if (cancelled) return;
             setLoaded(v);
             if (v) {
-              // FIX-02 §16：XR 与 Desktop 同一套规则 —— 世界变换先执行；
-              // authored Initial Camera 存在 → 不自动 frameScene；
-              // 否则 frameScene()（进入 XR 前的桌面构图 = authored 初始相机）。
+              // GS-DESKTOP-01：XR 与 Desktop 同一套规则 —— 世界变换先执行，
+              // 随后 resetCamera() 回到有效初始相机；绝不自动 frameScene()。
               // FIX-XR-01: 官方 loaded 事件为真 → loading → ready。
               syncReady();
             }

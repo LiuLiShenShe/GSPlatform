@@ -25,7 +25,10 @@ import {
 } from '../../scene-runtime/SuperSplatRuntime';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
-import { shouldFrameSceneOnLoad } from '../../scene-runtime/initialCameraPolicy';
+// GS-DESKTOP-01：起始相机规则只有这一个权威来源（Desktop / Authoring / XR 共用）。
+// 绝不在此处调用 runtime.frameScene() —— 加载完成自动取景整个 AABB 正是用户
+// 报告的「视角突然退到远处、显示整个 Gaussian 场景和废点」。
+import { applyInitialCameraPolicy } from '../../scene-runtime/initialCameraPolicy';
 import {
   assessSceneScale,
   type SceneScaleAssessment,
@@ -232,9 +235,9 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
         const initialize = () => {
           if (!runtime.loaded || initialized) return;
           initialized = true;
-          runtime.applyWorldTransform();
-          if (shouldFrameSceneOnLoad(desc)) runtime.frameScene();
-          else runtime.resetCamera();
+          // GS-DESKTOP-01：施加世界变换 + 官方 resetCamera()（有效初始相机）。
+          // 一次性、绝不自动 frameScene()：加载完成后不再强制取景整个 AABB。
+          applyInitialCameraPolicy(runtime, desc);
         };
         const refresh = () => {
           if (cancelled) return;

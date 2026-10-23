@@ -57,11 +57,17 @@ export function InitialViewPanel({ presentation, onSetInitialView, onGetCurrentP
             </Button>
           </Space>
         ) : (
-          <Space>
-            <Tag color="warning">未设置</Tag>
-            <Button type="primary" icon={<EyeOutlined />} onClick={handleSet} size="small">
-              设为初始视角
-            </Button>
+          <Space direction="vertical" size={4}>
+            <Space>
+              <Tag color="warning">未设置</Tag>
+              <Button type="primary" icon={<EyeOutlined />} onClick={handleSet} size="small">
+                将当前视角设为初始视角
+              </Button>
+            </Space>
+            {/* GS-DESKTOP-01 §2-B：封面是加载期的 2D 图片，不是相机视角。 */}
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              未设置时打开场景使用官方默认相机；加载时的封面图不是相机视角。
+            </Text>
           </Space>
         )}
       </div>

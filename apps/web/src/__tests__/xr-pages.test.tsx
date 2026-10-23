@@ -353,11 +353,21 @@ describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数�
     u2.unmount();
   });
 
-  it('/xr/:sceneId 场景加载完成后自动 frameScene，Enter VR 由官方 canStartVR 驱动', async () => {
+  it('/xr/:sceneId 加载完成后 resetCamera（不自动 frameScene），Enter VR 由官方 canStartVR 驱动', async () => {
     const u = renderApp({ route: '/xr/r-8c4e2264e86a' });
     await waitFor(() => {
       expect(screen.getByTestId('diag-can-start-vr').textContent).toBe('true');
     });
+    // GS-DESKTOP-01：XR 与 Desktop 同一套起始相机规则 —— 只 resetCamera，
+    // 绝不自动 frameScene（否则加载完成会把视角拉到整个 AABB）。
+    expect(
+      (officialHandle as unknown as { resetCamera: { mock: { calls: unknown[] } } }).resetCamera.mock.calls
+        .length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      (officialHandle as unknown as { frameScene: { mock: { calls: unknown[] } } }).frameScene.mock.calls
+        .length,
+    ).toBe(0);
     expect(screen.getByTestId('enter-vr-btn')).toBeEnabled();
     u.unmount();
   });

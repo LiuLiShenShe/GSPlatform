@@ -152,7 +152,7 @@ for node, statistics in (celery_app.control.inspect(timeout=2).stats() or {}).it
     worker_receipt = state / (service + '.pid')
     if not worker_receipt.exists() or json.loads(worker_receipt.read_text())['pid'] != statistics['pid']:
         raise SystemExit('Worker ownership receipt is missing or mismatched')
-for service, port in (('api', 18001), ('web', 5175), ('proxy', 5174)):
+for service, port in (('api', 18001), ('web', int(os.environ.get('GS_VR00_WEB_PORT', '5175'))), ('proxy', 5174)):
     if (state / (service + '.pid')).exists():
         continue
     with socket.socket() as listener:
@@ -176,8 +176,8 @@ case "${1:-status}" in
             start_service gpu "$ROOT" "$PYTHON" -m celery -A workers.celery_app worker -Q gpu --concurrency=1 --loglevel=INFO --hostname=vr00-gpu@%h
         fi
         start_service maintenance "$ROOT" "$PYTHON" -c 'import os; from workers.celery_app import celery_app; celery_app.conf.beat_schedule={"vr00-recovery":{"task":"tasks.cleanup_expired_uploads","schedule":21600.0,"options":{"queue":"gsplatform"}}}; celery_app.start(["beat","--loglevel=INFO","--schedule",os.environ["GS_VR00_STATE_DIR"]+"/beat-schedule"])'
-        start_service web "$ROOT/apps/web" node "$ROOT/apps/web/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port 5175 --strictPort
-        sed "s@__SCENE_ORIGIN_ROOT__@$GS_SCENE_ORIGIN_ROOT@g" "$ROOT/deploy/nginx/vr00-staging.conf" > "$STATE/nginx.conf"
+        start_service web "$ROOT/apps/web" node "$ROOT/apps/web/node_modules/vite/bin/vite.js" --host 127.0.0.1 --port "${GS_VR00_WEB_PORT:-5175}" --strictPort
+        sed -e "s@__SCENE_ORIGIN_ROOT__@$GS_SCENE_ORIGIN_ROOT@g" -e "s@__WEB_PORT__@${GS_VR00_WEB_PORT:-5175}@g" "$ROOT/deploy/nginx/vr00-staging.conf" > "$STATE/nginx.conf"
         start_service proxy "$ROOT" docker run --rm --pull=never --name gsplatform-vr00-nginx-20261011 --label gsplatform.vr00=20261011 --network host --user "$UID:$(id -g)" --mount "type=bind,src=$STATE/nginx.conf,dst=/etc/nginx/nginx.conf,readonly" --mount "type=bind,src=$STATE,dst=$STATE,readonly" --mount "type=bind,src=$STATE/logs,dst=/logs" --mount type=bind,src=/home/test/gsplatform-data/published,dst=/home/test/gsplatform-data/published,readonly nginx:stable-alpine nginx
         if [[ "${GS_VR00_TUNNEL_ENABLED:-false}" == true ]]; then
             start_service tunnel "$ROOT" cloudflared tunnel --protocol "${GS_VR00_TUNNEL_PROTOCOL:-auto}" --url http://127.0.0.1:5174 --no-autoupdate

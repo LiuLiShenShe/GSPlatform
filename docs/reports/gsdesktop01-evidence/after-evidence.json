@@ -1,0 +1,770 @@
+{
+  "label": "after",
+  "url": "http://localhost:5173/scene/fix02-semantics?diagnostics=1",
+  "scene": "fix02-semantics",
+  "loadingVisual": "poster overlay (2D image) over the official host canvas",
+  "loadingAt": {
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "target": [
+      0,
+      0,
+      -3
+    ],
+    "fov": 45
+  },
+  "immediateAtLoad": {
+    "position": [
+      0,
+      2,
+      5.966867348651265e-18
+    ],
+    "target": [
+      1.890003079575671,
+      2,
+      -4.136981197628211e-16
+    ],
+    "fov": 85
+  },
+  "settledAfter6s": {
+    "position": [
+      0,
+      2,
+      0
+    ],
+    "target": [
+      1.890003079575671,
+      2,
+      -4.196649871114724e-16
+    ],
+    "fov": 85
+  },
+  "calls": [
+    "applyWorldTransform@10071",
+    "resetCamera@10071"
+  ],
+  "samplesAroundLoad": [
+    {
+      "t": 9437,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9487,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9537,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9587,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9637,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9687,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9757,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9793,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9845,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9888,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9937,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9988,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 10125,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10150,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10187,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10238,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10288,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10338,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10387,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10438,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10487,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10537,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10587,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10637,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10688,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10737,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10788,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10837,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10888,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10938,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10988,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11038,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11087,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11137,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11187,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11237,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11288,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11337,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11387,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11438,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11488,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11537,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11587,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11637,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11687,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11738,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11787,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11838,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11887,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11937,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11987,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12037,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12087,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12137,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12187,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    }
+  ],
+  "timings": {
+    "gotoMs": 12298,
+    "sampleCount": 206
+  }
+}

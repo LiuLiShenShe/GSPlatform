@@ -31,7 +31,7 @@ import { VersionPanel } from '../features/authoring/VersionPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
 import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 import { resolveSceneRuntimeDescriptor } from '../scene-runtime/descriptorResolver';
-import { runtimeInitialCameraUse, shouldFrameSceneOnLoad } from '../scene-runtime/initialCameraPolicy';
+import { runtimeInitialCameraUse, hasAuthoredInitialCamera, applyInitialCameraPolicy } from '../scene-runtime/initialCameraPolicy';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from '../scene-runtime/types';
 import type { SceneViewpoint } from '../services/presentationApi';
@@ -119,6 +119,12 @@ export default function SceneAuthoringPage() {
           return;
         }
         runtimeRef.current = runtime;
+        // DEV-only 调试把柄（生产构建 import.meta.env.DEV=false，不输出）。
+        // 与 /scene 的 window.__gsruntime、/xr 的 window.__gsxrruntime 同一做法：
+        // e2e 直接读取预览 runtime 的真实相机 pose（不触碰 React 内部状态）。
+        if (import.meta.env.DEV) {
+          (window as unknown as { __gsauthoringruntime?: unknown }).__gsauthoringruntime = runtime;
+        }
         // 闭包内保留非空引用（TS 收窄在回调里失效）。
         const active = runtime;
         let initialized = false;
@@ -127,17 +133,12 @@ export default function SceneAuthoringPage() {
             setViewerReady(loaded);
             if (loaded && !initialized) {
               initialized = true;
-              // FIX-02 §5：世界变换真正执行（施加到 gsplat 实体；恒等 → no-op）。
-              active.applyWorldTransform();
-              // FIX-02 §2/§16：与 /scene 同一规则 —— authored Initial Camera 存在
-              // → 不自动 frameScene（保持作者已保存的初始构图）；否则取景整个场景。
-              if (shouldFrameSceneOnLoad(descriptor)) {
-                try {
-                  active.frameScene();
-                } catch (frameErr) {
-                  console.error('[authoring] frameScene failed', frameErr);
-                }
-              } else active.resetCamera();
+              // GS-DESKTOP-01：创作预览与 /scene 走**完全相同**的起始相机规则
+              // （单一权威来源 initialCameraPolicy.applyInitialCameraPolicy）——
+              // 世界变换 + resetCamera()。authored Initial Camera 存在 → 保持作者
+              // 已保存的初始构图；不存在 → 官方默认相机，**不取景整个 AABB**
+              // （加载完成自动 frameScene 正是「视角突然退到远处」的成因）。
+              applyInitialCameraPolicy(active, descriptor);
             }
           }
         };
@@ -155,6 +156,12 @@ export default function SceneAuthoringPage() {
       cancelled = true;
       runtime?.destroy();
       runtimeRef.current = null;
+      // DEV-only 调试把柄必须一并清掉：headless SwiftShader 下保留一个已销毁
+      // runtime 的强引用会阻止 WebGPU 设备释放，随后的页面跳转会卡死
+      // （GS-NEXT-10 / fresh-browser.ts 记录的同类问题）。
+      if (import.meta.env.DEV) {
+        (window as unknown as { __gsauthoringruntime?: unknown }).__gsauthoringruntime = null;
+      }
     };
   }, [effectiveSceneId, authoring.settingsRevision, annotationRevision, versionRevision]);
 
@@ -280,7 +287,7 @@ export default function SceneAuthoringPage() {
           return;
         }
         message.error(
-          '初始视角已写入数据库，但运行时未采用它：打开场景仍会使用官方自动取景。'
+          '初始视角已写入数据库，但运行时未采用它：打开场景仍会使用官方默认相机。'
             + '这通常是因为场景几何变更后空间绑定被判定为失效，需要重新校验后再次保存。',
         );
       } catch {
@@ -418,8 +425,15 @@ export default function SceneAuthoringPage() {
           <Tag color={viewerReady ? 'green' : 'default'}>
             {viewerReady ? 'Viewer 就绪' : '连接中…'}
           </Tag>
-          <Button size="small" type="primary" icon={<SaveOutlined />} onClick={handleSaveAll}>
-            保存当前视角
+          <Button
+            size="small"
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSaveAll}
+            data-testid="save-current-view-as-initial"
+            title="把预览里当前的相机构图保存为该场景的初始视角（无需手动输入坐标）"
+          >
+            将当前视角设为初始视角
           </Button>
         </Space>
 
@@ -432,7 +446,23 @@ export default function SceneAuthoringPage() {
               showIcon
               data-testid="initial-view-runtime-mismatch"
               message="已保存的初始视角未被运行时采用"
-              description="数据库里有初始视角，但当前场景描述符不包含它，打开场景会回退到官方自动取景。场景几何变更会判定空间绑定失效——请重新保存（或重新发布）后再确认。"
+              description="数据库里有初始视角，但当前场景描述符不包含它，打开场景会回退到官方默认相机。场景几何变更会判定空间绑定失效——请重新保存（或重新发布）后再确认。"
+            />
+          </div>
+        )}
+        {activeDescriptor !== null &&
+          initialViewUse.status === 'absent' &&
+          !hasAuthoredInitialCamera(activeDescriptor) && (
+          <div style={{ marginBottom: 8 }}>
+            {/* GS-DESKTOP-01 §2-B：封面（poster）只是加载期的一张 2D 图片，
+                不是相机视角，也不能据此反推 3D 位姿。没有已保存的初始视角时
+                必须明说，避免用户把海报构图当成"已保存相机"。 */}
+            <Alert
+              type="info"
+              showIcon
+              data-testid="initial-view-not-authored"
+              message="尚未设置初始视角"
+              description="打开场景时将使用官方默认相机，加载完成后不会自动取景。加载期间看到的封面图只是封面（2D 图片），不是相机视角。请在左侧真实 Gaussian 预览中调整到满意的近距离构图，再点击「将当前视角设为初始视角」。"
             />
           </div>
         )}

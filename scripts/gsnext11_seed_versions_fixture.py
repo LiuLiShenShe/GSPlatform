@@ -37,7 +37,7 @@ DSN = os.environ.get(
     "@127.0.0.1:5432/gsplatform_vr00_tests_20261011",
 )
 OWNER_EMAIL = os.environ.get("GS_SEED_OWNER_EMAIL", "dev@gsplatform.local")
-SLUG = "gsnext11-versions"
+SLUG = os.environ.get("GS_SEED_SLUG", "gsnext11-versions")
 
 STATE = Path(os.path.expanduser("~/.local/state/gsplatform-vr00-20261011"))
 STORAGE = Path(os.environ.get("GS_SEED_STORAGE_ROOT", str(STATE / "dev-storage")))
@@ -185,7 +185,7 @@ def seed() -> None:
                 "id": scene_id,
                 "owner": owner,
                 "slug": SLUG,
-                "title": "GS-NEXT-11 版本切换夹具",
+                "title": f"{SLUG} 版本切换夹具",
                 "desc": "A=streamed-sog / B=sog，版本管理与回滚 e2e",
                 "splat": A_COUNTS[-1],
                 "size": size_a,

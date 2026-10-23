@@ -120,9 +120,51 @@ async function moveCameraToCloseUp(page: import('@playwright/test').Page): Promi
   await page.waitForTimeout(1500); // 等官方过渡稳定
 }
 
-/** 点击「更新为当前视角 / 设为初始视角」（两种文案都接受）。 */
+/**
+ * 在**新标签页**重新打开场景。
+ *
+ * Headless SwiftShader 的已知限制（不是产品缺陷）：官方 viewer 在页面内发生过
+ * 相机交互后，直接 `page.goto` 离开会卡在 WebGPU 设备销毁上（实测基线代码
+ * 同样复现）。新开一个 page 重新加载等价于用户"重新打开场景"，不会误伤被测
+ * 行为；旧页面保留到浏览器关闭，避免同一渲染进程被强制拆毁。
+ */
+async function reopenPage(page: import('@playwright/test').Page): Promise<import('@playwright/test').Page> {
+  const fresh = await page.context().newPage();
+  return fresh;
+}
+
+/**
+ * 打开新页并让旧页退出（顺序很重要）：
+ *   1) 新页先开始加载（此时旧页的 WebGPU 设备仍在，不需要在本渲染进程里销毁）；
+ *   2) 等新页出现 viewer 根节点；
+ *   3) 再关闭旧页 —— 早关会触发 headless SwiftShader 的设备销毁卡死。
+ */
+async function reopenScene(
+  page: import('@playwright/test').Page,
+  url: string,
+  selector: string,
+): Promise<import('@playwright/test').Page> {
+  const fresh = await reopenPage(page);
+  await fresh.goto(url);
+  await fresh.waitForSelector(selector);
+  await page.close();
+  return fresh;
+}
+
+/**
+ * 点击「将当前视角设为初始视角」（顶栏简单入口）。
+ *
+ * GS-DESKTOP-01 统一了文案：顶栏按钮 = 「将当前视角设为初始视角」；InitialViewPanel
+ * 里未设置时也是同一句（已设置时是「更新为当前视角」）。两种都接受，避免文案
+ * 微调就把 e2e 打挂。
+ */
 async function clickSaveInitialView(page: import('@playwright/test').Page): Promise<void> {
-  await page.getByRole('button', { name: /更新为当前视角|设为初始视角/ }).click();
+  const primary = page.getByTestId('save-current-view-as-initial');
+  if (await primary.count()) {
+    await primary.click();
+    return;
+  }
+  await page.getByRole('button', { name: /更新为当前视角|将当前视角设为初始视角|设为初始视角/ }).click();
 }
 
 let snapshot: Presentation;
@@ -178,9 +220,12 @@ test.describe('GS-NEXT-02 核心：保存近距离视角 → 重新打开恢复�
     expect(runtime.presentation.initialCamera.fov).toBeCloseTo(saved.initialCameraFov!, 6);
 
     // ── L4：重新打开场景，相机真的在那里（用户真正的成功标准）──
-    await page.goto(`/scene/${SCENE}`);
-    await page.waitForSelector('[data-testid="scene-viewer-page"][data-runtime="official"]');
-    const diag = await readDiag(page);
+    const reopened = await reopenScene(
+      page,
+      `/scene/${SCENE}`,
+      '[data-testid="scene-viewer-page"][data-runtime="official"]',
+    );
+    const diag = await readDiag(reopened);
     const actual = cam(diag)!;
     expect(actual, '应有相机读数').not.toBeNull();
     console.log('reloaded camera:', JSON.stringify(actual), 'mode', diag.cameraMode);
@@ -208,9 +253,14 @@ test.describe('GS-NEXT-02 核心：保存近距离视角 → 重新打开恢复�
     const savedPos = [saved.initialCameraPosition!.x, saved.initialCameraPosition!.y, saved.initialCameraPosition!.z];
 
     // 刷新（重新拉取 presentation + 重建预览 runtime）。
-    await openAuthoring(page);
-    await expect(page.getByText(/^Position: \(/)).toBeVisible();
-    const panelText = (await page.getByText(/^Position: \(/).first().textContent()) ?? '';
+    const refreshed = await reopenScene(page, `/model/edit/${SCENE}`, '[data-testid="scene-authoring-page"]');
+    await expect(refreshed.getByText('Viewer 就绪').first()).toBeVisible({ timeout: 120_000 });
+    await refreshed.waitForSelector('[data-testid="scene-authoring-page"] canvas', {
+      state: 'visible',
+      timeout: 60_000,
+    });
+    await expect(refreshed.getByText(/^Position: \(/)).toBeVisible();
+    const panelText = (await refreshed.getByText(/^Position: \(/).first().textContent()) ?? '';
     console.log('panel after reload:', panelText);
     // 面板显示的应是已保存的（经 server 读取，非乐观 state）。
     const nums = panelText.match(/-?\d+\.\d+/g)?.map(Number) ?? [];
@@ -218,7 +268,7 @@ test.describe('GS-NEXT-02 核心：保存近距离视角 → 重新打开恢复�
     for (const i of [0, 1, 2]) {
       expect(Math.abs(nums[i] - savedPos[i]), `面板位置 ${i} 应为已保存值`).toBeLessThan(0.01);
     }
-    await expect(page.locator('[data-testid="initial-view-runtime-mismatch"]')).toHaveCount(0);
+    await expect(refreshed.locator('[data-testid="initial-view-runtime-mismatch"]')).toHaveCount(0);
   });
 
   test('L5：Desktop 与 XR 共用同一个已保存视角', async ({ page, request }) => {
@@ -325,28 +375,45 @@ test.describe('GS-NEXT-02 §五 Performance Mode 默认 ON（Desktop/XR 一致�
 });
 
 test.describe('GS-NEXT-02 回退与失败可见性', () => {
-  test('无 authored 相机 → 回退官方 frameScene（描述符契约夹具）', async ({ page, request }) => {
+  test('无 authored 相机 → 采用官方默认相机（不自动 frameScene；GS-DESKTOP-01 契约）', async ({ page, request }) => {
     // 说明：这里用「描述符契约夹具」覆盖**无 authored 相机**这一分支。
     // DB 合同无法把 initialCamera 置空（PATCH 把 null 视为「不变」，且该分支的
     // DB 侧前置条件由后端单测覆盖），因此拦截 runtime 响应喂一个真实形状的
     // 无相机描述符 —— 走的是与线上一致的 resolve → settings → runtime 链路。
+    //
+    // GS-DESKTOP-01 契约变更（旧契约「无 authored 必须自动 frameScene」已废弃）：
+    //   官方 1.35.0 的加载路径**从不**调用 frameScene；加载后的初始相机始终是
+    //   `settings.cameras[0].initial`。没有 authored 相机时，adapter 保留
+    //   `defaultSettings('environment')` 的官方默认相机 [0,2,0]（fov 85）。
+    //   旧行为（GS-DESKTOP-01 修复前）会额外调用 frameScene()，把相机在加载
+    //   完成后 1 秒内拉到整个 AABB 取景 —— 这正是用户报告的 P0「视角突然退到
+    //   远处、显示整个 Gaussian 场景和废点」。
+    //   证据：真实浏览器实测（修复前）[0,2,0] → [3.2433,1.7331,3.3158]（位移 4.65）；
+    //   修复后固定在 [0,2,0]。真实浏览器契约见 e2e/gsdesktop01-camera-stability.spec.ts。
     const runtimeResponse = await request.get(`${API}/runtime`);
     expect(runtimeResponse.status()).toBe(200);
     const descriptor = await runtimeResponse.json();
     descriptor.presentation.initialCamera = { position: null, target: null, fov: null };
     await page.route(`**/api/v1/scenes/${SCENE}/runtime`, route => route.fulfill({ json: descriptor }));
 
-    await page.goto(`/scene/${SCENE}`);
+    await page.goto(`/scene/${SCENE}?diagnostics=1`);
     await page.waitForSelector('[data-testid="scene-viewer-page"][data-runtime="official"]');
     const diag = await readDiag(page);
     const actual = cam(diag)!;
     console.log('no-authored camera:', JSON.stringify(actual));
-    // 回退 = 官方 frameScene：取景整个 AABB，不是任何 authored 视角。
-    expect(dist(actual.position, FACTORY.position), '应离开 authored 视角（已取景全场景）').toBeGreaterThan(1.0);
-    // 读数须为有限值（frameScene 产物应是一个合法相机位姿，而非 NaN/空场景噪声）。
-    expect(actual.position.every(Number.isFinite), 'frameScene 相机位置应为有限值').toBe(true);
-    expect(actual.fov).toBeGreaterThan(0);
-    console.log('fallback fov:', actual.fov, 'cameraMode:', diag.cameraMode);
+
+    // 官方默认相机（defaultSettings('environment')）：position [0,2,0] / fov 85。
+    expect(dist(actual.position, [0, 2, 0]), '应停在官方默认相机，而不是 AABB 取景').toBeLessThan(0.05);
+    expect(Math.abs(actual.fov - 85), '官方默认 fov 85').toBeLessThan(0.05);
+    // 关键否定断言：绝不是整个 AABB 的 frameScene 产物（该夹具实测为 [3.2433,1.7331,3.3158]）。
+    expect(dist(actual.position, [3.2433, 1.7331, 3.3158]), '不得再自动取景整个 AABB').toBeGreaterThan(1.0);
+    expect(actual.position.every(Number.isFinite), '相机位置应为有限值').toBe(true);
+    console.log('official default fov:', actual.fov, 'cameraMode:', diag.cameraMode);
+
+    // 稳定观察：加载完成后不得再移动。
+    await page.waitForTimeout(4000);
+    const later = cam(await readDiag(page))!;
+    expect(dist(later.position, actual.position), '加载完成后相机不得移动').toBeLessThan(0.01);
   });
 
   test('保存失败时：面板回滚到服务器真相并明确报错（不得留下「假保存」）', async ({ page, request }) => {

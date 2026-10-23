@@ -1,88 +1,139 @@
 /**
- * FIX-02 §2/§3/§18 —— 初始相机策略。
+ * GS-DESKTOP-01 —— 初始相机策略（Desktop / Authoring / XR 唯一权威来源）。
  *
- * 规则（Desktop 与 XR 相同）：
- *   - Scene 有 authored Initial Camera（position+target 成对存在，显式 null 语义，
- *     绝不是 `position != [0,0,0]` 猜测）→ Viewer loaded 后**不自动 frameScene**，
- *     使用 authored initial camera（必要时 runtime.resetCamera() 恢复）。
- *   - 无 authored camera → frameScene 取景整个场景。
+ * ## 契约变更（旧契约 → 新契约，附官方 1.35.0 实测依据）
  *
- * 本文件锁定策略判定；加载时机用法（onLoaded hooked）由 runtime 页面验证。
+ * 旧契约（FIX-02/GS-NEXT-02）：
+ *   - 无 authored initial camera → 加载完成后 ``frameScene()`` 取景整个场景。
+ *
+ * 新契约（GS-DESKTOP-01，用户 P0 修复）：
+ *   - 加载完成后**只** ``applyWorldTransform()`` + ``resetCamera()``；
+ *     **任何情况下都不自动 ``frameScene()``**。
+ *   - 无 authored 相机 → 采用官方 ``defaultSettings('environment')`` 的默认相机
+ *     （``cameras[0].initial``），而不是整个 AABB 取景。
+ *
+ * 依据（``@playcanvas/supersplat-viewer@1.35.0`` ``dist/viewer.js``）：
+ *   - ``CameraManager`` 构造时 ``this.camera.copy(resetCamera)``，其中
+ *     ``resetCamera = camera0 ? createCamera(camera0...) : frameCamera``，而
+ *     ``defaultSettings()`` **始终**提供 ``cameras[0].initial``，所以加载后的
+ *     官方初始相机一直是 ``settings.cameras[0].initial``。
+ *   - ``frameCamera = createFrameCamera(bbox, fov)``（距离 =
+ *     ``bbox.halfExtents.length() / sin(fov/2)``）只被 ``inputEvent 'frame'``
+ *     消费 —— 即官方的 Frame 操作，加载路径不会调用它。
+ *   - 真机复现（fix02-semantics，无 authored 相机）：加载完成时相机在
+ *     官方默认 ``[0,2,0]``，自动 frameScene 后 1 秒内被拉到
+ *     ``[3.2433,1.7331,3.3158]``（位移 4.65），正是「视角突然退到远处」。
+ *
+ * 本文件锁定策略判定与「加载只做 reset 不做 frame」这一调用契约；真实浏览器
+ * 行为由 apps/web/e2e/gsdesktop01-camera-stability.spec.ts 验证。
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
+  applyInitialCameraPolicy,
   hasAuthoredInitialCamera,
+  initialCameraSource,
   runtimeInitialCameraUse,
-  shouldFrameSceneOnLoad,
+  type InitialCameraRuntime,
 } from '../scene-runtime/initialCameraPolicy';
 import { emptyRuntimeDescriptorFixture, runtimeDescriptorFixture } from '../scene-runtime/__fixtures__/descriptor';
 import type { SceneRuntimeDescriptorV1 } from '../scene-runtime/types';
 
-describe('FIX-02 initial camera policy（hasAuthoredInitialCamera）', () => {
-  it('position+target 成对存在 → 判定为 authored（显式语义，非 [0,0,0] 猜测）', () => {
-    const desc: SceneRuntimeDescriptorV1 = {
-      ...emptyRuntimeDescriptorFixture,
-      presentation: {
-        ...emptyRuntimeDescriptorFixture.presentation,
-        initialCamera: { position: { x: 0, y: 1.6, z: 3 }, target: { x: 0, y: 0, z: 0 }, fov: 55 },
-      },
-    };
-    expect(hasAuthoredInitialCamera(desc)).toBe(true);
-    expect(shouldFrameSceneOnLoad(desc)).toBe(false);
+/** 记录调用顺序的假 runtime（额外挂 frameScene 用于断言"绝不自动取景"）。 */
+function makeRuntime() {
+  const calls: string[] = [];
+  const runtime = {
+    applyWorldTransform: vi.fn(() => {
+      calls.push('applyWorldTransform');
+      return true;
+    }),
+    resetCamera: vi.fn(() => {
+      calls.push('resetCamera');
+    }),
+    // 结构类型之外多挂一个：如果实现偷偷调用它，断言会失败。
+    frameScene: vi.fn(() => {
+      calls.push('frameScene');
+    }),
+  };
+  return { runtime, calls };
+}
+
+function withInitialCamera(
+  initialCamera: SceneRuntimeDescriptorV1['presentation']['initialCamera'],
+): SceneRuntimeDescriptorV1 {
+  return {
+    ...emptyRuntimeDescriptorFixture,
+    presentation: { ...emptyRuntimeDescriptorFixture.presentation, initialCamera },
+  };
+}
+
+describe('initial camera 判定（hasAuthoredInitialCamera）', () => {
+  it('position+target 成对存在 → authored（显式语义，非 [0,0,0] 猜测）', () => {
+    expect(hasAuthoredInitialCamera(runtimeDescriptorFixture)).toBe(true);
+    expect(initialCameraSource(runtimeDescriptorFixture)).toBe('authored');
   });
 
   it('position 恰为 [0,0,0] 但 target 成对 → 仍是 authored（不靠零值猜测）', () => {
-    const desc: SceneRuntimeDescriptorV1 = {
-      ...emptyRuntimeDescriptorFixture,
-      presentation: {
-        ...emptyRuntimeDescriptorFixture.presentation,
-        initialCamera: { position: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: -1 }, fov: 55 },
-      },
-    };
+    const desc = withInitialCamera({
+      position: { x: 0, y: 0, z: 0 },
+      target: { x: 0, y: 0, z: -1 },
+      fov: 55,
+    });
     expect(hasAuthoredInitialCamera(desc)).toBe(true);
-    expect(shouldFrameSceneOnLoad(desc)).toBe(false);
   });
 
-  it('target 缺失（null）→ 无 authored camera → 应 frameScene', () => {
-    const desc: SceneRuntimeDescriptorV1 = {
-      ...emptyRuntimeDescriptorFixture,
-      presentation: {
-        ...emptyRuntimeDescriptorFixture.presentation,
-        initialCamera: { position: { x: 5, y: 2, z: 5 }, target: null, fov: 55 },
-      },
-    };
+  it.each([
+    ['target 缺失', { position: { x: 5, y: 2, z: 5 }, target: null, fov: 55 }],
+    ['position 缺失', { position: null, target: { x: 0, y: 0, z: 0 }, fov: 55 }],
+    ['两者都缺失', { position: null, target: null, fov: null }],
+  ] as const)('%s → 无 authored 相机 → official-default', (_label, cam) => {
+    const desc = withInitialCamera(cam);
     expect(hasAuthoredInitialCamera(desc)).toBe(false);
-    expect(shouldFrameSceneOnLoad(desc)).toBe(true);
-  });
-
-  it('position 缺失（null）→ 无 authored camera → 应 frameScene', () => {
-    const desc: SceneRuntimeDescriptorV1 = {
-      ...emptyRuntimeDescriptorFixture,
-      presentation: {
-        ...emptyRuntimeDescriptorFixture.presentation,
-        initialCamera: { position: null, target: { x: 0, y: 0, z: 0 }, fov: 55 },
-      },
-    };
-    expect(hasAuthoredInitialCamera(desc)).toBe(false);
-    expect(shouldFrameSceneOnLoad(desc)).toBe(true);
+    expect(initialCameraSource(desc)).toBe('official-default');
   });
 
   it('descriptor 为 null（加载失败/未就绪）→ 不误判为 authored', () => {
     expect(hasAuthoredInitialCamera(null)).toBe(false);
-    expect(shouldFrameSceneOnLoad(null)).toBe(true);
+    expect(initialCameraSource(null)).toBe('official-default');
+  });
+});
+
+describe('加载完成契约（applyInitialCameraPolicy）', () => {
+  it('authored：施加世界变换后 resetCamera，且绝不 frameScene', () => {
+    const { runtime, calls } = makeRuntime();
+    const source = applyInitialCameraPolicy(runtime, runtimeDescriptorFixture);
+    expect(source).toBe('authored');
+    expect(calls).toEqual(['applyWorldTransform', 'resetCamera']);
+    expect(runtime.frameScene).not.toHaveBeenCalled();
   });
 
-  it('标准 fixture 的作者初始终端不受影响（行为对存量场景零变化）', () => {
-    // runtimeDescriptorFixture 带完整 initialCamera —— 视为 authored、
-    // 不自动 frameScene；测试夹具语义不变。
-    expect(hasAuthoredInitialCamera(runtimeDescriptorFixture)).toBe(true);
+  it('无 authored：同样只 resetCamera（官方默认相机），绝不 frameScene', () => {
+    const { runtime, calls } = makeRuntime();
+    const source = applyInitialCameraPolicy(runtime, emptyRuntimeDescriptorFixture);
+    expect(source).toBe('official-default');
+    expect(calls).toEqual(['applyWorldTransform', 'resetCamera']);
+    expect(runtime.frameScene).not.toHaveBeenCalled();
+  });
+
+  it('descriptor 缺失：仍只 resetCamera，绝不 frameScene', () => {
+    const { runtime, calls } = makeRuntime();
+    expect(applyInitialCameraPolicy(runtime, null)).toBe('official-default');
+    expect(calls).toEqual(['applyWorldTransform', 'resetCamera']);
+  });
+
+  it('结构上不可能自动取景：策略接口不接受 frameScene', () => {
+    // 运行时类型只暴露 applyWorldTransform / resetCamera —— 调用点绕不开策略。
+    const typed: InitialCameraRuntime = {
+      applyWorldTransform: () => true,
+      resetCamera: () => undefined,
+    };
+    expect(() => applyInitialCameraPolicy(typed, emptyRuntimeDescriptorFixture)).not.toThrow();
   });
 });
 
 describe('GS-NEXT-02 已保存初始视角是否被运行时采用（runtimeInitialCameraUse）', () => {
   const saved = { x: 0.4, y: -0.2, z: 0.14 };
 
-  it('从未保存（presentation 无 initialCameraPosition）→ absent（走官方 frameScene，符合预期）', () => {
+  it('从未保存 → absent（打开场景使用官方默认相机，符合预期）', () => {
     expect(runtimeInitialCameraUse(null, runtimeDescriptorFixture)).toEqual({ status: 'absent' });
     expect(runtimeInitialCameraUse(undefined, runtimeDescriptorFixture)).toEqual({ status: 'absent' });
   });
@@ -92,19 +143,15 @@ describe('GS-NEXT-02 已保存初始视角是否被运行时采用（runtimeInit
   });
 
   it('已保存 + 描述符带 authored camera → authored（运行时正在采用该视角）', () => {
-    const desc: SceneRuntimeDescriptorV1 = {
-      ...emptyRuntimeDescriptorFixture,
-      presentation: {
-        ...emptyRuntimeDescriptorFixture.presentation,
-        initialCamera: { position: saved, target: { x: 0, y: 0, z: -1 }, fov: 60 },
-      },
-    };
+    const desc = withInitialCamera({
+      position: saved,
+      target: { x: 0, y: 0, z: -1 },
+      fov: 60,
+    });
     expect(runtimeInitialCameraUse(saved, desc)).toEqual({ status: 'authored' });
   });
 
-  it('已保存 + 描述符丢弃了 initialCamera（空间绑定 STALE）→ ignored（面板显示已保存但打开场景仍取景）', () => {
-    // 复现 PICO 复测现象：`scene_presentations` 有值，但描述符 initialCamera
-    // 为 null（空 fixture 即此形态）—— 这正是"保存成功却仍是鸟瞰"的根因。
+  it('已保存 + 描述符丢弃了 initialCamera（空间绑定 STALE）→ ignored（面板显示已保存但打开场景仍是默认相机）', () => {
     expect(runtimeInitialCameraUse(saved, emptyRuntimeDescriptorFixture)).toEqual({ status: 'ignored' });
   });
 

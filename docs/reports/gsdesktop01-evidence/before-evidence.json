@@ -1,0 +1,796 @@
+{
+  "label": "before",
+  "url": "http://localhost:5173/scene/fix02-semantics?diagnostics=1",
+  "scene": "fix02-semantics",
+  "loadingVisual": "poster overlay (2D image) over the official host canvas",
+  "loadingAt": {
+    "position": [
+      0,
+      0,
+      0
+    ],
+    "target": [
+      0,
+      0,
+      -3
+    ],
+    "fov": 45
+  },
+  "immediateAtLoad": {
+    "position": [
+      3.0435898303985596,
+      1.749580979347229,
+      3.1116106510162354
+    ],
+    "target": [
+      0.04591484690069203,
+      0.1875350974707466,
+      -0.012481112736729472
+    ],
+    "fov": 85
+  },
+  "settledAfter6s": {
+    "position": [
+      3.2433254718780518,
+      1.7331472635269165,
+      3.315809965133667
+    ],
+    "target": [
+      -0.00021045737796399067,
+      0.11137929889890863,
+      0.07227403587765124
+    ],
+    "fov": 85
+  },
+  "calls": [
+    "applyWorldTransform@10077",
+    "frameScene@10077"
+  ],
+  "samplesAroundLoad": [
+    {
+      "t": 9469,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9519,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9570,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9619,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9669,
+      "loaded": false,
+      "progress": 0,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9746,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9791,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9840,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9872,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9919,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 9969,
+      "loaded": false,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "fov": 45,
+      "poster": true
+    },
+    {
+      "t": 10134,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        0,
+        2,
+        0
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10180,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10219,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10269,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10319,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10370,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10420,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10470,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10520,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10569,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10620,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        1.6232,
+        1.8664,
+        1.6595
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10670,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10719,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10769,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10819,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10870,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10920,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 10970,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11019,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11070,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11119,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11169,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11219,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11270,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11319,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11370,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11419,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11470,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11520,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11569,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11619,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11669,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11720,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11769,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11820,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.4349,
+        1.7997,
+        2.4893
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11878,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.8848,
+        1.7626,
+        2.9493
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 11919,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        2.9246,
+        1.7594,
+        2.9899
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12009,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12038,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12073,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12121,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12169,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12219,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12269,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12319,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    },
+    {
+      "t": 12369,
+      "loaded": true,
+      "progress": 100,
+      "mode": "orbit",
+      "pos": [
+        3.2433,
+        1.7331,
+        3.3158
+      ],
+      "fov": 85,
+      "poster": false
+    }
+  ],
+  "timings": {
+    "gotoMs": 12492,
+    "sampleCount": 209
+  }
+}
