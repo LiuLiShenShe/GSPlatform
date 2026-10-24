@@ -1,0 +1,142 @@
+{
+  "viewports": [
+    {
+      "tag": "1920x1080",
+      "metrics": {
+        "viewport": [
+          1920,
+          1080
+        ],
+        "docScrollWidth": 1912,
+        "horizontalScroll": false,
+        "horizontalScrollCount": 0,
+        "panels": 3,
+        "panelTitles": [
+          "场景",
+          "标注",
+          "视角"
+        ],
+        "duplicateTitles": [],
+        "inputs": 3,
+        "buttons": 55,
+        "disabledButtons": 0,
+        "overflowCount": 1,
+        "overflowSamples": [
+          {
+            "tag": "SPAN",
+            "text": "编辑模式下可直接在 Viewer 中 Orbit / Pan",
+            "cls": "pcui-element font-regular gs-props__hint"
+          }
+        ],
+        "viewerRect": null,
+        "controlsRect": {
+          "x": 558,
+          "y": 1002,
+          "width": 930,
+          "height": 34,
+          "top": 1002,
+          "right": 1488,
+          "bottom": 1036,
+          "left": 558
+        },
+        "rightPanelRect": {
+          "x": 1504,
+          "y": 139,
+          "width": 340,
+          "height": 913,
+          "top": 139,
+          "right": 1844,
+          "bottom": 1052,
+          "left": 1504
+        },
+        "viewerOverlapsOfficialControls": null,
+        "rightPanelCoversControls": false,
+        "inputDuplicateCount": 1,
+        "labels": [
+          "fix02-semantics",
+          "Viewer 就绪",
+          "场景",
+          "标注",
+          "视角",
+          "初始相机",
+          "(2.50, 1.80, 6.00)",
+          "编辑模式下可直接在 Viewer 中 Orbit / Pan / Zoom 取景，再点 Apply。"
+        ],
+        "statusText": "Viewer 就绪"
+      },
+      "consoleErrors": [
+        "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead."
+      ],
+      "pageErrors": []
+    },
+    {
+      "tag": "1280x720",
+      "metrics": {
+        "viewport": [
+          1280,
+          720
+        ],
+        "docScrollWidth": 1272,
+        "horizontalScroll": false,
+        "horizontalScrollCount": 0,
+        "panels": 3,
+        "panelTitles": [
+          "场景",
+          "标注",
+          "视角"
+        ],
+        "duplicateTitles": [],
+        "inputs": 3,
+        "buttons": 55,
+        "disabledButtons": 0,
+        "overflowCount": 1,
+        "overflowSamples": [
+          {
+            "tag": "SPAN",
+            "text": "编辑模式下可直接在 Viewer 中 Orbit / Pan",
+            "cls": "pcui-element font-regular gs-props__hint"
+          }
+        ],
+        "viewerRect": null,
+        "controlsRect": {
+          "x": 514,
+          "y": 642,
+          "width": 378,
+          "height": 34,
+          "top": 642,
+          "right": 892,
+          "bottom": 676,
+          "left": 514
+        },
+        "rightPanelRect": {
+          "x": 908,
+          "y": 139,
+          "width": 340,
+          "height": 553,
+          "top": 139,
+          "right": 1248,
+          "bottom": 692,
+          "left": 908
+        },
+        "viewerOverlapsOfficialControls": null,
+        "rightPanelCoversControls": false,
+        "inputDuplicateCount": 1,
+        "labels": [
+          "fix02-semantics",
+          "Viewer 就绪",
+          "场景",
+          "标注",
+          "视角",
+          "初始相机",
+          "(2.50, 1.80, 6.00)",
+          "编辑模式下可直接在 Viewer 中 Orbit / Pan / Zoom 取景，再点 Apply。"
+        ],
+        "statusText": "Viewer 就绪"
+      },
+      "consoleErrors": [
+        "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead."
+      ],
+      "pageErrors": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+[
+  {
+    "file": "camera-save-reset.json",
+    "items": []
+  },
+  {
+    "file": "ui-interactions.json",
+    "items": []
+  },
+  {
+    "file": "visual-quality.json",
+    "items": []
+  }
+]

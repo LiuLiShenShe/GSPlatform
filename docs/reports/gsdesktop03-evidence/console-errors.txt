@@ -1,0 +1,28 @@
+[
+  {
+    "file": "annotation-flow.json",
+    "items": [
+      "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.",
+      "Warning: [antd: Modal] Static function can not consume context like dynamic theme. Please use 'App' component instead."
+    ]
+  },
+  {
+    "file": "camera-save-reset.json",
+    "items": [
+      "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.",
+      "Warning: [antd: Modal] Static function can not consume context like dynamic theme. Please use 'App' component instead."
+    ]
+  },
+  {
+    "file": "ui-interactions.json",
+    "items": []
+  },
+  {
+    "file": "visual-quality.json",
+    "items": []
+  },
+  {
+    "file": "walk-safety.json",
+    "items": []
+  }
+]

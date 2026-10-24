@@ -1,0 +1,40 @@
+{
+  "scene": "fix02-semantics",
+  "initialCamera": [
+    {
+      "x": 2.5,
+      "y": 1.8,
+      "z": 6.0
+    },
+    {
+      "x": 0.0,
+      "y": 0.6,
+      "z": 0.0
+    },
+    47.0
+  ],
+  "annotations": [
+    {
+      "id": "13fcef38-681f-42d6-bb7c-af71fee98e79",
+      "title": "标注A",
+      "enabled": true
+    },
+    {
+      "id": "d33bfe17-965e-4980-bbb1-0e88a7e47888",
+      "title": "标注B",
+      "enabled": true
+    },
+    {
+      "id": "2b9ebddc-509d-44a6-a6e7-0015bf0bb11b",
+      "title": "标注C",
+      "enabled": true
+    }
+  ],
+  "viewpoints": [
+    {
+      "id": "b0d7a350-af14-41e0-bab1-f07f140bf521",
+      "name": "正门视角",
+      "enabled": true
+    }
+  ]
+}

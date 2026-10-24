@@ -1,0 +1,219 @@
+{
+  "browser": {
+    "headless": false,
+    "display": ":98",
+    "args": "see common.mjs"
+  },
+  "scenes": {
+    "A": {
+      "sceneId": "fix02-semantics",
+      "format": "sog",
+      "contentUrl": "/api/v1/scenes/fix02-semantics/assets/current/scene.sog",
+      "posterSeen": false,
+      "loadedAtMs": 2430,
+      "atLoaded": {
+        "camera": {
+          "position": [
+            2.5,
+            1.8,
+            6
+          ],
+          "target": [
+            -0.0157,
+            0.5925,
+            -0.0377
+          ],
+          "fov": 47
+        },
+        "gsplats": 59400,
+        "progress": 100
+      },
+      "at2s": {
+        "camera": {
+          "position": [
+            2.5,
+            1.8,
+            6
+          ],
+          "target": [
+            -0.0157,
+            0.5925,
+            -0.0377
+          ],
+          "fov": 47
+        },
+        "gsplats": 59400
+      },
+      "at8s": {
+        "camera": {
+          "position": [
+            2.5,
+            1.8,
+            6
+          ],
+          "target": [
+            -0.0157,
+            0.5925,
+            -0.0377
+          ],
+          "fov": 47
+        },
+        "gsplats": 59400,
+        "cameraMode": "orbit"
+      },
+      "drift8s": 0,
+      "driftMode": 0,
+      "chunkRequests": [
+        "/api/v1/scenes/fix02-semantics/assets/current/scene.sog"
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "samples": [
+        {
+          "t": 1663,
+          "progress": 0,
+          "loaded": false,
+          "gsplats": 0,
+          "poster": false,
+          "camera": null,
+          "cameraMode": "orbit",
+          "frameCalls": null
+        },
+        {
+          "t": 2430,
+          "progress": 100,
+          "loaded": true,
+          "gsplats": 0,
+          "poster": false,
+          "camera": {
+            "position": [
+              2.5,
+              1.8,
+              6
+            ],
+            "target": [
+              -0.0157,
+              0.5925,
+              -0.0377
+            ],
+            "fov": 47
+          },
+          "cameraMode": "orbit",
+          "frameCalls": null
+        }
+      ]
+    },
+    "B": {
+      "sceneId": "gsdesktop01-versions",
+      "format": "lod-meta",
+      "contentUrl": "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/lod-meta.json",
+      "posterSeen": false,
+      "loadedAtMs": 2778,
+      "atLoaded": {
+        "camera": {
+          "position": [
+            3,
+            1.8,
+            6
+          ],
+          "target": [
+            0.2805,
+            0.7122,
+            0.5609
+          ],
+          "fov": 47
+        },
+        "gsplats": 1788,
+        "progress": 100
+      },
+      "at2s": {
+        "camera": {
+          "position": [
+            3,
+            1.8,
+            6
+          ],
+          "target": [
+            0.2805,
+            0.7122,
+            0.5609
+          ],
+          "fov": 47
+        },
+        "gsplats": 179
+      },
+      "at8s": {
+        "camera": {
+          "position": [
+            3,
+            1.8,
+            6
+          ],
+          "target": [
+            0.2805,
+            0.7122,
+            0.5609
+          ],
+          "fov": 47
+        },
+        "gsplats": 179,
+        "cameraMode": "orbit"
+      },
+      "drift8s": 0,
+      "driftMode": 0,
+      "chunkRequests": [
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/lod-meta.json",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/2_0/meta.json",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/2_0/quats.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/2_0/means_l.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/2_0/means_u.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/2_0/scales.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/2_0/sh0.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/0_0/meta.json",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/0_0/means_u.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/0_0/means_l.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/0_0/quats.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/0_0/scales.webp",
+        "/api/v1/scenes/gsdesktop01-versions/assets/versions/d1a111111111/0_0/sh0.webp"
+      ],
+      "consoleErrors": [],
+      "pageErrors": [],
+      "failedRequests": [],
+      "samples": [
+        {
+          "t": 1493,
+          "progress": 0,
+          "loaded": false,
+          "gsplats": 0,
+          "poster": false,
+          "camera": null,
+          "cameraMode": "orbit",
+          "frameCalls": null
+        },
+        {
+          "t": 2778,
+          "progress": 100,
+          "loaded": true,
+          "gsplats": 0,
+          "poster": false,
+          "camera": {
+            "position": [
+              3,
+              1.8,
+              6
+            ],
+            "target": [
+              0.2805,
+              0.7122,
+              0.5609
+            ],
+            "fov": 47
+          },
+          "cameraMode": "orbit",
+          "frameCalls": null
+        }
+      ]
+    }
+  }
+}

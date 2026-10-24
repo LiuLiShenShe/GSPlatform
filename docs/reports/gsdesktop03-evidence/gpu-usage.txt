@@ -1,0 +1,22 @@
+# GPU usage during a real 13M-scene load (GS-DESKTOP-03)
+# 2026-10-24T15:42:26+08:00
+# nvidia-smi pmon (per-process, type G = graphics)
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       8388     G      -      -      -      -      -      -    Xorg           
+    0       9255     G      -      -      -      -      -      -    gnome-shell    
+    0    1463203     G      -      -      -      -      -      -    nautilus       
+    0    3292638   C+G      -      -      -      -      -      -    playwrig       
+    1       8388     G      -      -      -      -      -      -    Xorg           
+    1    2805992     C     99     88      -      -      -      -    python         
+    0       8388     G      -      -      -      -      -      -    Xorg           
+    0       9255     G      -      -      -      -      -      -    gnome-shell    
+    0    1463203     G      -      -      -      -      -      -    nautilus       
+    0    3292638   C+G      -      -      -      -      -      -    playwrig       
+    1       8388     G      -      -      -      -      -      -    Xorg           
+    1    2805992     C     99     89      -      -      -      -    python         
+
+# nvidia-smi query
+index, name, utilization.gpu [%], memory.used [MiB], memory.total [MiB]
+0, NVIDIA RTX A6000, 17 %, 1269 MiB, 49140 MiB
+1, NVIDIA RTX A6000, 100 %, 16265 MiB, 49140 MiB

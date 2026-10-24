@@ -1,0 +1,415 @@
+{
+  "sceneId": "fix02-semantics",
+  "at": "2026-10-24T07:14:55.975Z",
+  "steps": [
+    {
+      "label": "A-authored-settled",
+      "t": 1792826104855,
+      "camera": {
+        "position": [
+          2.5,
+          1.7999999523162842,
+          6
+        ],
+        "target": [
+          -0.015698897774607534,
+          0.5924645249941076,
+          -0.03767703749807616
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit"
+    },
+    {
+      "label": "drag",
+      "dx": -220,
+      "dy": -60,
+      "canvasBox": {
+        "x": 498,
+        "y": 139,
+        "width": 730,
+        "height": 833
+      },
+      "hit": {
+        "tag": "CANVAS",
+        "cls": ""
+      }
+    },
+    {
+      "label": "B-after-drag",
+      "t": 1792826112054,
+      "camera": {
+        "position": [
+          3.7083070278167725,
+          0.71451336145401,
+          2.537242889404297
+        ],
+        "target": [
+          0.0008546606251300659,
+          0.6000264031112232,
+          0.0005848589046393293
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit"
+    },
+    {
+      "label": "after-save",
+      "db": {
+        "worldPosition": null,
+        "worldRotation": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "worldScale": null,
+        "initialCameraPosition": {
+          "x": 3.7083070278167725,
+          "y": 0.71451336145401,
+          "z": 2.537242889404297
+        },
+        "initialCameraTarget": {
+          "x": 0.0008546606251300659,
+          "y": 0.6000264031112232,
+          "z": 0.0005848589046393293
+        },
+        "initialCameraFov": 47,
+        "backgroundType": "color",
+        "backgroundColor": null,
+        "backgroundAssetId": null,
+        "backgroundMetadata": null,
+        "coverAssetId": null,
+        "coverUrl": null,
+        "backgroundAudioAssetId": null,
+        "backgroundAudioVolume": 0.5,
+        "backgroundAudioLoop": true,
+        "backgroundAudioEnabled": false,
+        "tonemapping": "aces",
+        "highPrecisionRendering": false,
+        "postEffects": null,
+        "collisionMode": null,
+        "collisionAssetId": null,
+        "collisionGravity": 9.81,
+        "collisionSlopeLimitDegrees": 45,
+        "collisionStepOffset": 0.3,
+        "collisionPlayerHeight": 1.8,
+        "collisionEnabled": false
+      },
+      "runtime": {
+        "position": {
+          "x": 3.7083070278167725,
+          "y": 0.71451336145401,
+          "z": 2.537242889404297
+        },
+        "target": {
+          "x": 0.0008546606251300659,
+          "y": 0.6000264031112232,
+          "z": 0.0005848589046393293
+        },
+        "fov": 47
+      }
+    },
+    {
+      "label": "drag",
+      "dx": 260,
+      "dy": 90,
+      "canvasBox": {
+        "x": 498,
+        "y": 139,
+        "width": 730,
+        "height": 833
+      },
+      "hit": {
+        "tag": "CANVAS",
+        "cls": ""
+      }
+    },
+    {
+      "label": "C-before-reset",
+      "t": 1792826123627,
+      "camera": {
+        "position": [
+          1.2420021295547485,
+          1.7602736949920654,
+          4.160943508148193
+        ],
+        "target": [
+          -0.02365622452343885,
+          0.5779004353998944,
+          -0.07925282501333175
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit"
+    },
+    {
+      "label": "reset-without-reload",
+      "t": 1792826127759,
+      "camera": {
+        "position": [
+          2.5,
+          1.7999999523162842,
+          6
+        ],
+        "target": [
+          -0.015698897774607534,
+          0.5924645249941076,
+          -0.03767703749807616
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit"
+    },
+    {
+      "label": "official-reset-without-reload",
+      "t": 1792826132390,
+      "camera": {
+        "position": [
+          2.5,
+          1.7999999523162842,
+          6
+        ],
+        "target": [
+          -0.015698897774607534,
+          0.5924645249941076,
+          -0.03767703749807616
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit"
+    },
+    {
+      "label": "reset-after-reload",
+      "camera": {
+        "position": [
+          3.7083,
+          0.7145,
+          2.5372
+        ],
+        "target": [
+          0.0009,
+          0.6,
+          0.0006
+        ],
+        "fov": 47
+      }
+    }
+  ],
+  "modals": [
+    {
+      "step": "save-initial-view",
+      "text": "已保存（初始视角已更新，打开场景将采用该视角） 知道了"
+    }
+  ],
+  "A": {
+    "position": [
+      2.5,
+      1.7999999523162842,
+      6
+    ],
+    "target": [
+      -0.015698897774607534,
+      0.5924645249941076,
+      -0.03767703749807616
+    ],
+    "fov": 47
+  },
+  "dbBefore": {
+    "worldPosition": null,
+    "worldRotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "worldScale": null,
+    "initialCameraPosition": {
+      "x": 2.5,
+      "y": 1.8,
+      "z": 6
+    },
+    "initialCameraTarget": {
+      "x": 0,
+      "y": 0.6,
+      "z": 0
+    },
+    "initialCameraFov": 47,
+    "backgroundType": "color",
+    "backgroundColor": null,
+    "backgroundAssetId": null,
+    "backgroundMetadata": null,
+    "coverAssetId": null,
+    "coverUrl": null,
+    "backgroundAudioAssetId": null,
+    "backgroundAudioVolume": 0.5,
+    "backgroundAudioLoop": true,
+    "backgroundAudioEnabled": false,
+    "tonemapping": "aces",
+    "highPrecisionRendering": false,
+    "postEffects": null,
+    "collisionMode": null,
+    "collisionAssetId": null,
+    "collisionGravity": 9.81,
+    "collisionSlopeLimitDegrees": 45,
+    "collisionStepOffset": 0.3,
+    "collisionPlayerHeight": 1.8,
+    "collisionEnabled": false
+  },
+  "runtimeBefore": {
+    "position": {
+      "x": 2.5,
+      "y": 1.8,
+      "z": 6
+    },
+    "target": {
+      "x": 0,
+      "y": 0.6,
+      "z": 0
+    },
+    "fov": 47
+  },
+  "B": {
+    "position": [
+      3.7083070278167725,
+      0.71451336145401,
+      2.537242889404297
+    ],
+    "target": [
+      0.0008546606251300659,
+      0.6000264031112232,
+      0.0005848589046393293
+    ],
+    "fov": 47
+  },
+  "driftAtoB": 3.8247841533077795,
+  "dbAfterSave": {
+    "worldPosition": null,
+    "worldRotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "worldScale": null,
+    "initialCameraPosition": {
+      "x": 3.7083070278167725,
+      "y": 0.71451336145401,
+      "z": 2.537242889404297
+    },
+    "initialCameraTarget": {
+      "x": 0.0008546606251300659,
+      "y": 0.6000264031112232,
+      "z": 0.0005848589046393293
+    },
+    "initialCameraFov": 47,
+    "backgroundType": "color",
+    "backgroundColor": null,
+    "backgroundAssetId": null,
+    "backgroundMetadata": null,
+    "coverAssetId": null,
+    "coverUrl": null,
+    "backgroundAudioAssetId": null,
+    "backgroundAudioVolume": 0.5,
+    "backgroundAudioLoop": true,
+    "backgroundAudioEnabled": false,
+    "tonemapping": "aces",
+    "highPrecisionRendering": false,
+    "postEffects": null,
+    "collisionMode": null,
+    "collisionAssetId": null,
+    "collisionGravity": 9.81,
+    "collisionSlopeLimitDegrees": 45,
+    "collisionStepOffset": 0.3,
+    "collisionPlayerHeight": 1.8,
+    "collisionEnabled": false
+  },
+  "runtimeAfterSave": {
+    "position": {
+      "x": 3.7083070278167725,
+      "y": 0.71451336145401,
+      "z": 2.537242889404297
+    },
+    "target": {
+      "x": 0.0008546606251300659,
+      "y": 0.6000264031112232,
+      "z": 0.0005848589046393293
+    },
+    "fov": 47
+  },
+  "C": {
+    "position": [
+      1.2420021295547485,
+      1.7602736949920654,
+      4.160943508148193
+    ],
+    "target": [
+      -0.02365622452343885,
+      0.5779004353998944,
+      -0.07925282501333175
+    ],
+    "fov": 47
+  },
+  "driftBtoC": 3.1325194693253207,
+  "resetWithoutReload": {
+    "position": [
+      2.5,
+      1.7999999523162842,
+      6
+    ],
+    "target": [
+      -0.015698897774607534,
+      0.5924645249941076,
+      -0.03767703749807616
+    ],
+    "fov": 47
+  },
+  "errorToBWithoutReload": 3.8247841533077795,
+  "errorToAWithoutReload": 0,
+  "officialResetWithoutReload": {
+    "position": [
+      2.5,
+      1.7999999523162842,
+      6
+    ],
+    "target": [
+      -0.015698897774607534,
+      0.5924645249941076,
+      -0.03767703749807616
+    ],
+    "fov": 47
+  },
+  "officialErrorToB": 3.8247841533077795,
+  "officialErrorToA": 0,
+  "afterReloadLoad": {
+    "position": [
+      3.7083,
+      0.7145,
+      2.5372
+    ],
+    "target": [
+      0.0009,
+      0.6,
+      0.0006
+    ],
+    "fov": 47
+  },
+  "resetAfterReload": {
+    "position": [
+      3.7083,
+      0.7145,
+      2.5372
+    ],
+    "target": [
+      0.0009,
+      0.6,
+      0.0006
+    ],
+    "fov": 47
+  },
+  "errorToBAfterReload": 0.00004546888675565557,
+  "errorToAAfterReload": 3.8248245549931643,
+  "consoleErrors": [
+    "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.",
+    "Warning: [antd: Modal] Static function can not consume context like dynamic theme. Please use 'App' component instead."
+  ],
+  "pageErrors": [],
+  "failedRequests": []
+}

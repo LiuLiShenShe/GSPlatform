@@ -1,0 +1,214 @@
+{
+  "sceneId": "fix02-semantics",
+  "at": "2026-10-24T07:22:23.685Z",
+  "steps": [
+    {
+      "step": "created",
+      "count": 4,
+      "modal": "标注已创建（锚点为近似位置，可在属性区继续编辑） 知道了"
+    },
+    {
+      "step": "renamed",
+      "title": "GS-DESKTOP-03 测试标注"
+    },
+    {
+      "step": "viewer-hotspots",
+      "hotspotCount": 4,
+      "hotspotTexts": [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      "showAnnotations": true,
+      "annotations": [
+        "标注A",
+        "标注B",
+        "标注C",
+        "GS-DESKTOP-03 测试标注"
+      ]
+    },
+    {
+      "step": "hotspot-click",
+      "tooltip": "标注A标注A",
+      "overlay": null,
+      "selected": 0,
+      "selectedTitle": null
+    },
+    {
+      "step": "official-navigation",
+      "nav": [
+        {
+          "i": 0,
+          "selected": 0,
+          "title": "标注A"
+        },
+        {
+          "i": 1,
+          "selected": 1,
+          "title": "标注B"
+        },
+        {
+          "i": 2,
+          "selected": 2,
+          "title": "标注C"
+        },
+        {
+          "i": 3,
+          "selected": 3,
+          "title": "GS-DESKTOP-03 测试标注"
+        }
+      ]
+    },
+    {
+      "step": "hidden",
+      "hotspotCount": 3,
+      "showAnnotations": true
+    },
+    {
+      "step": "deleted",
+      "hotspotCount": 3,
+      "finalCount": 3
+    }
+  ],
+  "annotationsBefore": [
+    {
+      "id": "13fcef38-681f-42d6-bb7c-af71fee98e79",
+      "title": "标注A",
+      "enabled": true
+    },
+    {
+      "id": "d33bfe17-965e-4980-bbb1-0e88a7e47888",
+      "title": "标注B",
+      "enabled": true
+    },
+    {
+      "id": "2b9ebddc-509d-44a6-a6e7-0015bf0bb11b",
+      "title": "标注C",
+      "enabled": true
+    }
+  ],
+  "createModal": "标注已创建（锚点为近似位置，可在属性区继续编辑） 知道了",
+  "annotationsAfterCreate": [
+    {
+      "id": "13fcef38-681f-42d6-bb7c-af71fee98e79",
+      "title": "标注A",
+      "enabled": true,
+      "cameraPosition": {
+        "x": 1,
+        "y": 1.6,
+        "z": 4.5
+      }
+    },
+    {
+      "id": "d33bfe17-965e-4980-bbb1-0e88a7e47888",
+      "title": "标注B",
+      "enabled": true,
+      "cameraPosition": {
+        "x": -2,
+        "y": 1.5,
+        "z": 5
+      }
+    },
+    {
+      "id": "2b9ebddc-509d-44a6-a6e7-0015bf0bb11b",
+      "title": "标注C",
+      "enabled": true,
+      "cameraPosition": {
+        "x": 0.5,
+        "y": 1.4,
+        "z": 6.5
+      }
+    },
+    {
+      "id": "95e3218b-ad38-41c5-968d-fddc4c049360",
+      "title": "",
+      "enabled": true,
+      "cameraPosition": {
+        "x": 2.5,
+        "y": 1.7999999523162842,
+        "z": 6
+      }
+    }
+  ],
+  "createdId": "95e3218b-ad38-41c5-968d-fddc4c049360",
+  "afterEdit": {
+    "id": "95e3218b-ad38-41c5-968d-fddc4c049360",
+    "title": "GS-DESKTOP-03 测试标注",
+    "description": ""
+  },
+  "viewerHotspots": {
+    "hotspotCount": 4,
+    "hotspotTexts": [
+      "1",
+      "2",
+      "3",
+      "4"
+    ],
+    "showAnnotations": true,
+    "annotations": [
+      "标注A",
+      "标注B",
+      "标注C",
+      "GS-DESKTOP-03 测试标注"
+    ]
+  },
+  "hotspotClick": {
+    "tooltip": "标注A标注A",
+    "overlay": null,
+    "selected": 0,
+    "selectedTitle": null
+  },
+  "officialNavigation": [
+    {
+      "i": 0,
+      "selected": 0,
+      "title": "标注A"
+    },
+    {
+      "i": 1,
+      "selected": 1,
+      "title": "标注B"
+    },
+    {
+      "i": 2,
+      "selected": 2,
+      "title": "标注C"
+    },
+    {
+      "i": 3,
+      "selected": 3,
+      "title": "GS-DESKTOP-03 测试标注"
+    }
+  ],
+  "hideStatus": 200,
+  "afterHide": {
+    "hotspotCount": 3,
+    "showAnnotations": true
+  },
+  "deleteStatus": 200,
+  "afterDelete": {
+    "hotspotCount": 3
+  },
+  "annotationsFinal": [
+    {
+      "id": "13fcef38-681f-42d6-bb7c-af71fee98e79",
+      "title": "标注A"
+    },
+    {
+      "id": "d33bfe17-965e-4980-bbb1-0e88a7e47888",
+      "title": "标注B"
+    },
+    {
+      "id": "2b9ebddc-509d-44a6-a6e7-0015bf0bb11b",
+      "title": "标注C"
+    }
+  ],
+  "consoleErrors": [
+    "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.",
+    "Warning: [antd: Modal] Static function can not consume context like dynamic theme. Please use 'App' component instead."
+  ],
+  "pageErrors": [
+    "WrongDocumentError: The root document of this element is not valid for pointer lock."
+  ]
+}

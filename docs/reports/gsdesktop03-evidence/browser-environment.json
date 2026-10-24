@@ -1,0 +1,25 @@
+{
+  "browser": "Google Chrome 145.0.7632.116 (channel: chrome)",
+  "playwright": "1.63.0",
+  "headless": false,
+  "display": ":98 (Xvfb 1920x1080x24)",
+  "renderer": "ANGLE (NVIDIA, Vulkan 1.4.325 (NVIDIA NVIDIA RTX A6000 (0x00002230)), NVIDIA)",
+  "webgpu": "WebGPU device: nvidia / ampere (official viewer log)",
+  "hardwareGpu": true,
+  "gpu": "ReferenceError: require is not defined",
+  "git": "ReferenceError: require is not defined",
+  "branch": "ReferenceError: require is not defined",
+  "capturedAt": "2026-10-24T07:36:22.853Z",
+  "baseUrls": {
+    "main": "http://localhost:5173",
+    "historical13M": "http://localhost:5188"
+  },
+  "viewport": [
+    1600,
+    1000
+  ],
+  "notes": [
+    "本轮全部截图在 headful Chrome + Xvfb + NVIDIA GPU 下拍摄，WebGL/WebGPU canvas 参与截图合成；",
+    "纯 3D 画面另用官方 captureFrame()（经宿主 runtime.captureScreenshot）保存为 PNG，二者已分别命名。"
+  ]
+}

@@ -1,0 +1,479 @@
+{
+  "sceneId": "fix02-semantics",
+  "initialCamera": {
+    "position": [
+      2.5,
+      1.8,
+      6
+    ],
+    "target": [
+      -0.0157,
+      0.5925,
+      -0.0377
+    ],
+    "fov": 47
+  },
+  "steps": [
+    {
+      "step": "initial",
+      "camera": {
+        "position": [
+          2.5,
+          1.8,
+          6
+        ],
+        "target": [
+          -0.0157,
+          0.5925,
+          -0.0377
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit",
+      "showAnnotations": true,
+      "performanceMode": true,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    },
+    {
+      "step": "click-fly",
+      "camera": {
+        "position": [
+          2.5,
+          1.8,
+          6
+        ],
+        "target": [
+          -0.0157,
+          0.5925,
+          -0.0377
+        ],
+        "fov": 47
+      },
+      "cameraMode": "fly",
+      "showAnnotations": true,
+      "performanceMode": true,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    },
+    {
+      "step": "click-orbit",
+      "camera": {
+        "position": [
+          2.5,
+          1.8,
+          6
+        ],
+        "target": [
+          -0.0157,
+          0.5925,
+          -0.0377
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit",
+      "showAnnotations": true,
+      "performanceMode": true,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    },
+    {
+      "step": "click-frame",
+      "camera": {
+        "position": [
+          5.4796,
+          2.8536,
+          5.57
+        ],
+        "target": [
+          -0.0006,
+          0.1137,
+          0.0715
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit",
+      "showAnnotations": true,
+      "performanceMode": true,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    },
+    {
+      "step": "annotations-off",
+      "camera": {
+        "position": [
+          5.4952,
+          2.8591,
+          5.5677
+        ],
+        "target": [
+          -0.0002,
+          0.1114,
+          0.0723
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit",
+      "showAnnotations": false,
+      "performanceMode": true,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    },
+    {
+      "step": "annotations-on",
+      "camera": {
+        "position": [
+          5.4952,
+          2.8591,
+          5.5677
+        ],
+        "target": [
+          -0.0002,
+          0.1114,
+          0.0723
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit",
+      "showAnnotations": true,
+      "performanceMode": true,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    },
+    {
+      "step": "performance-toggle",
+      "camera": {
+        "position": [
+          5.4952,
+          2.8591,
+          5.5677
+        ],
+        "target": [
+          -0.0002,
+          0.1114,
+          0.0723
+        ],
+        "fov": 47
+      },
+      "cameraMode": "orbit",
+      "showAnnotations": true,
+      "performanceMode": false,
+      "selectedAnnotation": null,
+      "isFullscreen": null
+    }
+  ],
+  "visibility": {
+    "controls": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 16,
+        "y": 950,
+        "width": 1568,
+        "height": 34
+      }
+    },
+    "orbit": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 1372,
+        "y": 950,
+        "width": 34,
+        "height": 34
+      }
+    },
+    "fly": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 1406,
+        "y": 950,
+        "width": 34,
+        "height": 34
+      }
+    },
+    "settings": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 1448,
+        "y": 950,
+        "width": 34,
+        "height": 34
+      }
+    },
+    "info": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 1516,
+        "y": 950,
+        "width": 34,
+        "height": 34
+      }
+    },
+    "fullscreen": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 1550,
+        "y": 950,
+        "width": 34,
+        "height": 34
+      }
+    },
+    "annotationNav": {
+      "count": 1,
+      "visible": true,
+      "box": {
+        "x": 616,
+        "y": 68,
+        "width": 368,
+        "height": 34
+      }
+    },
+    "hotspot": {
+      "count": 3,
+      "visible": true,
+      "box": {
+        "x": 661.431884765625,
+        "y": 449.9927673339844,
+        "width": 26,
+        "height": 26
+      }
+    }
+  },
+  "hitTests": [
+    {
+      "sel": ".sse-orbitCamera",
+      "point": [
+        1389,
+        967
+      ],
+      "hitTag": "svg",
+      "hitClass": {},
+      "inside": true
+    },
+    {
+      "sel": ".sse-flyCamera",
+      "point": [
+        1423,
+        967
+      ],
+      "hitTag": "use",
+      "hitClass": {},
+      "inside": true
+    },
+    {
+      "sel": ".sse-settings",
+      "point": [
+        1465,
+        967
+      ],
+      "hitTag": "svg",
+      "hitClass": {},
+      "inside": true
+    },
+    {
+      "sel": ".sse-info",
+      "point": [
+        1533,
+        967
+      ],
+      "hitTag": "use",
+      "hitClass": {},
+      "inside": true
+    },
+    {
+      "sel": ".sse-enterFullscreen",
+      "point": [
+        1567,
+        967
+      ],
+      "hitTag": "svg",
+      "hitClass": {},
+      "inside": true
+    },
+    {
+      "sel": ".sse-annotationNav",
+      "point": [
+        800,
+        85
+      ],
+      "hitTag": "SPAN",
+      "hitClass": "sse-annotationNavTitle",
+      "inside": true
+    }
+  ],
+  "hostDuplicates": {
+    "ov-frame": 0,
+    "ov-reset": 0,
+    "ov-walk": 0,
+    "ov-performance": 0,
+    "ov-annotations": 0,
+    "ov-fullscreen": 0,
+    "ov-exit-fullscreen": 0,
+    "ov-camera-mode": 0
+  },
+  "settingsPanel": {
+    "box": {
+      "x": 1417.96875,
+      "y": 752,
+      "width": 166.03125,
+      "height": 162
+    },
+    "visible": true
+  },
+  "frame": {
+    "before": {
+      "position": [
+        2.5,
+        1.8,
+        6
+      ],
+      "target": [
+        -0.0157,
+        0.5925,
+        -0.0377
+      ],
+      "fov": 47
+    },
+    "after": {
+      "position": [
+        5.4796,
+        2.8536,
+        5.57
+      ],
+      "target": [
+        -0.0006,
+        0.1137,
+        0.0715
+      ],
+      "fov": 47
+    },
+    "moved": 3.1895123639829333
+  },
+  "reset": {
+    "initialProfile": {
+      "position": [
+        2.5,
+        1.8,
+        6
+      ],
+      "target": [
+        -0.0157,
+        0.5925,
+        -0.0377
+      ],
+      "fov": 47
+    },
+    "afterReset": {
+      "position": [
+        2.7621,
+        1.8927,
+        5.9622
+      ],
+      "target": [
+        -0.0187,
+        0.5482,
+        -0.034
+      ],
+      "fov": 47
+    },
+    "error": 0.28056824481754894
+  },
+  "infoPanel": {
+    "visible": true,
+    "text": "SuperSplat Viewer\nv1.35.0\nWebGPU nvidia / ampere\nPlayCanvas Engine\nv2.22.4\n模式切换\n环绕模式\n1\n飞行模式\n2\n切换游戏控制\nG\n播放 / 暂停\n空格\n切换操作\nH\n切换信息\nShift\nH\n退出 / 取消\nEsc"
+  },
+  "fullscreen": {
+    "fullscreenElement": "sse-viewer",
+    "innerWidth": 1600,
+    "innerHeight": 1000
+  },
+  "fullscreenAfterExit": {
+    "fullscreenElement": null,
+    "innerWidth": 1600,
+    "innerHeight": 1000
+  },
+  "annotationNav": {
+    "afterNext": {
+      "camera": {
+        "position": [
+          2.4517,
+          1.7968,
+          5.9893
+        ],
+        "target": [
+          0.0269,
+          0.5965,
+          -0.0558
+        ],
+        "fov": 47.03
+      }
+    },
+    "afterSecondNext": {
+      "camera": {
+        "position": [
+          -0.915,
+          1.484,
+          5.5538
+        ],
+        "target": [
+          0.5424,
+          0.6123,
+          0.0872
+        ],
+        "fov": 53.14
+      }
+    },
+    "afterPrev": {
+      "camera": {
+        "position": [
+          -0.7504,
+          1.4636,
+          5.7016
+        ],
+        "target": [
+          0.5405,
+          0.5926,
+          0.0753
+        ],
+        "fov": 54.4
+      }
+    }
+  },
+  "canvasDrag": {
+    "before": {
+      "position": [
+        -0.7504,
+        1.4636,
+        5.7016
+      ],
+      "target": [
+        0.5405,
+        0.5926,
+        0.0753
+      ],
+      "fov": 54.4
+    },
+    "after": {
+      "position": [
+        -3.3535,
+        2.0656,
+        3.984
+      ],
+      "target": [
+        0.1842,
+        0.6067,
+        0.019
+      ],
+      "fov": 50
+    },
+    "moved": 3.176268781132982
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "failedRequests": []
+}

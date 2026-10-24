@@ -1,0 +1,164 @@
+{
+  "sceneId": "fix02-semantics",
+  "preconditions": {
+    "collision": null,
+    "calibration": {
+      "state": "UNVERIFIED",
+      "recordedState": "UNVERIFIED",
+      "metersPerSceneUnit": null,
+      "referenceMethod": null,
+      "referenceValue": null,
+      "sourceVersion": null,
+      "transformIdentity": null,
+      "evidence": null,
+      "stale": false,
+      "physicalWalkAllowed": false
+    },
+    "diagnostics": {
+      "walkAllowed": false,
+      "hasCollision": false,
+      "collisionStale": false,
+      "sceneScale": {
+        "status": "ok",
+        "horizontalExtent": 4.794,
+        "verticalExtent": 2.825
+      }
+    }
+  },
+  "steps": [
+    {
+      "step": "initial",
+      "state": {
+        "cameraMode": "orbit",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      },
+      "gate": {
+        "hostHasGateClass": false,
+        "hostClass": "gs-viewer__canvas-host gs-supersplat-host",
+        "walkButtonDisplay": "none",
+        "walkButtonClass": "sse-fpsCamera sse-controlButton sse-toggle sse-right sse-hidden",
+        "walkShortcutInInfo": true
+      }
+    }
+  ],
+  "keyboard": [
+    {
+      "label": "official-shortcut-fly (control)",
+      "key": "2",
+      "before": {
+        "cameraMode": "orbit",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      },
+      "after": {
+        "cameraMode": "fly",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      }
+    },
+    {
+      "label": "official-shortcut-orbit (control)",
+      "key": "1",
+      "before": {
+        "cameraMode": "fly",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      },
+      "after": {
+        "cameraMode": "orbit",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      }
+    },
+    {
+      "label": "walk-shortcut",
+      "key": "3",
+      "before": {
+        "cameraMode": "orbit",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      },
+      "after": {
+        "cameraMode": "orbit",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      }
+    },
+    {
+      "label": "wasd-w",
+      "key": "w",
+      "before": {
+        "cameraMode": "orbit",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": false
+      },
+      "after": {
+        "cameraMode": "fly",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": true
+      }
+    },
+    {
+      "label": "wasd-a",
+      "key": "a",
+      "before": {
+        "cameraMode": "fly",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": true
+      },
+      "after": {
+        "cameraMode": "fly",
+        "walkAllowed": false,
+        "hasCollision": false,
+        "inputEnabled": true,
+        "gamingControls": true
+      }
+    }
+  ],
+  "hostApiToggleWalk": {
+    "before": "fly",
+    "after": "fly",
+    "walkAllowed": false
+  },
+  "finalState": {
+    "cameraMode": "fly",
+    "walkAllowed": false,
+    "hasCollision": false,
+    "inputEnabled": true,
+    "gamingControls": true
+  },
+  "finalGate": {
+    "hostHasGateClass": false,
+    "hostClass": "gs-viewer__canvas-host gs-supersplat-host",
+    "walkButtonDisplay": "none",
+    "walkButtonClass": "sse-fpsCamera sse-controlButton sse-toggle sse-right sse-hidden",
+    "walkShortcutInInfo": true
+  },
+  "officialGateSource": {
+    "note": "官方 isWalkAllowed(bbox, collision) = 有碰撞 且 水平范围 >= 5 单位；键盘 3 / WASD 与官方 toggleWalk() 都只查 state.walkAllowed",
+    "hostGate": "宿主仅给挂载容器加 gs-walk-blocked class，用 CSS display:none 隐藏 .sse-fpsCamera，不拦键盘"
+  },
+  "consoleErrors": [],
+  "pageErrors": []
+}
