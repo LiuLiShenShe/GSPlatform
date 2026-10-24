@@ -19,12 +19,15 @@ import {
   EyeOutlined,
   InfoCircleOutlined,
   LinkOutlined,
+  MenuOutlined,
   ShareAltOutlined,
   StarFilled,
   StarOutlined,
   StopOutlined,
 } from '@ant-design/icons';
 import type { SceneSummary } from '../../fixtures/scenes';
+import type { RuntimeViewpoint } from '../../scene-runtime/types';
+import { SavedViewsExtension } from '../viewer-official/SavedViewsExtension';
 import {
   addFavorite,
   removeFavorite,
@@ -39,6 +42,9 @@ import { useAuthStore } from '../../stores/authStore';
 
 interface ViewerRightPanelProps {
   scene: SceneSummary | undefined;
+  /** GS-DESKTOP-02：平台 Saved Views（官方 1.35 无原生列表）。 */
+  viewpoints?: RuntimeViewpoint[];
+  onSelectViewpoint?: (viewpointId: string) => boolean | void;
 }
 
 type FavState = 'checked' | 'unchecked' | 'checking';
@@ -64,10 +70,13 @@ const ASK_HINTS = [
  * Phase 08 全部接入真实后端 API；未登录时分享与问 AI 仍然可用，
  * 收藏需要登录（由 401 拦截器引导）。
  */
-export function ViewerRightPanel({ scene }: ViewerRightPanelProps) {
+export function ViewerRightPanel({ scene, viewpoints, onSelectViewpoint }: ViewerRightPanelProps) {
   const { message, modal } = App.useApp();
   const user = useAuthStore((s) => s.user);
   const sceneSlug = scene?.id;
+  // GS-DESKTOP-02：平台面板可折叠 —— 不遮挡官方原生控件（底部工具条 /
+  // 标注导览器 / 设置面板）。折叠后只留一个小入口。
+  const [collapsed, setCollapsed] = useState(false);
 
   // 收藏状态（需要登录；匿名访客直接显示未收藏，避免 401 拦截器误跳转）
   const [fav, setFav] = useState<FavState>('checking');
@@ -253,9 +262,46 @@ export function ViewerRightPanel({ scene }: ViewerRightPanelProps) {
 
   const shareCreating = share.kind === 'creating';
 
+  if (collapsed) {
+    return (
+      <aside
+        className="gs-viewer__right-panel gs-viewer__right-panel--collapsed"
+        aria-label="场景操作面板（已折叠）"
+      >
+        <Tooltip title="展开场景操作面板">
+          <Button
+            type="text"
+            icon={<MenuOutlined aria-hidden />}
+            aria-label="展开场景操作面板"
+            data-testid="vrp-expand"
+            onClick={() => setCollapsed(false)}
+          />
+        </Tooltip>
+      </aside>
+    );
+  }
+
   return (
     <aside className="gs-viewer__right-panel" aria-label="场景操作面板">
       <Space orientation="vertical" size={6} style={{ width: '100%' }}>
+        <Space style={{ width: '100%', justifyContent: 'space-between' }}>
+          <Typography.Text style={{ fontSize: 11, color: '#8a97b5' }}>平台</Typography.Text>
+          <Tooltip title="收起面板（不遮挡官方控件）">
+            <Button
+              size="small"
+              type="text"
+              icon={<MenuOutlined aria-hidden />}
+              aria-label="收起场景操作面板"
+              data-testid="vrp-collapse"
+              onClick={() => setCollapsed(true)}
+            />
+          </Tooltip>
+        </Space>
+        {/* GS-DESKTOP-02：平台扩展入口（与官方 Orbit/Fly/Reset/Frame 控件区分）。
+            官方 1.35 没有 Saved Views 列表，Viewpoint 是平台数据。 */}
+        {viewpoints !== undefined && onSelectViewpoint && (
+          <SavedViewsExtension viewpoints={viewpoints} onSelect={onSelectViewpoint} />
+        )}
         <Tooltip title={scene ? `查看作者 ${scene.author}` : '作者信息'}>
           <Button block type="text" icon={<EyeOutlined aria-hidden />} onClick={openAuthor}>
             作者

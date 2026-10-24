@@ -37,9 +37,9 @@
  *   `resetCamera()`（官方 'reset' 输入事件）会切到 orbit 并回到
  *   `settings.cameras[0].initial`，这是一次性的、用户也随时可再触发的操作。
  *
- * `frameScene()` 仍然是**用户主动**操作：工具栏 `Frame` 按钮 →
- * `OfficialViewerToolbar` → `runtime.frameScene()`。`Reset` 按钮 →
- * `runtime.resetCamera()` → 回到有效初始相机。
+ * `frameScene()` 仍然是**用户主动**操作：官方原生工具条 `Frame` 按钮 →
+ * 官方 `viewer.frameScene()`。官方 `Reset` 按钮 → 官方 `resetCamera()` →
+ * 回到有效初始相机。（GS-DESKTOP-02 起宿主不再自绘工具条。）
  *
  * §3 显式语义：判定只看 position/target 是否为 null，**绝不**用
  * `position != [0,0,0]` 之类的猜测（作者可能真的把相机放在原点）。

@@ -622,8 +622,10 @@ describe('Renderer Policy', () => {
     expect(container.classList.contains('gs-supersplat-host')).toBe(true);
     const style = document.getElementById('gs-supersplat-ui-scope');
     expect(style).not.toBeNull();
-    expect(style!.textContent).toContain('.sse-ui');
+    // GS-DESKTOP-02：官方 UI 完整保留；本层只有 Walk 安全闸门 + hotspot 层保留。
+    expect(style!.textContent).toContain('.sse-fpsCamera');
     expect(style!.textContent).toContain('.sse-sceneLayer');
+    expect(style!.textContent).not.toContain('.sse-ui > *');
   });
 });
 

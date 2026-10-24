@@ -127,25 +127,51 @@ async function waitCameraAway(
   return cam(await readDiag(page));
 }
 
+/**
+ * 手动推进官方引擎的公开 update 循环（app.tick）——只推进时间，不写相机状态。
+ *
+ * headless + SwiftShader 下真实 rAF 只有约 2fps，而官方相机过渡按帧时长推进
+ * （单帧 delta 有上限），一次 1.2–2.4s 的过渡要 ~150s 墙钟才收敛，会卡在
+ * 等待预算边界上（既有注释里的 GS-NEXT-10 已记录同类问题）。gsdesktop01 的
+ * 相机 e2e 用的就是这个手法；断言（落点/朝向/fov 数值）完全不变。
+ */
+async function pumpEngine(page: import('@playwright/test').Page, ms = 250): Promise<void> {
+  const count = Math.max(1, Math.ceil(ms / 16.7));
+  await page.evaluate((n) => {
+    const rt = (window as unknown as { __gsruntime?: { app?: { tick?: (t: number) => void } } }).__gsruntime;
+    const app = rt?.app;
+    if (typeof app?.tick !== 'function') return;
+    const w = window as unknown as { __gsTickClock?: number };
+    let clock = Math.max(w.__gsTickClock ?? 0, performance.now());
+    for (let i = 0; i < n; i += 1) {
+      clock += 16.7;
+      app.tick(clock);
+    }
+    w.__gsTickClock = clock;
+  }, count);
+}
+
 /** 等相机到达期望位置附近（官方 goto 过渡；软件渲染下需要长预算）。 */
 async function waitCameraNear(
   page: import('@playwright/test').Page,
   expected: { position: number[]; target: number[]; fov: number },
   tol = 0.5,
 ) {
-  await page.waitForFunction(
-    ({ pos, tol: t }) => {
-      const el = document.querySelector('[data-testid="ov-diagnostics"]');
-      if (!el) return false;
-      let d: any;
-      try { d = JSON.parse(el.textContent ?? '{}'); } catch { return false; }
-      const c = d?.camera;
-      if (!c) return false;
-      return Math.hypot(c.position[0] - pos[0], c.position[1] - pos[1], c.position[2] - pos[2]) < t;
-    },
-    { pos: expected.position, tol },
-    { timeout: CAMERA_SETTLE_MS },
-  );
+  const end = Date.now() + CAMERA_SETTLE_MS;
+  let last: Cam | null = null;
+  while (Date.now() < end) {
+    await pumpEngine(page, 250);
+    last = cam(await readDiag(page));
+    if (last && dist(last.position, expected.position) < tol) break;
+  }
+  expect(
+    last,
+    `waitCameraNear: 应有相机读数（期望 ${JSON.stringify(expected.position)}）`,
+  ).not.toBeNull();
+  expect(
+    dist(last!.position, expected.position),
+    `waitCameraNear: 相机应到达 ${JSON.stringify(expected.position)}，实际 ${JSON.stringify(last!.position)}`,
+  ).toBeLessThan(tol);
 }
 
 // 兜底：每个测试前把世界变换复位恒等（World Transform 测试会在自身内设非恒等并
@@ -182,14 +208,16 @@ test.describe('FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint
     // Frame：相机应离开 authored 初始构图（取景整个场景）。
     // GS-NEXT-10：不用固定 sleep（软件渲染下官方阻尼过渡要几十秒才收敛），改为
     // 轮询到「确实离开」为止 —— 断言本身（距离 > 1.0）没有被放松。
-    await page.click('[data-testid="ov-frame"]');
+    await page.locator('.sse-settings').first().click();
+    await page.waitForTimeout(300);
+    await page.locator('.sse-frame').first().click();
     const frameCam = await waitCameraAway(page, DB.initial.position, 1.0);
     console.log('after frame cam:', JSON.stringify(frameCam));
     expect(frameCam).not.toBeNull();
     expect(dist(frameCam!.position, DB.initial.position), 'frame 应离开初始位置').toBeGreaterThan(1.0);
 
     // Reset：回到 authored initial（orbit 稳定，严格容差）。
-    await page.click('[data-testid="ov-reset"]');
+    await page.locator('.sse-reset').first().click();
     await waitCameraNear(page, DB.initial, 0.08);
     const afterReset = await readDiag(page);
     console.log('after reset cam:', JSON.stringify(afterReset.camera), 'mode', afterReset.cameraMode);
@@ -201,11 +229,10 @@ test.describe('FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint
     await page.waitForSelector('[data-testid="scene-viewer-page"][data-runtime="official"]');
     await readDiag(page);
 
-    const btn = page.locator('[data-testid="ov-saved-views"]');
-    await expect(btn).toBeEnabled();
-    await expect(btn).toHaveText(/视角 \(1\)/);
-    await btn.click();
-    await page.getByText(DB.viewpoint.name, { exact: true }).click();
+    // GS-DESKTOP-02：Saved Views 是平台 PCUI 扩展入口（官方 1.35 无原生列表），
+    // 视角名直接可点（不再用下拉）。
+    await expect(page.locator('[data-testid="ov-saved-views"]')).toHaveText(/视角 \(1\)/);
+    await page.getByRole('button', { name: DB.viewpoint.name, exact: true }).click();
 
     // GS-NEXT-10：等「真的落到视角上」（轮询 + 长预算），不再用固定 sleep ——
     // 软件渲染下官方过渡要几十秒，固定 sleep 会在过渡中途读数。

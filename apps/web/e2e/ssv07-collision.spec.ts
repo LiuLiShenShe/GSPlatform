@@ -89,8 +89,12 @@ test.describe('SSV-07 Desktop walk（官方碰撞 voxel）', () => {
     // ④ 尺度评估与校准是两件事：未校准不代表尺度异常，仍应给出 ok 评估。
     expect((diag.sceneScale as { status: string }).status).toBe('ok');
 
-    // ⑤ Walk 按钮确实禁用（门控在 UI 生效，而不只是 runtime 状态）。
-    await expect(page.locator('[data-testid="ov-walk"]')).toBeDisabled();
+    // ⑤ GS-DESKTOP-02：Walk 入口是官方 `.sse-fpsCamera`。无碰撞数据时官方
+    //    walkAllowed=false，按钮被官方自己隐藏 —— 不再有宿主自绘 Walk 按钮。
+    await expect(page.locator('.sse-fpsCamera')).toHaveCount(1);
+    const walkHidden = await page.locator('.sse-fpsCamera').first()
+      .evaluate((el) => el.classList.contains('sse-hidden') || !(el as HTMLElement).offsetParent);
+    expect(walkHidden, '无碰撞数据时官方 Walk 按钮应隐藏').toBe(true);
   });
 
   test('无碰撞场景 → walkAllowed=false 且 Walk 按钮禁用', async ({ page }) => {
@@ -101,7 +105,10 @@ test.describe('SSV-07 Desktop walk（官方碰撞 voxel）', () => {
     console.log('local-garden walkAllowed/hasCollision:', diag.walkAllowed, diag.hasCollision);
     expect(diag.walkAllowed).toBe(false);
     expect(diag.hasCollision).toBe(false);
-    await expect(page.locator('[data-testid="ov-walk"]')).toBeDisabled();
+    await expect(page.locator('.sse-fpsCamera')).toHaveCount(1);
+    const walkHidden = await page.locator('.sse-fpsCamera').first()
+      .evaluate((el) => el.classList.contains('sse-hidden') || !(el as HTMLElement).offsetParent);
+    expect(walkHidden, '无碰撞数据时官方 Walk 按钮应隐藏').toBe(true);
   });
 });
 

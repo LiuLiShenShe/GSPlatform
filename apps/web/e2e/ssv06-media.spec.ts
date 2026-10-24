@@ -31,13 +31,8 @@ test.describe('SSV-06 annotation media (real scene r-8c4e2264e86a)', () => {
     const hotspots = page.locator('.sse-annotation-hotspots .sse-annotation-hotspot');
     await expect(hotspots).toHaveCount(5, { timeout: 30000 });
 
-    // 官方 chrome 被 scoped CSS 隐藏（GS-NEXT-04 起：`.sse-ui` 本身可见，
-    // 但它的直接子元素除官方标注导览器外全部隐藏 —— 见 superSplatUiCompatibility）。
-    const chromeVisible = await page
-      .locator('.sse-ui > *:not(.sse-annotationNav)')
-      .evaluateAll((els) => els.filter((e) => (e as HTMLElement).offsetParent !== null).length);
-    console.log('visible official chrome children (expect 0):', chromeVisible);
-    expect(chromeVisible).toBe(0);
+    // GS-DESKTOP-02：官方 chrome 完整保留（不再隐藏）—— 断言工具条/导览器都在。
+    await expect(page.locator('.sse-controlsWrap')).toHaveCount(1);
     await expect(page.locator('.sse-ui > .sse-annotationNav')).toHaveCount(1);
 
     // TEXT 热点（index 0）→ 官方 tooltip 直接显示，不打开媒体 Overlay。

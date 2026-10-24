@@ -58,21 +58,46 @@ async function clickNav(page: Page, which: 'prev' | 'next'): Promise<void> {
   await page.click(`.sse-annotation${which === 'prev' ? 'Prev' : 'Next'}`);
 }
 
+/**
+ * 手动推进官方引擎的公开 update 循环（app.tick）——只推进时间，不写相机状态。
+ *
+ * headless + SwiftShader 下真实 rAF 只有约 2fps，官方相机过渡按帧时长推进，
+ * 一次 1.2–2.4s 的过渡要 ~150s 墙钟才收敛（GS-NEXT-10 / gsdesktop01 已记录）。
+ * 断言（落点数值）不变，只把等待方式换成「推进引擎时间 + 轮询」。
+ */
+async function pumpEngine(page: Page, ms = 250): Promise<void> {
+  const count = Math.max(1, Math.ceil(ms / 16.7));
+  await page.evaluate((n) => {
+    const rt = (window as unknown as {
+      __gsruntime?: { app?: { tick?: (t: number) => void } };
+      __gsxrruntime?: { app?: { tick?: (t: number) => void } };
+    });
+    const app = rt.__gsruntime?.app ?? rt.__gsxrruntime?.app;
+    if (typeof app?.tick !== 'function') return;
+    const w = window as unknown as { __gsTickClock?: number };
+    let clock = Math.max(w.__gsTickClock ?? 0, performance.now());
+    for (let i = 0; i < n; i += 1) {
+      clock += 16.7;
+      app.tick(clock);
+    }
+    w.__gsTickClock = clock;
+  }, count);
+}
+
 /** 等官方相机过渡完成并落在期望位置附近。 */
 async function waitCameraNear(page: Page, expected: number[], tol = 0.06) {
-  await page.waitForFunction(
-    ({ pos, tol: t }) => {
-      const el = document.querySelector('[data-testid="ov-diagnostics"]');
-      if (!el) return false;
-      let d: any;
-      try { d = JSON.parse(el.textContent ?? '{}'); } catch { return false; }
-      const c = d?.camera;
-      if (!c) return false;
-      return Math.hypot(c.position[0] - pos[0], c.position[1] - pos[1], c.position[2] - pos[2]) < t;
-    },
-    { pos: expected, tol },
-    { timeout: 20000 },
-  );
+  const end = Date.now() + 90_000;
+  let last: number[] | null = null;
+  while (Date.now() < end) {
+    await pumpEngine(page, 250);
+    const cam = (await readDiag(page)).camera as { position: number[] } | null;
+    last = cam?.position ?? null;
+    if (last && dist(last, expected) < tol) return;
+  }
+  expect(
+    last && dist(last, expected),
+    `相机应过渡到 ${JSON.stringify(expected)}，实际 ${JSON.stringify(last)}`,
+  ).toBeLessThan(tol);
 }
 
 test.describe('GS-NEXT-04 Desktop —— 放行的官方标注导览器', () => {
@@ -137,14 +162,20 @@ test.describe('GS-NEXT-04 Desktop —— 放行的官方标注导览器', () => 
     await waitCameraNear(page, cam(2));
   });
 
-  test('放行官方 chrome 层后：其余官方控件仍隐藏，且不拦截 canvas 拖拽', async ({ page }) => {
+  test('GS-DESKTOP-02：官方原生 chrome 可见，且不拦截 canvas 拖拽', async ({ page }) => {
     await openViewer(page);
 
-    // ① 其余官方 chrome 不可见（否则横跨全宽的 controlsWrap 会吃掉 canvas 鼠标事件）
-    const visibleChrome = await page
-      .locator('.sse-ui > *:not(.sse-annotationNav)')
-      .evaluateAll((els) => els.filter((e) => (e as HTMLElement).offsetParent !== null).length);
-    expect(visibleChrome).toBe(0);
+    // ① GS-DESKTOP-02：官方 chrome 现在可见（原生 UI 完整保留）。
+    await expect(page.locator('.sse-controlsWrap')).toBeVisible();
+    // 官方控件中心点不被宿主覆盖层遮挡（否则会吃掉 canvas 鼠标事件）。
+    const hit = await page.evaluate(() => {
+      const el = document.querySelector('.sse-controlsWrap');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return { tag: top?.tagName ?? null, inside: !!top && (el.contains(top) || (top as HTMLElement).contains(el)) };
+    });
+    expect(hit?.inside).toBe(true);
 
     // ② canvas 拖拽仍然驱动官方相机（证明没有额外 overlay 吞事件）
     const before = (await readDiag(page)).camera.position;

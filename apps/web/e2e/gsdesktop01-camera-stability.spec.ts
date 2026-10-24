@@ -40,7 +40,21 @@ type ApiRequest = import('@playwright/test').APIRequestContext;
 /** 把探针脚本塞进页面：hook runtime 方法 + 按 20Hz 采样官方相机 pose。 */
 async function installProbe(page: Page): Promise<void> {
   await page.addInitScript(`
-    window.__probe = { calls: [], samples: [] };
+    window.__probe = { calls: [], samples: [], uiClicks: [] };
+    // GS-DESKTOP-02：官方 Viewer 的 Frame / Reset 按钮直接调用官方内部 handle，
+    // 不经过本项目的 SuperSplatRuntime 包装层（下面 wire 的 calls 记录不到）。
+    // 用 capture 阶段的 DOM 点击记录「用户主动触发了哪些官方按钮」，与相机位移
+    // 证据一起证明：用户操作有效，且平台代码从未在用户操作之外自动取景。
+    document.addEventListener('click', (e) => {
+      try {
+        const t = e.target && e.target.closest ? e.target.closest('.sse-frame, .sse-reset') : null;
+        if (!t) return;
+        window.__probe.uiClicks.push({
+          t: performance.now(),
+          cls: Array.from(t.classList).join(' '),
+        });
+      } catch (err) { /* ignore */ }
+    }, true);
     const wire = (v) => {
       try {
         const names = ['frameScene', 'resetCamera', 'setCameraPose', 'selectViewpoint',
@@ -109,6 +123,7 @@ interface ProbeSample {
 interface Probe {
   calls: { t: number; name: string; args?: string }[];
   samples: ProbeSample[];
+  uiClicks?: { t: number; cls: string }[];
   error?: string;
 }
 
@@ -418,9 +433,9 @@ async function moveCameraToCloseUp(page: Page): Promise<void> {
   await page.waitForTimeout(1500);
 }
 
-/** 「将当前视角设为初始视角」—— 页面顶栏的简单入口。 */
+/** 「将当前视角设为初始视角」—— 页面顶栏的简单入口（GS-DESKTOP-02 PCUI 工作区）。 */
 async function clickSaveCurrentView(page: Page): Promise<void> {
-  await page.getByTestId('save-current-view-as-initial').click();
+  await page.getByRole('button', { name: '保存初始视角' }).click();
 }
 
 // --------------------------------------------------------------------------- //
@@ -513,7 +528,9 @@ test.describe('GS-DESKTOP-01：加载完成后相机不自动拉远', () => {
     expect(before.loaded).toBe(true);
 
     // Frame（用户主动取景整个场景）→ 相机必须明显离开初始相机。
-    await page.locator('[data-testid="ov-frame"]').click({ force: true });
+    await page.locator('.sse-settings').first().click();
+    await page.waitForTimeout(300);
+    await page.locator('.sse-frame').first().click({ force: true });
     const framed = await waitForCamera(page, (cam) => distance(cam.position, expected.position) > 1.0, 60_000);
     console.log('[evidence] Frame 后相机:', JSON.stringify(framed));
     expect(
@@ -522,7 +539,11 @@ test.describe('GS-DESKTOP-01：加载完成后相机不自动拉远', () => {
     ).toBeGreaterThan(1.0);
 
     // Reset（回到初始相机）→ 精确回到 authored pose。
-    await page.locator('[data-testid="ov-reset"]').click({ force: true });
+    if (!(await page.locator('.sse-reset').first().isVisible())) {
+      await page.locator('.sse-settings').first().click();
+      await page.waitForTimeout(300);
+    }
+    await page.locator('.sse-reset').first().click({ force: true });
     const reset = await waitForCamera(page, (cam) => distance(cam.position, expected.position) < 0.05, 60_000);
     console.log('[evidence] Reset 后相机:', JSON.stringify(reset));
     expect(
@@ -536,7 +557,17 @@ test.describe('GS-DESKTOP-01：加载完成后相机不自动拉远', () => {
     expect(distance(after.camera.position, expected.position)).toBeLessThan(0.05);
 
     const probe = await readProbe(page);
-    expect(probe.calls.filter((c) => c.name === 'frameScene').length, '只应有用户主动的那一次 Frame').toBe(1);
+    // 官方 1.35.0 的 Frame / Reset 按钮直接调用官方内部 handle，探针在
+    // SuperSplatRuntime 包装层上的 frameScene 计数为 0 是**正确**的 —— 平台代码
+    // 在加载后从不调用 frameScene。用户主动操作另由 DOM 点击证据计数。
+    expect(
+      probe.calls.filter((c) => c.name === 'frameScene').length,
+      '平台代码不得在用户操作之外调用 frameScene（官方按钮走官方内部实现）',
+    ).toBe(0);
+    expect(
+      (probe.uiClicks ?? []).filter((c) => c.cls.includes('sse-frame')).length,
+      '只应有用户主动的那一次官方 Frame 点击',
+    ).toBe(1);
   });
 
   test('⑥ 刷新页面不留下第二个相机控制器，且相机仍然稳定', async ({ page, request }) => {

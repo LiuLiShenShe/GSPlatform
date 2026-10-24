@@ -156,8 +156,13 @@ export function useSceneAuthoring(sceneId: string): AuthoringState {
       initialCameraFov: pose.fov,
     };
     setPresentation(p => p ? { ...p, ...patch } : p);
-    await saveExperience(patch);
-  }, [saveExperience]);
+    // GS-DESKTOP-02 §3.1：初始相机是**相机数据**，不参与 ExperienceSettings 的
+    // 渲染装配（background / tonemapping / postfx 才需要重建预览）。这里刻意不走
+    // saveExperience —— 保存初始视角后重建 Viewer 会让正在编辑的相机跳回/重载，
+    // 也违反“不重复重建 Viewer”的要求。保存值由页面重新读取 Runtime Descriptor
+    // 验证；当前会话的「定位到已保存视角」读取更新后的 presentation。
+    await savePresentation(patch);
+  }, [savePresentation]);
 
   const setBackgroundType = useCallback(async (type: 'color' | 'equirectangular') => {
     setPresentation(p => p ? { ...p, backgroundType: type } : p);

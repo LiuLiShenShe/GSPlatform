@@ -1,10 +1,10 @@
 /**
- * SSV-03 / SSV-09 — Scene Viewer 页面测试（官方 SuperSplat runtime 唯一路径）。
+ * SSV-03 / SSV-09 / GS-DESKTOP-02 — Scene Viewer 页面测试（官方 SuperSplat runtime 唯一路径）。
  *
  * 默认 `/scene/:sceneId` 走官方链路：
- *   getSceneRuntime → buildExperienceSettings → SuperSplatRuntime.create(desktop)
- * 断言：无 iframe、进度/加载 overlay、Frame/Reset/Fullscreen/Performance/
- * Annotations/Orbit-Fly 转发到官方 handle、sceneId 切换 destroy+create、
+ *   getSceneRuntime → buildExperienceSettings → SuperSplatRuntime.create(desktop, ui:true)
+ * 断言：无 iframe、进度/加载 overlay、**宿主不再自绘第二套工具条**（官方原生
+ * Orbit/Fly/Reset/Frame/设置/帮助/全屏由官方 UI 提供）、sceneId 切换 destroy+create、
  * 卸载 destroy。
  *
  * SSV-09 删除 `?runtime=legacy` 回退与 legacy ViewerAdapter 链路（features/viewer、
@@ -182,62 +182,39 @@ describe('SSV-03: Official SuperSplat desktop viewer', () => {
     expect(await screen.findByTestId('ov-progress')).toHaveTextContent('42%');
   });
 
-  it('ready 后 Frame / Reset 转发官方方法', async () => {
+  it('GS-DESKTOP-02：不再渲染宿主自绘工具条，且以 ui:true 创建官方完整 UI', async () => {
     renderApp({ route: '/scene/local-garden' });
     await screen.findByTestId('ov-mount');
     awaitOfficialReady();
 
-    const frameBtn = screen.getByTestId('ov-frame');
-    const resetBtn = screen.getByTestId('ov-reset');
-    await userEvent.click(resetBtn);
-    expect(officialHandle.resetCamera).toHaveBeenCalled();
-
-    await userEvent.click(frameBtn);
-    expect(officialHandle.frameScene).toHaveBeenCalled();
+    // 宿主旧工具条（Frame/Reset/Walk/Performance/Annotations/Fullscreen/Saved Views
+    // 下拉以外的自绘控件）必须全部消失 —— 官方原生 UI 是唯一来源。
+    for (const id of ['ov-frame', 'ov-reset', 'ov-walk', 'ov-performance', 'ov-annotations', 'ov-fullscreen']) {
+      expect(screen.queryByTestId(id), `${id} 不应再存在（重复工具栏）`).not.toBeInTheDocument();
+    }
+    // 官方 UI 必须开启（hotspots / controls / settings / info / fullscreen 都在该层）。
+    const { createViewer } = await import('@playcanvas/supersplat-viewer/viewer');
+    const lastOptions = vi.mocked(createViewer).mock.calls.at(-1)?.[0] as { ui?: boolean };
+    expect(lastOptions?.ui).toBe(true);
   });
 
-  it('Fullscreen 调用官方 requestFullscreen', async () => {
+  it('Saved Views 走平台扩展入口（官方 1.35 无原生列表）', async () => {
     renderApp({ route: '/scene/local-garden' });
     await screen.findByTestId('ov-mount');
     awaitOfficialReady();
 
-    await userEvent.click(screen.getByTestId('ov-fullscreen'));
-    await waitFor(() => expect(officialHandle.requestFullscreen).toHaveBeenCalled());
+    // fixture 自带 1 个 enabled viewpoint → 平台扩展入口列出它。
+    expect(screen.getByTestId('ov-saved-views')).toHaveTextContent('视角 (1)');
+    expect(screen.getByText('平台视角 · 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('场景操作面板')).toBeInTheDocument();
   });
 
-  it('Performance 按钮写入官方 state.performanceMode（GS-NEXT-02 §五：无偏好时默认 ON）', async () => {
-    localStorage.removeItem('performanceMode');
+  it('平台面板可折叠（不遮挡官方原生控件）', async () => {
     renderApp({ route: '/scene/local-garden' });
     await screen.findByTestId('ov-mount');
-    awaitOfficialReady();
-
-    // GS-NEXT-02 §五.1：无显式偏好 → GSPlatform 产品默认 ON（不再沿用官方
-    // 桌面端默认 OFF）；默认值经官方 state 施加一次，非用户偏好。
-    expect(officialHandle.state.performanceMode).toBe(true);
-    await userEvent.click(screen.getByTestId('ov-performance'));
-    expect(officialHandle.state.performanceMode).toBe(false);
-  });
-
-  it('Annotations 按钮切换官方 state.showAnnotations', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    await screen.findByTestId('ov-mount');
-    awaitOfficialReady();
-
-    expect(officialHandle.state.showAnnotations).toBe(true);
-    await userEvent.click(screen.getByTestId('ov-annotations'));
-    expect(officialHandle.state.showAnnotations).toBe(false);
-  });
-
-  it('Orbit/Fly 分段写入官方 state.cameraMode', async () => {
-    renderApp({ route: '/scene/local-garden' });
-    await screen.findByTestId('ov-mount');
-    awaitOfficialReady();
-
-    expect(officialHandle.state.cameraMode).toBe('orbit');
-    await userEvent.click(screen.getByText('Fly'));
-    expect(officialHandle.state.cameraMode).toBe('fly');
-    await userEvent.click(screen.getByText('Orbit'));
-    expect(officialHandle.state.cameraMode).toBe('orbit');
+    await userEvent.click(screen.getByTestId('vrp-collapse'));
+    expect(screen.getByTestId('vrp-expand')).toBeInTheDocument();
+    expect(screen.queryByLabelText('场景操作面板')).not.toBeInTheDocument();
   });
 
   it('sceneId 切换时销毁旧 runtime 并创建新 runtime', async () => {

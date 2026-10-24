@@ -178,6 +178,10 @@ test('创作页版本面板：列表、确认切换、成功反馈与空间重�
   }
 
   await page.goto(`/model/edit/${SCENE}`);
+  await page.waitForSelector('[data-testid="scene-authoring-page"]');
+  // GS-DESKTOP-02：版本/回滚属于**平台管理**，已从创作页内联面板迁到
+  // 顶栏「版本历史」抽屉（功能与断言不变，只是入口位置不同）。
+  await page.getByRole('button', { name: '版本历史' }).click();
   const panel = page.getByTestId('version-panel');
   await expect(panel).toBeVisible({ timeout: 60_000 });
   await expect(panel.getByText('历史版本')).toBeVisible();

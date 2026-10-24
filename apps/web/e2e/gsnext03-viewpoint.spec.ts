@@ -105,13 +105,13 @@ async function sampleCameraTrack(page: Page, durationMs: number): Promise<number
   }), durationMs);
 }
 
-/** Desktop 工具栏：Saved Views 下拉 → 点选某个视点。 */
+/**
+ * Desktop：Saved Views 是平台 PCUI 扩展入口（GS-DESKTOP-02），视角名直接可点
+ * （官方 1.35 没有原生 Saved Views 列表；导航仍走官方相机过渡）。
+ */
 async function clickSavedView(page: Page, name: string): Promise<void> {
-  await page.click('[data-testid="ov-saved-views"]');
-  // 菜单项是 antd Dropdown portal（.ant-dropdown-menu-title-content）。先等它
-  // 真正可见再点 —— 软件渲染下菜单动画/主线程繁忙会让「找到即点」偶发超时，
-  // 这是测试交互时序，不是产品行为（点击后相机确实导航）。
-  const item = page.getByText(name, { exact: true });
+  await expect(page.locator('[data-testid="ov-saved-views"]')).toBeVisible({ timeout: 30000 });
+  const item = page.getByRole('button', { name, exact: true });
   await expect(item).toBeVisible({ timeout: 30000 });
   await item.click({ timeout: 30000 });
 }
@@ -198,12 +198,13 @@ test.describe('GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（De
     await page.waitForTimeout(1500);
 
     const NAME = 'GS-NEXT-03 视点A';
-    // ViewpointPanel 作用域（顶栏与初始视角面板的按钮文案不同，避免 strict 冲突）
-    const panel = page.locator('.authoring-panel', { has: page.getByText('观察点') });
-    await panel.getByPlaceholder('视角名称').fill(NAME);
-    await panel.getByRole('button', { name: '保存当前视角' }).click();
+    // GS-DESKTOP-02：创作页已迁移到官方 PCUI 工作区 —— 视角新增行在左栏，
+    // 输入框 placeholder 与按钮文案保持原样（'/保存当前视角' 全页唯一）。
+    // PCUI TextInput 的 placeholder 在外层 div，真正的输入框是内部 <input>。
+    await page.locator('.gs-workspace__add input').fill(NAME);
+    await page.getByRole('button', { name: '保存当前视角' }).click();
     await page.waitForFunction(
-      (n) => [...document.querySelectorAll('.authoring-panel *')]
+      (n) => [...document.querySelectorAll('.gs-workspace__left *')]
         .some((el) => el.textContent?.trim() === n),
       NAME,
       { timeout: CAMERA_SETTLE_MS },
@@ -258,12 +259,11 @@ test.describe('GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（De
     expect(patch.status()).toBe(200);
 
     await openScene(page);
-    await page.click('[data-testid="ov-saved-views"]');
-    // 夹具自带 1 个 + 本用例 2 个 enabled
-    await expect(page.getByText('NEXT03-A', { exact: true })).toBeVisible();
-    await expect(page.getByText('NEXT03-B', { exact: true })).toBeVisible();
-    await expect(page.getByText('NEXT03-OFF', { exact: true })).toHaveCount(0);
-    await expect(page.getByText(/视角 \(\d+\)/)).toBeVisible();
+    // 夹具自带 1 个 + 本用例 2 个 enabled；PCUI 入口直接列出视角名。
+    await expect(page.getByRole('button', { name: 'NEXT03-A', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'NEXT03-B', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'NEXT03-OFF', exact: true })).toHaveCount(0);
+    await expect(page.locator('[data-testid="ov-saved-views"]')).toHaveText(/视角 \(\d+\)/);
   });
 });
 

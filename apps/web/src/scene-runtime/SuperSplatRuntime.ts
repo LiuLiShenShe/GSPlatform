@@ -1584,9 +1584,9 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
     settings: options.settings,
     posterUrl: options.posterUrl,
     collisionUrl: options.collisionUrl,
-    // SSV-03 起 headless：默认不渲染官方控件（宿主自绘）。
-    // SSV-06 起可选 ui:true：官方 annotation hotspots / tooltip 需要官方 UI 层，
-    // 开启后由 applyUiScopeStyles 隐藏多余 chrome，只保留 .sse-sceneLayer。
+    // GS-DESKTOP-02：ui:true 表示**完整官方 UI**（工具条 / 设置 / 帮助 /
+    // 全屏 / annotation hotspots + 导览器）。宿主不再隐藏或复制这些控件；
+    // 唯一的内部 class 规则是集中在 superSplatUiCompatibility.ts 的 Walk 安全闸门。
     ui: options.ui ?? false,
     // Renderer Policy：
     //   desktop → undefined（官方默认 webgpu，引擎自动 fallback WebGL，即“auto”）
@@ -1602,11 +1602,11 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
 }
 
 // ------------------------------------------------------------------ #
-// 官方 UI 内部 class 兼容（FIX-03 §11/§12）—— 全部集中在
+// 官方 UI 内部 class 兼容（FIX-03 §11/§12；GS-DESKTOP-02）—— 全部集中在
 // scene-runtime/superSplatUiCompatibility.ts（禁止散落）：
 //   Pinned to @playcanvas/supersplat-viewer@1.35.0（内部 CSS 依赖）
-// 只保留官方 annotations 层（.sse-sceneLayer），隐藏官方冗余 chrome（.sse-ui）
-// —— 宿主自绘控件，不重复渲染，且不 fork viewer。
+// 官方 UI 完整保留（工具条 / 设置 / 帮助 / 全屏 / hotspots / 导览器）；
+// 本层只叠加一条 Walk 安全闸门（尺度未校准 → 隐藏官方 Walk 入口）。
 // ------------------------------------------------------------------ #
 
 // ------------------------------------------------------------------ #

@@ -5,7 +5,6 @@ import { findScene } from '../services/sceneApi';
 import type { SceneSummary } from '../fixtures/scenes';
 import { ViewerRightPanel } from '../features/viewer-shell/ViewerRightPanel';
 import { OfficialViewerCanvas } from '../features/viewer-official/OfficialViewerCanvas';
-import { OfficialViewerToolbar } from '../features/viewer-official/OfficialViewerToolbar';
 import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
 import { useSuperSplatDesktop } from '../features/viewer-official/useSuperSplatDesktop';
 import { useBackgroundAudio } from '../hooks/useBackgroundAudio';
@@ -103,7 +102,14 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
             isPlaying ? backgroundAudio.pause() : backgroundAudio.resume()
           }
         />
-        <ViewerRightPanel scene={scene} />
+        <ViewerRightPanel
+          scene={scene}
+          // GS-DESKTOP-02：Saved Views 是 GSPlatform 独有能力（官方 1.35 没有
+          // 原生 Saved Views 列表）。平台面板保留一个小型扩展入口，与官方
+          // Orbit/Fly/Reset/Frame/设置/帮助等原生控件明确区分。
+          viewpoints={state.viewpoints}
+          onSelectViewpoint={state.selectViewpoint}
+        />
         {/* 视觉隐藏的真实运行态读数（e2e 取证：renderer / 已渲染 Gaussian 数 / 首帧） */}
         <span
           data-testid="ov-diagnostics"
@@ -191,7 +197,6 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
           })}
         </span>
       </div>
-      <OfficialViewerToolbar state={state} />
     </div>
   );
 }

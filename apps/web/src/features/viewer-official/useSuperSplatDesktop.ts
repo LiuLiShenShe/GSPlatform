@@ -29,6 +29,7 @@ import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 // 绝不在此处调用 runtime.frameScene() —— 加载完成自动取景整个 AABB 正是用户
 // 报告的「视角突然退到远处、显示整个 Gaussian 场景和废点」。
 import { applyInitialCameraPolicy } from '../../scene-runtime/initialCameraPolicy';
+import { setWalkGateBlocked } from '../../scene-runtime/superSplatUiCompatibility';
 import {
   assessSceneScale,
   type SceneScaleAssessment,
@@ -212,7 +213,7 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
           contentUrl: desc.content.url,
           settings,
           posterUrl: desc.scene.posterUrl ?? undefined,
-          collisionUrl: desc.collision?.enabled
+          collisionUrl: desc.collision?.enabled && !desc.collision?.stale
             ? resolveRuntimeAssetUrl(desc.collision.url) ?? undefined
             : undefined,
           mode: 'desktop',
@@ -255,7 +256,16 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
           setCanStartVR(runtime.state.canStartVR);
           // SSV-07 §4：每次取帧重算尺度诊断（包围盒来自 gsplat 实例）。
           // sceneScale.needsCalibration → Walk 入口禁用 + UI 告警。
-          setSceneScale(assessSceneScale(runtime.getSceneBounds()));
+          const scale = assessSceneScale(runtime.getSceneBounds());
+          setSceneScale(scale);
+          // GS-DESKTOP-02：官方 UI 已恢复，Walk 入口是官方 `.sse-fpsCamera`。
+          // 尺度未校准时用集中管理的安全闸门隐藏它（唯一保留的内部 class 规则），
+          // 而不是自绘第二个 Walk 按钮。碰撞 STALE 时上游直接不注入 collisionUrl，
+          // 官方 walkAllowed 本身即为 false。
+          setWalkGateBlocked(
+            mount,
+            runtime.state.loaded && (scale.needsCalibration || desc.collision?.stale === true),
+          );
           if (runtime.state.loaded && !cancelled) setStatus('ready');
         };
 

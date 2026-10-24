@@ -1,10 +1,11 @@
 /**
- * Authoring 共享类型（SSV-05）。
+ * AuthoringCameraPose —— 创作页相机 pose 的可序列化形状。
  *
- * 相机 pose 复用官方 ExperienceSettings 的 CameraPose（{ position, target, fov }，
- * 无 legacy 的 mode 字段）—— 与 SuperSplatRuntime.getCameraPose() 的返回
- * 类型完全一致，编辑页不直接触碰 PlayCanvas app。
+ * 与官方 `CameraPose`（tuple 数组）一致，但作者侧读写（SCENE 空间）统一用
+ * 这个别名，避免每个面板各自定义结构。
  */
-import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
-
-export type { CameraPose as AuthoringCameraPose };
+export interface AuthoringCameraPose {
+  position: [number, number, number];
+  target: [number, number, number];
+  fov: number;
+}
