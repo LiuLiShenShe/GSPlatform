@@ -1,0 +1,15 @@
+# GS-DESKTOP-03 phase 3 在本轮修复后的重跑输出（2026-10-25）
+# 目的：证明同一个旧取证脚本现在记录的是「同会话 Reset 回新视角」。
+# 原始 gsdesktop03-evidence/* 保持修复前状态，未覆盖。
+
+[A-authored-settled] cam=[6.474756717681885,-0.6055655479431152,-0.5117838382720947] fov=47
+[B-after-drag] cam=[4.423743724822998,-0.2227041870355606,-0.346047580242157] fov=47
+[modal:save-initial-view] 已保存（初始视角已更新，打开场景将采用该视角）。正在把新初始视角同步到当前 Viewer —— 官方 Reset 目标会一起更新… 知道了
+db after save {"worldPosition":null,"worldRotation":{"x":0,"y":0,"z":0},"worldScale":null,"initialCameraPosition":{"x":4.423743724822998,"y":-0.2227041870355606,"z":-0.346047580242157},"initialCameraTarget":{"x":0.0569380250670557,"y":0.5924447347215729,"z":0.006820979194583743},"initialCameraFov":47,"backgroundType":"color","backgroundColor":null,"backgroundAssetId":null,"backgroundMetadata":null,"coverAssetId":null,"coverUrl":null,"backgroundAudioAssetId":null,"backgroundAudioVolume":0.5,"backgroundAudioLoop":true,"backgroundAudioEnabled":false,"tonemapping":"aces","highPrecisionRendering":false,"postEffects":null,"collisionMode":null,"collisionAssetId":null,"collisionGravity":9.81,"collisionSlopeLimitDegrees":45,"collisionStepOffset":0.3,"collisionPlayerHeight":1.8,"collisionEnabled":false} runtime {"position":{"x":4.423743724822998,"y":-0.2227041870355606,"z":-0.346047580242157},"target":{"x":0.0569380250670557,"y":0.5924447347215729,"z":0.006820979194583743},"fov":47}
+[C-before-reset] cam=[4.423743724822998,-0.2227041870355606,-0.346047580242157] fov=47
+[reset-without-reload] cam=[4.423743724822998,-0.2227041870355606,-0.346047580242157] fov=47
+[official-reset-without-reload] cam=[4.423743724822998,-0.2227041870355606,-0.346047580242157] fov=47
+after reload reset: [4.4237,-0.2227,-0.346] errToB=0.000 errToA=2.093
+phase 3 done
+
+[exited with code 0]

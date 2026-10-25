@@ -796,6 +796,7 @@ a {
 }
 
 .gs-workspace__item--active {
+  width: 100%;
   outline: 1px solid #6aa9ff;
 }
 
@@ -917,10 +918,30 @@ a {
   width: 100%;
 }
 
-.gs-props__hint {
+/* GS-DESKTOP-04 §七：长提示（比如「编辑模式…Orbit / Pan / Zoom…Apply」）在 PCUI
+   里被裁成一行（gsdesktop03 实测 scrollWidth > clientWidth）。PCUI 的 label 默认
+   inline-block + nowrap + ellipsis，这里用更高特异性改成块级换行，禁止截断。 */
+.gs-props .gs-props__hint {
+  display: block;
   font-size: 11px;
   color: #8b93a1;
   white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  margin: 2px 6px;
+}
+
+/* 主操作（保存初始视角）在 1080p 下不够醒目：官方 PCUI 按钮样式之外加一点强调。
+   注意：PCUI 的 `class` 属性只接受**单个** token（内部走 classList.add），
+   写成 `"a b"` 会抛 InvalidCharacterError —— 所以「整宽 + 强调」合成一个类。 */
+.gs-props__primary {
+  width: 100%;
+  font-weight: 600;
+  border: 1px solid rgba(96, 165, 250, 0.85) !important;
+  color: #eaf2ff !important;
 }
 
 .gs-props__alert {

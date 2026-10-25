@@ -17,13 +17,13 @@ import {
   ColorPicker,
   Divider,
   Label,
-  NumericInput,
   SelectInput,
   TextAreaInput,
   TextInput,
 } from '@playcanvas/pcui/react';
 import { PcuiField } from './PcuiField';
 import { PcuiButton } from './PcuiButton';
+import { PcuiNumericInput } from './PcuiNumericInput';
 import type { AnnotationContentType, AnnotationStyle, SceneAnnotation } from '../../../services/annotationApi';
 
 interface Props {
@@ -142,7 +142,6 @@ export function AnnotationProperties({
         <TextInput
           value={mediaAssetId}
           onChange={(v: string) => setMediaAssetId(v)}
-          placeholder="media asset id"
         />
       </PcuiField>
       <PcuiField label="文字颜色">
@@ -152,7 +151,7 @@ export function AnnotationProperties({
         />
       </PcuiField>
       <PcuiField label="文字大小">
-        <NumericInput
+        <PcuiNumericInput
           value={textSize}
           min={8}
           max={96}
@@ -162,7 +161,7 @@ export function AnnotationProperties({
         />
       </PcuiField>
       <PcuiField label="标注相机 FOV">
-        <NumericInput
+        <PcuiNumericInput
           value={fov}
           min={10}
           max={120}

@@ -34,6 +34,7 @@ import {
 } from '../../scene-runtime/SuperSplatRuntime';
 import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 import { hasAuthoredInitialCamera, applyInitialCameraPolicy } from '../../scene-runtime/initialCameraPolicy';
+import { decideWalkSafety } from '../../scene-runtime/walkSafetyPolicy';
 import { eligibleGuidePoints } from '../../scene-runtime/guidePoints';
 import { destinationKey, INITIAL_DESTINATION_ID } from '../../scene-runtime/xrDestinations';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
@@ -302,15 +303,18 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
 
         // 3) 官方 SuperSplat Runtime（mode:'xr' → renderer 强制 'webgl'）
         //    ui:true = 官方 annotation hotspots/tooltip 层（SSV-06）。
-        //    collisionUrl 解析为绝对 URL（同 Desktop，SSV-07 §8：碰撞资产
-        //    不得破坏 XR 加载 —— 官方 VR 路径同样消费碰撞数据）。
+        //
+        //    GS-DESKTOP-04 §六：XR 与 Desktop 走**同一个**平台 walk 安全闸门
+        //    （walkSafetyPolicy.decideWalkSafety）。判定不安全就不注入碰撞资源，
+        //    官方 VR 内的 walk 同样不会可用。
+        const xrWalkSafety = decideWalkSafety({ descriptor: desc });
         const runtime = await SuperSplatRuntime.create({
           container: mount,
           contentUrl: desc.content.url,
           settings,
           posterUrl: desc.scene.posterUrl ?? undefined,
-          collisionUrl: desc.collision?.enabled
-            ? resolveRuntimeAssetUrl(desc.collision.url) ?? undefined
+          collisionUrl: xrWalkSafety.safe
+            ? resolveRuntimeAssetUrl(desc.collision?.url) ?? undefined
             : undefined,
           mode: 'xr',
           ui: true,

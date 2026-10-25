@@ -23,7 +23,12 @@ export interface PcuiButtonProps {
   text: string;
   onClick: () => void;
   enabled?: boolean;
-  class?: string | string[];
+  /**
+   * 附加 class —— **只能是一个 token**。PCUI 的 Element 内部对 class 走
+   * `classList.add(token)`，传 `"a b"` 会在挂载时抛 InvalidCharacterError
+   * 并把整个页面炸成错误边界（GS-DESKTOP-04 实测）。需要多个样式时合成一个类。
+   */
+  class?: string;
 }
 
 export function PcuiButton({ text, onClick, enabled, class: cls }: PcuiButtonProps) {

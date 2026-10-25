@@ -8,9 +8,10 @@
  *   - 数据库 ID 不变。
  */
 import { useEffect, useState } from 'react';
-import { BooleanInput, Label, NumericInput, TextInput } from '@playcanvas/pcui/react';
+import { BooleanInput, Label, TextInput } from '@playcanvas/pcui/react';
 import { PcuiField } from './PcuiField';
 import { PcuiButton } from './PcuiButton';
+import { PcuiNumericInput } from './PcuiNumericInput';
 import type { SceneViewpoint } from '../../../services/presentationApi';
 import type { AuthoringCameraPose } from '../authoringTypes';
 
@@ -62,7 +63,7 @@ export function ViewpointProperties({
         <BooleanInput type="toggle" value={enabled} onChange={(v: boolean) => setEnabled(v)} />
       </PcuiField>
       <PcuiField label="FOV">
-        <NumericInput
+        <PcuiNumericInput
           value={fov}
           min={10}
           max={120}
@@ -117,7 +118,7 @@ export function ViewpointProperties({
             onNavigate(viewpoint);
           }}
         />
-        <PcuiButton text="删除" class={['gs-props__danger']} onClick={() => void onDelete(viewpoint.id)} />
+        <PcuiButton text="删除" class="gs-props__danger" onClick={() => void onDelete(viewpoint.id)} />
       </div>
     </div>
   );

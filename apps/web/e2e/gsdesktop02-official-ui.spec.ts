@@ -34,6 +34,37 @@ type Diag = {
   contentUrl: string | null;
 };
 
+/**
+ * 手动推进官方 app 的 tick（GS-NEXT-10：headless WebGPU 下 rAF 可能不再投递）。
+ *
+ * GS-DESKTOP-04 实测：把「保存初始视角」触发的受控重建放在**从未 tick 过**的
+ * Viewer 之后，SwiftShader 里第二次 `navigator.gpu.requestAdapter()` 会长时间
+ * 不 resolve（实测 >240s）；先让第一个 Viewer 真实渲染过若干帧再保存，重建
+ * 实测 ~112s 收敛。这属于云渲染管线的 teardown/重建时序，不是产品逻辑。
+ */
+async function pumpFrames(page: Page, ms: number): Promise<void> {
+  const total = Math.max(1, Math.ceil(ms / 16.7));
+  let done = 0;
+  while (done < total) {
+    const chunk = Math.min(60, total - done);
+    await page.evaluate((count) => {
+      const rt = (window as unknown as { __gsauthoringruntime?: { app?: { tick?: (t: number) => void } } })
+        .__gsauthoringruntime;
+      const app = rt?.app;
+      if (typeof app?.tick !== 'function') return;
+      const w = window as unknown as { __gsTickClock?: number };
+      let clock = Math.max(w.__gsTickClock ?? 0, performance.now());
+      for (let i = 0; i < count; i += 1) {
+        clock += 16.7;
+        app.tick(clock);
+      }
+      w.__gsTickClock = clock;
+    }, chunk);
+    await page.waitForTimeout(40);
+    done += chunk;
+  }
+}
+
 async function openViewer(page: Page, sceneId = SCENE): Promise<void> {
   await page.goto(`/scene/${sceneId}`);
   await page.waitForSelector('[data-testid="scene-viewer-page"][data-runtime="official"]');
@@ -297,6 +328,9 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
   });
 
   test('D：编辑相机 → 保存 → 重开后最终视角一致', async ({ page }) => {
+    // 本用例要等一次受控重建收敛（SwiftShader 下实测 112–400s），
+    // 文件级 480s 预算不够宽裕，单独放宽。
+    test.setTimeout(1_500_000);
     // 本用例会写共享夹具的初始相机：结束后恢复，避免污染其他用例。
     const snapshot = await (await page.request.get(`${API}/${SCENE}/presentation`)).json();
     try {
@@ -306,6 +340,9 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
       () => document.body.textContent?.includes('Viewer 就绪') ?? false,
       { timeout: 120_000 },
     );
+    // 让第一个 Viewer 真实渲染若干帧再保存（见 pumpFrames 注释：否则受控重建
+    // 的第二次 WebGPU requestAdapter 在 SwiftShader 下会长时间不 resolve）。
+    await pumpFrames(page, 2000);
 
     // 读保存前的初始视角（DB 真相）。
     const before = await page.request.get(`${API}/${SCENE}/presentation`);
@@ -342,13 +379,29 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
       : 999;
     expect(moved, '保存的应是移动后的相机').toBeGreaterThan(0.2);
 
-    // 保存后不得重建 Viewer / 相机不得跳变（§3.1）。
-    await page.waitForTimeout(2500);
+    // 保存后相机不得跳变（§3.1）。GS-DESKTOP-04 §三 修订：官方 1.35.0 的 Reset
+    // 目标在 CameraManager 构造时固化，公开 API 无法运行时更新 —— 所以保存成功后
+    // **允许一次受控重建**（让官方 Reset 也指向新视角），但重建后必须恢复用户当时
+    // 的视角，画面不得跳远。
+    //
+    // 预算说明（实测，不是放宽断言）：headless SwiftShader 下销毁旧 WebGPU 设备后
+    // 的第二次 `requestAdapter` 实测 111.9s 才 resolve，同一环境另一次实测约 400s，
+    // 所以这里按 600s 等同步收敛；真实 GPU 浏览器上是秒级。
+    //
+    // `polling: 500` 是必需的：官方 Viewer 加载完成后 `app.autoRender=false`，
+    // 页面 rAF 可能不再投递，而 `waitForFunction` 默认按 rAF 轮询 —— 会用真实
+    // 的「永远等不到」超时来掩盖「条件其实已满足」。
+    await page.waitForFunction(() => {
+      const rt = (window as unknown as { __gsauthoringruntime?: { loaded?: boolean; getCameraPose?: () => unknown } })
+        .__gsauthoringruntime;
+      return rt?.loaded === true && !!rt.getCameraPose?.();
+    }, undefined, { timeout: 600_000, polling: 500 });
+    await page.waitForTimeout(600);
     const afterSavePose = await page.evaluate(() => {
       const runtime = (window as unknown as { __gsauthoringruntime?: { getCameraPose?: () => { position: number[] } | null } }).__gsauthoringruntime;
       return runtime?.getCameraPose?.()?.position.map((n: number) => +n.toFixed(3)) ?? null;
     });
-    expect(afterSavePose, '保存后 Viewer 仍应就绪（不重建）').not.toBeNull();
+    expect(afterSavePose, '保存后 Viewer 仍应就绪（同步重建收敛）').not.toBeNull();
     const savedPos = [
       presAfter.initialCameraPosition.x,
       presAfter.initialCameraPosition.y,

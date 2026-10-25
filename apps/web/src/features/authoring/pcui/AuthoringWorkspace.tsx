@@ -17,7 +17,6 @@ import {
   ColorPicker,
   Divider,
   Label,
-  NumericInput,
   Panel,
   SelectInput,
   SliderInput,
@@ -25,6 +24,7 @@ import {
 } from '@playcanvas/pcui/react';
 import { PcuiField } from './PcuiField';
 import { PcuiButton } from './PcuiButton';
+import { PcuiNumericInput } from './PcuiNumericInput';
 import { AnnotationProperties } from './AnnotationProperties';
 import { ViewpointProperties } from './ViewpointProperties';
 import type { SceneAnnotation } from '../../../services/annotationApi';
@@ -32,7 +32,14 @@ import type { ScenePresentation, SceneViewpoint, Vec3 } from '../../../services/
 import type { AuthoringCameraPose } from '../authoringTypes';
 import type { RuntimePostEffects, RuntimeTonemapping } from '../../../scene-runtime/types';
 import type { RuntimeInitialCameraUse } from '../../../scene-runtime/initialCameraPolicy';
-import { POST_EFFECT_RANGES } from '@playcanvas/supersplat-viewer/settings';
+import { CAMERA_FOV_RANGE, POST_EFFECT_RANGES } from '@playcanvas/supersplat-viewer/settings';
+import type { CameraSyncStatus } from '../../../scene-runtime/initialCameraSync';
+
+/** FOV clamp 进官方 authoring 界（与 experienceAdapter 用的是同一份范围数据）。 */
+function clampFov(fov: number): number {
+  if (!Number.isFinite(fov)) return CAMERA_FOV_RANGE.max;
+  return Math.min(Math.max(Math.round(fov), CAMERA_FOV_RANGE.min), CAMERA_FOV_RANGE.max);
+}
 
 export type SceneSection = 'camera' | 'world' | 'background' | 'postfx' | 'cover' | 'audio';
 export type WorkspaceSelection =
@@ -89,6 +96,11 @@ export interface AuthoringWorkspaceProps {
   onResetToSaved: () => void;
   onSaveCurrentAsInitial: () => Promise<void>;
   onSetFov: (fov: number) => void;
+  /** GS-DESKTOP-04 §三：新初始视角同步进当前 Viewer 的状态。 */
+  cameraSync: CameraSyncStatus;
+  cameraSyncError: string | null;
+  /** 同步失败后的重试入口（不清数据，只重读描述符再同步）。 */
+  onRetryCameraSync: () => void;
   cameraEdit: boolean;
   onEnterCameraEdit: () => void;
   onApplyCameraEdit: () => Promise<void>;
@@ -187,7 +199,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
                 key={section}
                 class={
                   selection.kind === 'scene' && selection.section === section
-                    ? ['gs-workspace__item', 'gs-workspace__item--active']
+                    ? 'gs-workspace__item--active'
                     : 'gs-workspace__item'
                 }
                 text={label}
@@ -210,7 +222,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
                   <PcuiButton
                     class={
                       selection.kind === 'annotation' && selection.id === a.id
-                        ? ['gs-workspace__item', 'gs-workspace__item--active']
+                        ? 'gs-workspace__item--active'
                         : 'gs-workspace__item'
                     }
                     text={`${a.title || '(未命名)'}${a.enabled ? '' : ' · 隐藏'}`}
@@ -237,7 +249,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
                   <PcuiButton
                     class={
                       selection.kind === 'viewpoint' && selection.id === vp.id
-                        ? ['gs-workspace__item', 'gs-workspace__item--active']
+                        ? 'gs-workspace__item--active'
                         : 'gs-workspace__item'
                     }
                     text={`${vp.name || '(未命名)'}${vp.enabled ? '' : ' · 隐藏'}`}
@@ -375,6 +387,7 @@ function SceneProperties(props: SceneProps) {
 function CameraProperties(props: SceneProps) {
   const initial = props.presentation?.initialCameraPosition;
   const fov = props.presentation?.initialCameraFov ?? 75;
+  const syncing = props.cameraSync === 'syncing';
   return (
     <div className="gs-props" data-testid="scene-properties-camera">
       <Label class="gs-props__title" text="初始相机" />
@@ -386,33 +399,49 @@ function CameraProperties(props: SceneProps) {
         <Label class="gs-props__hint" text="尚未设置：打开场景使用官方默认相机" />
       )}
       <PcuiField label="Lens (FOV)">
-        <NumericInput
+        <PcuiNumericInput
           value={fov}
-          min={10}
-          max={120}
+          min={CAMERA_FOV_RANGE.min}
+          max={CAMERA_FOV_RANGE.max}
           precision={0}
-          step={1}
-          onChange={(v: number) => props.onSetFov(v)}
+          step={CAMERA_FOV_RANGE.step}
+          // 官方 authoring 界 10–120°：越界值在提交前 clamp，避免把非法 FOV
+          // 写进 settings（官方 validateSettings(limits:true) 会整场景拒绝）。
+          onChange={(v: number) => props.onSetFov(clampFov(v))}
         />
       </PcuiField>
       <div className="gs-props__row">
-        <PcuiButton text="定位到已保存视角" onClick={props.onResetToSaved} />
+        <PcuiButton text="定位到已保存视角" enabled={!syncing} onClick={props.onResetToSaved} />
         <PcuiButton
           text={props.cameraEdit ? '编辑中…' : '编辑相机'}
-          enabled={!props.cameraEdit}
+          enabled={!props.cameraEdit && !syncing}
           onClick={props.onEnterCameraEdit}
         />
       </div>
       <PcuiButton
-        class="gs-props__wide"
-        text="将当前视角设为初始视角"
-        enabled={props.viewerReady && !props.authoringSaving}
+        class="gs-props__primary"
+        text={syncing ? '正在同步初始视角…' : '将当前视角设为初始视角'}
+        enabled={props.viewerReady && !props.authoringSaving && !syncing}
         onClick={() => void props.onSaveCurrentAsInitial()}
       />
       <Label
         class="gs-props__hint"
         text="编辑模式下可直接在 Viewer 中 Orbit / Pan / Zoom 取景，再点 Apply。"
       />
+      {syncing && (
+        <div className="gs-props__alert gs-props__alert--info" data-testid="camera-sync-progress">
+          正在把新初始视角同步到 Viewer（官方 Reset 也会一起更新）……
+        </div>
+      )}
+      {props.cameraSync === 'failed' && (
+        <div className="gs-props__alert" data-testid="camera-sync-failed">
+          新初始视角已保存，但同步到当前 Viewer 失败
+          {props.cameraSyncError ? `（${props.cameraSyncError}）` : ''}。
+          <div className="gs-props__row" style={{ marginTop: 6 }}>
+            <PcuiButton text="重新同步" onClick={props.onRetryCameraSync} />
+          </div>
+        </div>
+      )}
       {props.initialViewUse.status === 'ignored' && (
         <div className="gs-props__alert" data-testid="initial-view-runtime-mismatch">
           已保存的初始视角未被运行时采用（场景几何变更后空间绑定失效）。请重新保存。
@@ -437,7 +466,7 @@ function WorldProperties(props: SceneProps) {
       <Label class="gs-props__title" text="世界方向 / 缩放" />
       {(['x', 'y', 'z'] as const).map((axis) => (
         <PcuiField key={`rot-${axis}`} label={`旋转 ${axis.toUpperCase()} (°)`}>
-          <NumericInput
+          <PcuiNumericInput
             value={draftRot[axis]}
             min={-180}
             max={180}
@@ -449,7 +478,7 @@ function WorldProperties(props: SceneProps) {
       ))}
       {(['x', 'y', 'z'] as const).map((axis) => (
         <PcuiField key={`scale-${axis}`} label={`缩放 ${axis.toUpperCase()}`}>
-          <NumericInput
+          <PcuiNumericInput
             value={draftScale[axis]}
             min={0.01}
             max={100}

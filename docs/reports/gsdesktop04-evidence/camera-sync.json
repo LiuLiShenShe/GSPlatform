@@ -1,0 +1,369 @@
+{
+  "scene": "fix02-semantics",
+  "steps": [
+    {
+      "step": "loaded",
+      "pose": {
+        "position": [
+          5.643027305603027,
+          0.5953750014305115,
+          3.441833734512329
+        ],
+        "target": [
+          0.016536273012969893,
+          0.5999864747659615,
+          0.01008569429383721
+        ],
+        "fov": 47
+      }
+    },
+    {
+      "step": "moved-to-B",
+      "pose": {
+        "position": [
+          6.474756717681885,
+          -0.6055655479431152,
+          -0.5117838382720947
+        ],
+        "target": [
+          0.06534064419030461,
+          0.5908761901657049,
+          0.006141980321132112
+        ],
+        "fov": 47
+      }
+    },
+    {
+      "step": "after-save-sync",
+      "pose": {
+        "position": [
+          6.474756717681885,
+          -0.6055655479431152,
+          -0.5117838382720947
+        ],
+        "target": [
+          0.06534064419030461,
+          0.5908761901657049,
+          0.006141980321132112
+        ],
+        "fov": 47
+      }
+    },
+    {
+      "step": "moved-to-C",
+      "pose": {
+        "position": [
+          5.246982097625732,
+          1.099488377571106,
+          3.9649600982666016
+        ],
+        "target": [
+          0.012195008661912254,
+          0.5856595632054067,
+          -0.034462154244747634
+        ],
+        "fov": 47
+      }
+    },
+    {
+      "step": "official-reset",
+      "pose": {
+        "position": [
+          6.474756717681885,
+          -0.6055655479431152,
+          -0.5117838382720947
+        ],
+        "target": [
+          0.06534064419030461,
+          0.5908761901657049,
+          0.006141980321132112
+        ],
+        "fov": 47
+      }
+    },
+    {
+      "step": "keyboard-r-reset",
+      "pose": {
+        "position": [
+          6.474756717681885,
+          -0.6055655479431152,
+          -0.5117838382720947
+        ],
+        "target": [
+          0.06534064419030461,
+          0.5908761901657049,
+          0.006141980321132112
+        ],
+        "fov": 47
+      }
+    }
+  ],
+  "beforeAfter": {
+    "A": {
+      "position": [
+        5.643027305603027,
+        0.5953750014305115,
+        3.441833734512329
+      ],
+      "target": [
+        0.016536273012969893,
+        0.5999864747659615,
+        0.01008569429383721
+      ],
+      "fov": 47
+    },
+    "B": {
+      "position": [
+        6.474756717681885,
+        -0.6055655479431152,
+        -0.5117838382720947
+      ],
+      "target": [
+        0.06534064419030461,
+        0.5908761901657049,
+        0.006141980321132112
+      ],
+      "fov": 47
+    },
+    "afterSave": {
+      "position": [
+        6.474756717681885,
+        -0.6055655479431152,
+        -0.5117838382720947
+      ],
+      "target": [
+        0.06534064419030461,
+        0.5908761901657049,
+        0.006141980321132112
+      ],
+      "fov": 47
+    },
+    "C": {
+      "position": [
+        5.246982097625732,
+        1.099488377571106,
+        3.9649600982666016
+      ],
+      "target": [
+        0.012195008661912254,
+        0.5856595632054067,
+        -0.034462154244747634
+      ],
+      "fov": 47
+    },
+    "afterReset": {
+      "position": [
+        6.474756717681885,
+        -0.6055655479431152,
+        -0.5117838382720947
+      ],
+      "target": [
+        0.06534064419030461,
+        0.5908761901657049,
+        0.006141980321132112
+      ],
+      "fov": 47
+    },
+    "afterKey": {
+      "position": [
+        6.474756717681885,
+        -0.6055655479431152,
+        -0.5117838382720947
+      ],
+      "target": [
+        0.06534064419030461,
+        0.5908761901657049,
+        0.006141980321132112
+      ],
+      "fov": 47
+    },
+    "deltaB_afterSave": 0,
+    "deltaB_afterReset": 0,
+    "deltaB_afterKey": 0,
+    "deltaA_afterReset": 4.214869384675718
+  },
+  "lifecycle": {
+    "created": 2,
+    "destroyed": 1
+  },
+  "screenshots": [],
+  "lifecycleLive": {
+    "viewers": 1,
+    "canvases": 1
+  },
+  "events": {
+    "consoleErrors": [
+      "Warning: [antd: Drawer] `width` is deprecated. Please use `size` instead.",
+      "Warning: [antd: Modal] Static function can not consume context like dynamic theme. Please use 'App' component instead."
+    ],
+    "pageErrors": [],
+    "failedRequests": [],
+    "responses": [
+      {
+        "status": 200,
+        "url": "/api/v1/scenes/fix02-semantics/assets/current/scene.sog"
+      },
+      {
+        "status": 200,
+        "url": "/api/v1/scenes/fix02-semantics/assets/current/scene.sog"
+      }
+    ]
+  },
+  "descriptor": {
+    "schemaVersion": 1,
+    "scene": {
+      "id": "fix02-semantics",
+      "name": "FIX-02 semantics fixture",
+      "posterUrl": null
+    },
+    "content": {
+      "url": "/api/v1/scenes/fix02-semantics/assets/current/scene.sog",
+      "format": "sog"
+    },
+    "presentation": {
+      "worldTransform": {
+        "position": null,
+        "rotation": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "scale": null
+      },
+      "initialCamera": {
+        "position": {
+          "x": 6.474756717681885,
+          "y": -0.6055655479431152,
+          "z": -0.5117838382720947
+        },
+        "target": {
+          "x": 0.06534064419030461,
+          "y": 0.5908761901657049,
+          "z": 0.006141980321132112
+        },
+        "fov": 47
+      },
+      "background": {
+        "type": "color",
+        "color": null,
+        "url": null
+      },
+      "tonemapping": "aces",
+      "highPrecisionRendering": false,
+      "postEffects": null
+    },
+    "viewpoints": [
+      {
+        "id": "b0d7a350-af14-41e0-bab1-f07f140bf521",
+        "name": "正门视角",
+        "position": {
+          "x": 3,
+          "y": 2,
+          "z": 7
+        },
+        "target": {
+          "x": 0,
+          "y": 0.5,
+          "z": 0
+        },
+        "fov": 52,
+        "orderIndex": 0,
+        "enabled": true
+      }
+    ],
+    "annotations": [
+      {
+        "id": "13fcef38-681f-42d6-bb7c-af71fee98e79",
+        "title": "标注A",
+        "description": "",
+        "anchor": {
+          "x": -0.5,
+          "y": 0.8,
+          "z": 0
+        },
+        "style": "DEFAULT",
+        "contentType": "TEXT",
+        "textContent": "标注A",
+        "mediaAssetUrl": null,
+        "textColor": "#ffffff",
+        "textSize": 24,
+        "fov": 50,
+        "cameraPosition": {
+          "x": 1,
+          "y": 1.6,
+          "z": 4.5
+        },
+        "cameraTarget": {
+          "x": -0.5,
+          "y": 0.8,
+          "z": 0
+        },
+        "cameraFov": 40,
+        "orderIndex": 0,
+        "enabled": true
+      },
+      {
+        "id": "d33bfe17-965e-4980-bbb1-0e88a7e47888",
+        "title": "标注B",
+        "description": "",
+        "anchor": {
+          "x": 0.2,
+          "y": 0.6,
+          "z": 0
+        },
+        "style": "DEFAULT",
+        "contentType": "TEXT",
+        "textContent": "标注B",
+        "mediaAssetUrl": null,
+        "textColor": "#ffffff",
+        "textSize": 24,
+        "fov": 50,
+        "cameraPosition": {
+          "x": -2,
+          "y": 1.5,
+          "z": 5
+        },
+        "cameraTarget": {
+          "x": 0.2,
+          "y": 0.6,
+          "z": 0
+        },
+        "cameraFov": 50,
+        "orderIndex": 1,
+        "enabled": true
+      },
+      {
+        "id": "2b9ebddc-509d-44a6-a6e7-0015bf0bb11b",
+        "title": "标注C",
+        "description": "",
+        "anchor": {
+          "x": 0.9,
+          "y": 0.5,
+          "z": 0
+        },
+        "style": "DEFAULT",
+        "contentType": "TEXT",
+        "textContent": "标注C",
+        "mediaAssetUrl": null,
+        "textColor": "#ffffff",
+        "textSize": 24,
+        "fov": 50,
+        "cameraPosition": {
+          "x": 0.5,
+          "y": 1.4,
+          "z": 6.5
+        },
+        "cameraTarget": {
+          "x": 0.9,
+          "y": 0.5,
+          "z": 0
+        },
+        "cameraFov": 60,
+        "orderIndex": 2,
+        "enabled": true
+      }
+    ],
+    "backgroundAudio": null,
+    "collision": null
+  }
+}

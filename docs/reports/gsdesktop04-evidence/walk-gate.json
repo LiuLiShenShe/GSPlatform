@@ -1,0 +1,345 @@
+{
+  "scenes": {
+    "safe": {
+      "scene": "gsdesktop04-walk-safe",
+      "expectedWalkAllowed": true,
+      "before": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": true,
+        "hasCollision": true,
+        "isFullscreen": false
+      },
+      "walkBtnVisible": true,
+      "afterKey": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "walk",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": true,
+        "hasCollision": true,
+        "isFullscreen": false
+      },
+      "afterUi": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": true,
+        "hasCollision": true,
+        "isFullscreen": false
+      },
+      "afterHost": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "walk",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": true,
+        "hasCollision": true,
+        "isFullscreen": false
+      },
+      "enteredWalk": true,
+      "events": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "responses": [
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/lod-meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/2_0/meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/2_0/quats.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/2_0/scales.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/2_0/sh0.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/2_0/means_l.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/2_0/means_u.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/0_0/meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/0_0/scales.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/0_0/quats.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/0_0/means_u.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/0_0/sh0.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-safe/assets/versions/w4a100000001/0_0/means_l.webp"
+          }
+        ]
+      }
+    },
+    "stale": {
+      "scene": "gsdesktop04-walk-stale",
+      "expectedWalkAllowed": false,
+      "before": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "walkBtnVisible": false,
+      "afterKey": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "afterUi": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "afterHost": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "enteredWalk": false,
+      "events": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "responses": [
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/lod-meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/2_0/meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/2_0/means_l.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/2_0/sh0.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/2_0/scales.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/2_0/means_u.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/2_0/quats.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/0_0/meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/0_0/sh0.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/0_0/means_u.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/0_0/scales.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/0_0/quats.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-stale/assets/versions/w4a100000001/0_0/means_l.webp"
+          }
+        ]
+      }
+    },
+    "uncalibrated": {
+      "scene": "gsdesktop04-walk-uncalibrated",
+      "expectedWalkAllowed": false,
+      "before": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "walkBtnVisible": false,
+      "afterKey": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "afterUi": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "afterHost": {
+        "loaded": true,
+        "progress": 100,
+        "cameraMode": "orbit",
+        "showAnnotations": true,
+        "performanceMode": true,
+        "walkAllowed": false,
+        "hasCollision": false,
+        "isFullscreen": false
+      },
+      "enteredWalk": false,
+      "events": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "responses": [
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/lod-meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/2_0/meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/2_0/means_u.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/2_0/scales.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/2_0/sh0.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/2_0/quats.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/2_0/means_l.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/0_0/meta.json"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/0_0/sh0.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/0_0/means_l.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/0_0/quats.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/0_0/means_u.webp"
+          },
+          {
+            "status": 200,
+            "url": "/api/v1/scenes/gsdesktop04-walk-uncalibrated/assets/versions/w4a100000001/0_0/scales.webp"
+          }
+        ]
+      }
+    }
+  },
+  "checks": [
+    {
+      "scene": "safe",
+      "walkAllowed": true,
+      "hasCollision": true,
+      "walkButtonVisible": true,
+      "enteredWalk": true,
+      "ok": true
+    },
+    {
+      "scene": "stale",
+      "walkAllowed": false,
+      "hasCollision": false,
+      "walkButtonVisible": false,
+      "enteredWalk": false,
+      "ok": true
+    },
+    {
+      "scene": "uncalibrated",
+      "walkAllowed": false,
+      "hasCollision": false,
+      "walkButtonVisible": false,
+      "enteredWalk": false,
+      "ok": true
+    }
+  ]
+}

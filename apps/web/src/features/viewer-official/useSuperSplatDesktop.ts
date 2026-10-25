@@ -32,8 +32,10 @@ import { applyInitialCameraPolicy } from '../../scene-runtime/initialCameraPolic
 import { setWalkGateBlocked } from '../../scene-runtime/superSplatUiCompatibility';
 import {
   assessSceneScale,
+  decideWalkSafety,
   type SceneScaleAssessment,
-} from '../../scene-runtime/sceneScale';
+  type WalkSafetyDecision,
+} from '../../scene-runtime/walkSafetyPolicy';
 import type { RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
 export type OfficialViewerStatus = 'loading' | 'ready' | 'error';
@@ -61,11 +63,16 @@ export interface OfficialDesktopViewerState {
   /** FIX-05 §22-§25：碰撞是否 STALE（世界变换在构建后改变 → 禁用 walk）。 */
   collisionStale: boolean;
   /**
-   * FIX-05 §24：有效 walk 允许 = 官方 walkAllowed AND 碰撞未 STALE。
-   * 世界变换改变后碰撞不再与场景对齐，入口必须禁用（官方 API 无法可靠重变换
-   * 碰撞几何）。STALE 时 Authoring 侧要求重建。
+   * FIX-05 §24 + GS-DESKTOP-04 §六：有效 walk 允许 = 官方 walkAllowed AND 平台闸门。
+   *
+   * 平台闸门（`decideWalkSafety`）是唯一权威来源：碰撞是否启用、是否 STALE、
+   * 官方是否真的 attach 了碰撞、以及平台尺度诊断是否通过。它同时决定「是否把
+   * 碰撞资源注入官方 Viewer」——不安全时**根本不注入**，于是官方
+   * `walkAllowed` 自身为 false，键盘 3 / WASD / 官方按钮 / 宿主 API 全部无效。
    */
   effectiveWalkAllowed: boolean;
+  /** 平台 Walk 闸门判定（诊断 / e2e 取证）。 */
+  walkSafety: WalkSafetyDecision;
   /** 碰撞工件格式（voxel = 官方体素，glb = 官方 mesh）。 */
   collisionFormat: string | null;
   /**
@@ -165,6 +172,27 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
   const [selectedGsplatformAnnotation, setSelectedGsplatformAnnotation] =
     useState<GsplatformAnnotationRef | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [walkSafety, setWalkSafety] = useState<WalkSafetyDecision>({
+    safe: false,
+    reason: 'no-collision',
+    collisionEnabled: false,
+    collisionStale: false,
+  });
+  /**
+   * GS-DESKTOP-04 §六：加载后发现平台尺度诊断不通过时，**撤销**已注入的碰撞
+   * 资源（受控重建一次，之后不再注入）。官方没有运行时移除碰撞的公开 API，
+   * 所以只能在创建时不给 `collisionUrl` —— 这保证最终状态下官方
+   * `walkAllowed === false`，键盘 3 也进不去。
+   *
+   * 记录 sceneId 是为了让「跨场景切换」自动失效（派生的 suppressCollision
+   * 立刻变回 false，不需要额外一次渲染/加载）。只会 false → true 一次，
+   * 描述符不变时第二次加载不会再次触发 → 不可能形成重建循环。
+   */
+  const [collisionSuppression, setCollisionSuppression] = useState<{
+    sceneId: string;
+    suppress: boolean;
+  }>({ sceneId, suppress: false });
+  const suppressCollision = collisionSuppression.sceneId === sceneId && collisionSuppression.suppress;
 
   // create / destroy-on-change / destroy-on-unmount（StrictMode-safe）
   useEffect(() => {
@@ -204,17 +232,22 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
         // 3) 官方 SuperSplat Runtime（desktop → auto renderer，无 iframe）
         //    ui:true = 官方 annotation hotspots/tooltip 层（SSV-06；多余 chrome
         //    由 wrapper 的 scoped CSS 隐藏）。
-        //    collisionUrl：仅在 collision.enabled 时传入 —— 关闭碰撞的场景
-        //    不向官方 viewer 注入碰撞数据（SSV-07 §2，避免默默开启 walk）。
-        //    且必须解析为绝对 URL（开发跨源 :5173 → :8001 无 /api 代理，官方
+        //
+        //    GS-DESKTOP-04 §六：`collisionUrl` 是**唯一**的 walk 安全闸门。
+        //    平台判定不安全（未启用 / STALE / 未 attach / 尺度未校准）就**不注入**
+        //    碰撞资源 —— 官方 isWalkAllowed(bbox, null) 恒为 false，键盘 3、WASD、
+        //    官方按钮、宿主 toggleWalk() 全部无效。隐藏按钮不算修复。
+        //    必须解析为绝对 URL（开发跨源 :5173 → :8001 无 /api 代理，官方
         //    viewer 直接 fetch 相对路径会 404 —— SSV-06 同款问题）。
+        const preloadWalk = decideWalkSafety({ descriptor: desc });
+        const injectCollision = preloadWalk.safe && !suppressCollision;
         const runtime = await SuperSplatRuntime.create({
           container: mount,
           contentUrl: desc.content.url,
           settings,
           posterUrl: desc.scene.posterUrl ?? undefined,
-          collisionUrl: desc.collision?.enabled && !desc.collision?.stale
-            ? resolveRuntimeAssetUrl(desc.collision.url) ?? undefined
+          collisionUrl: injectCollision
+            ? resolveRuntimeAssetUrl(desc.collision?.url) ?? undefined
             : undefined,
           mode: 'desktop',
           ui: true,
@@ -255,17 +288,35 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
           setWalkAllowed(runtime.state.walkAllowed);
           setCanStartVR(runtime.state.canStartVR);
           // SSV-07 §4：每次取帧重算尺度诊断（包围盒来自 gsplat 实例）。
-          // sceneScale.needsCalibration → Walk 入口禁用 + UI 告警。
-          const scale = assessSceneScale(runtime.getSceneBounds());
+          // GS-DESKTOP-04 §六：尺度诊断是平台 walk 闸门的一部分，不再是「只隐藏
+          // 按钮」——判定不通过时不仅隐藏入口，还会撤销已注入的碰撞资源（下面）。
+          const bounds = runtime.getSceneBounds();
+          const scale = assessSceneScale(bounds);
           setSceneScale(scale);
+          // 平台 walk 裁决（唯一权威来源）。官方 hasCollision 只有 attach 之后才为
+          // true，因此未 attach 时判定为不安全 —— 与官方 state.walkAllowed 一致。
+          const walk = decideWalkSafety({
+            descriptor: desc,
+            officialHasCollision: runtime.state.hasCollision,
+            sceneScale: scale,
+          });
+          setWalkSafety(walk);
+          // GS-DESKTOP-04 §六（根源修复）：碰撞已注入、但加载后的尺度诊断判定
+          // 「平台不可信」→ 受控重建一次且**不再注入碰撞**。之后官方
+          // `walkAllowed === false`，键盘 3 / WASD / 官方按钮 / 宿主 API 全部无效。
+          // 仅 false→true 一次，且只在已经真正加载出包围盒后判定。
+          if (
+            injectCollision &&
+            !suppressCollision &&
+            runtime.state.loaded &&
+            bounds !== null &&
+            !walk.safe
+          ) {
+            setCollisionSuppression({ sceneId: sceneIdRef.current, suppress: true });
+          }
           // GS-DESKTOP-02：官方 UI 已恢复，Walk 入口是官方 `.sse-fpsCamera`。
-          // 尺度未校准时用集中管理的安全闸门隐藏它（唯一保留的内部 class 规则），
-          // 而不是自绘第二个 Walk 按钮。碰撞 STALE 时上游直接不注入 collisionUrl，
-          // 官方 walkAllowed 本身即为 false。
-          setWalkGateBlocked(
-            mount,
-            runtime.state.loaded && (scale.needsCalibration || desc.collision?.stale === true),
-          );
+          // 该 class 现在只是 UI 提示（真正的闸门是不注入碰撞）。
+          setWalkGateBlocked(mount, runtime.state.loaded && !walk.safe);
           if (runtime.state.loaded && !cancelled) setStatus('ready');
         };
 
@@ -319,7 +370,7 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
       runtimeRef.current?.destroy();
       runtimeRef.current = null;
     };
-  }, [sceneId, reloadKey, diagnostics]);
+  }, [sceneId, reloadKey, diagnostics, suppressCollision]);
 
   // ------------------------------------------------------------------ #
   // 动作（写入官方 state 或转发官方方法）
@@ -400,14 +451,16 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
 
   const toggleWalk = useCallback(() => {
     const runtime = runtimeRef.current;
-    // FIX-05 §24：有效 walk 允许 = 官方 walkAllowed AND 碰撞未 STALE。
+    // FIX-05 §24 + GS-DESKTOP-04 §六：官方 walkAllowed 与平台闸门都要通过。
+    // 官方自己也是 `if (walkAllowed)` 才响应，这里是双保险（不写官方内部状态）。
     if (!runtime || !runtime.loaded || !runtime.walkAllowed || collisionStale) return;
+    if (!walkSafety.safe) return;
     try {
       runtime.toggleWalk(); // 官方 walk 模式（不做自建物理/控制器）
     } catch (err) {
       console.error('[viewer] toggleWalk failed', err);
     }
-  }, [collisionStale]);
+  }, [collisionStale, walkSafety]);
 
   return {
     status,
@@ -423,7 +476,8 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
     hasCollision,
     walkAllowed,
     collisionStale,
-    effectiveWalkAllowed: walkAllowed && !collisionStale,
+    effectiveWalkAllowed: walkAllowed && !collisionStale && walkSafety.safe,
+    walkSafety,
     collisionFormat,
     sceneScale,
     canStartVR,
