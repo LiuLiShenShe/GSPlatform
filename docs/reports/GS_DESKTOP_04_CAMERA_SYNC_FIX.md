@@ -422,3 +422,15 @@ python3 scripts/gsdesktop04_seed_walk_fixture.py
   （`fix(web): GS-DESKTOP-04 同会话初始视角同步官方 Reset + Walk 平台安全闸门`）
 - 未改动：历史 13M 原始 PLY、已发布 SceneVersion、生产 current 指针；未占用 GPU1。
 
+
+---
+
+## 9. 附带 P2 修复（§七）
+
+| P2 问题 | 修复 | 验证方式 |
+|---|---|---|
+| 相机提示文字被截断（1080p 下「编辑模式下可直接在 Viewer 中 Orbit / Pan / Zoom 取景，再点 Apply。」只剩一行省略号） | `.gs-props__hint` 提特异性为 `.gs-props .gs-props__hint`，`display:block` + `white-space:normal` + `overflow:visible` + `text-overflow:clip` + `max-width:100%`，覆盖 PCUI label 的 nowrap/ellipsis | 旧值实测 `scrollWidth > clientWidth` |
+| 「保存初始视角」在 1080p 下不醒目 | 新增单 token 类 `gs-props__primary`（整宽 + 600 字重 + 蓝色描边）；PCUI `class` 只吃一个 token，所以不能写成 `"a b"` | `camera-03-after-save-sync.webp` |
+| FOV 输入框没有边界 | FOV 改 `PcuiNumericInput`，`min/max/step` 直接取官方 `CAMERA_FOV_RANGE`（10–120°），提交前再 `clampFov()` 兜底 —— 非法值会被官方 `validateSettings(limits:true)` 整个场景拒绝 | `pcui-numeric-input.test.tsx` + 手动越界输入 |
+| 「媒体资产 ID」同时有 label 和 `placeholder="media asset id"`，语义重复 | 删掉 placeholder，把说明写成该字段的官方 hint：「沿用既有媒体 ACL；留空表示纯文本标注」 | 创作页标注属性面板 |
+
