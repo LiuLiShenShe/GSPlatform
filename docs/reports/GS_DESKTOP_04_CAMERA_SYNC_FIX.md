@@ -247,7 +247,7 @@ reason 顺序：no-collision → collision-disabled → collision-stale →
 | `src/features/authoring/pcui/PcuiNumericInput.tsx` | 新增 | PCUI NumericInput 宿主适配（最新闭包 + prop 回显抑制） |
 | `src/pages/SceneAuthoringPage.tsx` | 修改 | 保存 → 回读确认 → 单次受控重建 → 姿态恢复；同签名去重 |
 | `src/features/authoring/pcui/AuthoringWorkspace.tsx` | 修改 | FOV/世界变换改 `PcuiNumericInput`；同步状态与重试入口；按钮强调类 |
-| `src/features/authoring/pcui/{AnnotationProperties,ViewpointProperties,PcuiButton}.tsx` | 修改 | 同上 + PCUI `class` 单 token 修正 + 去掉重复占位符 |
+| `src/features/authoring/pcui/{AnnotationProperties,ViewpointProperties,PcuiButton}.tsx` | 修改 | 同上 + PCUI `class` 单 token 修正 + 重复占位符改为 hint 文案 |
 | `src/features/viewer-official/useSuperSplatDesktop.ts` / `useSuperSplatXR.ts` | 修改 | 共用 `decideWalkSafety`，不安全时不注入 `collisionUrl` |
 | `src/index.css` | 修改 | 长提示换行不截断；主操作强调；侧栏激活项整宽 |
 | `src/__tests__/initialCameraSync*.ts`、`walk-safety-policy.test.ts`、`pcui-numeric-input.test.tsx` | 新增 | 单测 |
