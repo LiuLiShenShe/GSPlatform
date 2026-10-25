@@ -418,6 +418,7 @@ python3 scripts/gsdesktop04_seed_walk_fixture.py
 ### 8.9 交付信息
 
 - 分支：`main`（基线 `0a403e43d9514516084b7630a5cce3429ceaaf28`）
-- 提交：`<COMMIT_SHA>`（见提交记录 `test(gsdesktop04): …`）
+- 提交：`2ac119a1ff3d1b93e3c9d10ec47295b1a67a6fe5`
+  （`fix(web): GS-DESKTOP-04 同会话初始视角同步官方 Reset + Walk 平台安全闸门`）
 - 未改动：历史 13M 原始 PLY、已发布 SceneVersion、生产 current 指针；未占用 GPU1。
 
