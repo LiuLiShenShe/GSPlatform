@@ -37,14 +37,14 @@ import {
   shouldBlockWalkEntry,
   walkAllowedByPlatform,
 } from '../scene-runtime/walkSafetyPolicy';
-import { assessSceneScale } from '../scene-runtime/sceneScale';
+import { assessSceneScale, type SceneBounds } from '../scene-runtime/sceneScale';
 import type { SceneRuntimeDescriptorV1 } from '../scene-runtime/types';
 import { runtimeDescriptorFixture } from '../scene-runtime/__fixtures__/descriptor';
 
 const COLLISION_URL = '/api/v1/scenes/x/collision.glb';
 
-const METER_BOUNDS = { min: [-5, 0, -5], max: [5, 3, 5], size: [10, 3, 10] };
-const CM_BOUNDS = { min: [0, 0, 0], max: [0.5, 0.4, 0.5], size: [0.5, 0.4, 0.5] };
+const METER_BOUNDS: SceneBounds = { min: [-5, 0, -5], max: [5, 3, 5], size: [10, 3, 10] };
+const CM_BOUNDS: SceneBounds = { min: [0, 0, 0], max: [0.5, 0.4, 0.5], size: [0.5, 0.4, 0.5] };
 
 const meterScale = assessSceneScale(METER_BOUNDS);
 const cmScale = assessSceneScale(CM_BOUNDS);
