@@ -5,6 +5,11 @@
 > 范围：修复「保存初始视角后，同会话官方 Reset 仍回旧视角」这一 P1；建立 Walk 平台安全闸门；
 > 附带的 P2（被截断提示 / 保存按钮不醒目 / FOV 输入 / 重复占位符）。
 > 硬约束：不调用 `CameraManager` 私有字段、不 monkey-patch 官方 DOM、不拦截 Reset 按钮。
+>
+> **Follow-up（2026-10-26，基线 `dbae006`）**：§10 —— 补齐两个边界：
+> ① 保存确认必须比对**完整姿态**（position + target + FOV）；
+> ② 保存期间的版本稳定性必须用**权威 SceneVersion 身份**判断，不能凭 `content.url`。
+> §1–§9 为首次执行的原始记录，其结论与证据的历史语境保持不变。
 
 ## 0. 结论速览（验收标记）
 
@@ -433,4 +438,254 @@ python3 scripts/gsdesktop04_seed_walk_fixture.py
 | 「保存初始视角」在 1080p 下不醒目 | 新增单 token 类 `gs-props__primary`（整宽 + 600 字重 + 蓝色描边）；PCUI `class` 只吃一个 token，所以不能写成 `"a b"` | `camera-03-after-save-sync.webp` |
 | FOV 输入框没有边界 | FOV 改 `PcuiNumericInput`，`min/max/step` 直接取官方 `CAMERA_FOV_RANGE`（10–120°），提交前再 `clampFov()` 兜底 —— 非法值会被官方 `validateSettings(limits:true)` 整个场景拒绝 | `pcui-numeric-input.test.tsx` + 手动越界输入 |
 | 「媒体资产 ID」同时有 label 和 `placeholder="media asset id"`，语义重复 | 删掉 placeholder，把说明写成该字段的官方 hint：「沿用既有媒体 ACL；留空表示纯文本标注」 | 创作页标注属性面板 |
+
+---
+
+## 10. Follow-up 修复（GS-DESKTOP-04 边界补齐）
+
+> 基线：`dbae006`（含 §1–§9 全部内容）｜提交见 §10.8
+> 范围：两个精确的边界缺陷，**不重做** GS-DESKTOP-04 的同步架构。
+
+### 10.1 问题 A —— 保存确认只比对位置，未比对完整姿态
+
+#### 根因
+
+`initialCameraSync.ts` 的 `savedViewMatchesDescriptor()` 只比较
+`position` 与 `target`；`SceneAuthoringPage.tsx` 的 `verifyInitialViewUsed()`
+又只看「描述符里**存在** authored 相机吗」（`runtimeInitialCameraUse`，
+它连 `saved` 参数都没用）。两处都不看 FOV，于是：
+
+- 后端只写入了 position/target 而 FOV 仍是旧值（或描述符 `fov: null`），
+  前端仍然判定「已采用」→ 弹「已保存」→ 触发受控重建 →
+  新 Viewer 的 Reset 目标带着一个**没被确认过的 FOV**；
+- FOV 单独保存（`handleSetFov`）走的是同一条宽松判定，问题完全相同。
+
+即「保存成功」这一结论在完整姿态（位置 / 目标 / FOV）上从未被确认过。
+
+#### 修复
+
+把完整姿态比较收敛成**唯一一份**纯函数契约，页面侧不再复写任何比较：
+
+- `scene-runtime/initialCameraSync.ts`
+  - 新增 `CAMERA_POSITION_TOLERANCE`（1e-4）与 `CAMERA_FOV_TOLERANCE`
+    （1e-3）—— 位置/目标用场景单位、FOV 用角度，量纲不同所以分开定义，
+    而不是一个「魔法数」同时管两者；
+  - 新增 `cameraPosesMatch()`：position + target + FOV 的完整比较
+    （`Number.isFinite` 兜底，非有限值一律不匹配）；
+  - `savedViewMatchesDescriptor()` 改为先要求描述符 FOV 是**有限数**
+    （`null` / `NaN` → 直接 false），再走 `cameraPosesMatch()`；
+  - 新增 `confirmInitialCameraSave(saved, descriptor, before, after)`
+    —— 把「写库成功之后」的判定（完整姿态 + 版本身份，见 §10.2）抽成
+    纯函数，页面只负责驱动与提示。
+- `scene-runtime/initialCameraPolicy.ts`：`runtimeInitialCameraUse()` 的
+  文档明确它**只回答面板提示**「描述符里存在 authored 相机吗」，不是保存
+  确认；保存确认一律走 `savedViewMatchesDescriptor()`，两处不得混用。
+- `pages/SceneAuthoringPage.tsx`
+  - 删掉页面内私有的 `cameraPoseEquals()`（1e-3 容差，第二套比较规则），
+    统一用 `cameraPosesMatch()`；
+  - `verifyInitialViewUsed()` 改为委托 `confirmInitialCameraSave()`，并给出
+    **分原因**的明确提示：缺少 authored 相机 / 描述符缺 FOV / 姿态不匹配；
+  - `handleSetFov()` 与普通保存合并进同一个 `persistInitialView()`，
+    FOV 单独保存不再有更宽松的确认路径。
+
+#### 确认未通过时的行为（任务 §三.5）
+
+不触发重建、不把同步状态推到 `synced`、明确告知「保存数据与运行时实际采用的
+姿态不一致」、保留「重新同步」入口（面板 `camera-sync-failed` 原有按钮）。
+
+### 10.2 问题 B —— 版本身份用 `content.url` 判断，同 URL 下换版本识别不到
+
+#### 根因
+
+保存流程用 `activeDescriptor.content.url` 比较保存前后的内容地址：
+
+```ts
+const before = activeDescriptor?.content?.url ?? null;
+…
+if (before !== null && fresh && fresh.content.url !== before) { /* 版本已切换 */ }
+```
+
+内容地址不是版本身份：**两个不同的 `SceneVersion` 可以复用同一个内容地址**
+（同一份资产被重新发布 / 回滚到相同 `asset_version`）。URL 相同时代码认为
+「版本没变」，于是把旧版本的相机姿态同步成新版本的 Reset 目标。
+
+另一个同源缺陷：`before === null` 时整个检查被跳过（`before !== null && …`），
+即「保存前没有描述符」等同于「版本稳定」。
+
+#### 权威身份来源（任务 §四.1–§四.2）
+
+`GET /scenes/{slug}/versions` 的 `currentVersionId`
+（`apps/api/app/api/v1/scene_versions.py` → `SceneVersionService.list_versions`
+→ `Scene.current_version_id`）。该端点**已经存在**，创作页的 `VersionPanel`
+就在用它 —— 不需要新的数据库字段，也不需要扩展运行时描述符契约。
+
+（备选方案 `GET /scenes/{slug}/edit-source` 的 `currentVersionId` 被否决：
+它是编辑会话专用端点，语义上把只读确认绑到「要开编辑器」上。）
+
+#### 修复
+
+- `scene-runtime/versionIdentity.ts`（新增，纯函数）
+  - `VersionIdentity = { status: 'known', versionId, contentUrl } | { status: 'unknown' }`
+    —— `contentUrl` 只作诊断，**不参与比较**；`unknown`（读取失败）绝不等于
+    「未变化」；
+  - `compareVersionIdentity(before, after)` → `'unchanged' | 'changed' | 'unknown'`，
+    只比较 `versionId`；
+  - `versionStabilityMessage()`：给用户的明确文案。
+- `pages/SceneAuthoringPage.tsx`
+  - `readVersionIdentity()`：保存前、保存后各读一次权威 `currentVersionId`
+    （`limit: 1`，最小负载）；
+  - manifest 回退场景（`resolveSceneRuntimeDescriptor` 返回
+    `fromManifest: true`，本地开发场景 `local-garden` / `ssv08-*`）根本没有
+    SceneVersion —— 这是**明确观测到的「无版本」**（`known(null)`），与
+    「读取失败」区分开，不让本地开发场景被误判成版本不稳定；
+  - `lastSavedPayloadRef` 的签名从 `content.url` 换成 `currentVersionId`；
+  - **交错保护（任务 §四.7）**：新增单调递增的 `saveGenerationRef`。任何新的
+    保存或版本切换（`handleVersionSwitched`）都会让在途的旧请求失效 ——
+    旧请求不再回写 `activeDescriptor`、不再改同步状态、不再触发重建。
+
+### 10.3 改动清单
+
+| 文件 | 类型 | 职责变化 |
+|---|---|---|
+| `src/scene-runtime/initialCameraSync.ts` | 修改 | 完整姿态容差常量 + `cameraPosesMatch()`；`savedViewMatchesDescriptor()` 纳入 FOV（缺 FOV → false）；新增 `confirmInitialCameraSave()` 纯判定链 |
+| `src/scene-runtime/versionIdentity.ts` | 新增 | `VersionIdentity` / `compareVersionIdentity()` / `versionStabilityMessage()` 纯函数 |
+| `src/pages/SceneAuthoringPage.tsx` | 修改 | 删除私有 `cameraPoseEquals`；`verifyInitialViewUsed` 委托纯判定链；普通保存与 FOV 保存合并为 `persistInitialView()`（权威版本身份前后各读一次 + 版本切换/新保存的 generation 失效保护） |
+| `src/scene-runtime/initialCameraPolicy.ts` | 修改（仅注释） | 明确 `runtimeInitialCameraUse()` 是面板提示，不是保存确认 |
+| `src/__tests__/initial-camera-sync.test.ts` | 修改 | 补 §10.4 完整姿态与 FOV 单独保存用例（16 → 26 项） |
+| `src/__tests__/version-identity.test.ts` | 新增 | 版本身份比较 + `confirmInitialCameraSave` 全部分支（24 项） |
+| `e2e/gsdesktop04-camera-sync.spec.ts` | 修改 | 新增 §10.7 版本切换真实链路用例（6 → 7 个用例） |
+
+后端**零改动**：无迁移、无模型字段变更、无描述符契约扩展。
+运行时段本 `SceneRuntimeDescriptorV1` **没有**新增版本身份字段 —— 权威身份
+已经由已存在的 `GET /versions` 提供，重复塞进描述符会造成第二份真相。
+
+### 10.4 测试结果
+
+#### 10.4.1 新增单测（`initial-camera-sync.test.ts` + `version-identity.test.ts`）
+
+`initial-camera-sync.test.ts`（26 项，原 16 项，新增 10 项）：
+
+| 用例 | 断言 |
+|---|---|
+| position 正确、target 错误 | 拒绝（`false`） |
+| position+target 正确、FOV 错误 | 拒绝 |
+| 描述符 FOV 为 `null` | 拒绝（不能确认完整姿态） |
+| 描述符 FOV 为 `NaN` | 拒绝 |
+| 完整姿态匹配 | 允许（`true`） |
+| 位置/目标/FOV 合理浮点尾差 | 仍匹配 |
+| FOV 尾差 0.01° 超出容差 | 拒绝 |
+| FOV 单独改变且后端已采用 | `resync-needed` → `adopt` → `already-synced` |
+| 后端未采用新 FOV（描述符仍是旧 FOV） | `ignored`；`syncedKey` 仍是旧目标 |
+| 后端描述符 FOV 为 `null` | `ignored`（不得重建） |
+
+`version-identity.test.ts`（24 项）：
+
+| 用例 | 断言 |
+|---|---|
+| 版本 ID 同 + URL 同 | `unchanged` |
+| 版本 ID 同 + URL 不同 | `unchanged`（身份只看版本 ID） |
+| **版本 ID 不同 + URL 相同** | **`changed`**（本轮核心反例） |
+| 版本 ID 不同 + URL 不同 | `changed` |
+| 保存前读取失败 | `unknown` |
+| 保存后读取失败 | `unknown` |
+| 两侧都失败 | `unknown` |
+| 两侧均 `null`（无版本，明确观测） | `unchanged` |
+| `null` → 有版本 / 有版本 → `null` | `changed` |
+| 用户提示文案 | `changed`/`unknown` 均含「不同步 / 重新保存」；`unchanged` 为空串 |
+| `confirmInitialCameraSave` 各分支 | `confirmed` / `not-adopted(descriptor-missing)` / `not-adopted(pose-mismatch)` / `version-unsafe(changed)` / `version-unsafe(unknown)` |
+| 姿态与版本都不通过 | 姿态问题优先报告（更接近根因） |
+| 版本变化后在新版本重新保存 | 先 `version-unsafe`，同版本重存后 `confirmed` |
+
+#### 10.4.2 回归
+
+| 关卡 | 结果 |
+|---|---|
+| `vitest run`（web，全量 41 文件） | **446 passed / 0 failed**（改动前基线 412 passed / 40 files；新增 1 测试文件 + 10 项） |
+| `tsc -b --force` | 仅 2 条**既有**报错，全部来自未触碰的 `src/__tests__/walk-safety-policy.test.ts:49-50`（`SceneBounds` 元组类型，基线 `dbae006` 上同样复现，已用 `git stash` 对照验证）；本轮改动 0 error |
+| `oxlint src` | **0 warning / 0 error** |
+| `vite build` | **ok**（56.6s；chunk >500kB 为既有告警） |
+
+### 10.4.3 关联回归（共用保存链路，独立回归）
+
+`gsnext02-initial-camera.spec.ts`（保存后回读 `/runtime` 断言 `fov` 与保存值
+一致）、`gsdesktop01-camera-stability.spec.ts`（authored 相机 / `fov` 断言）
+与 `gsdesktop02-official-ui.spec.ts`（官方 UI 交互）都跑在同一个保存确认链上。
+结果见 §10.7.2 —— 一并通过；因时间预算未跑的，明确记为「未在本轮执行」。
+
+### 10.5 未做 / 明确边界
+
+- **没有**扩展 `SceneRuntimeDescriptorV1` 加版本身份字段：权威身份已由
+  `GET /versions` 提供（见 §10.2）。
+- **没有**改动后端：无新迁移、无模型字段变更、无描述符契约变更。
+- **没有**重写 Viewer 生命周期或相机同步架构；§6 的重建纪律原样保留。
+- 未重新运行 §8.2 的后端 pytest 与真实 GPU 取证（本轮是前端保存确认链路的
+  边界修复，后端零改动；历史证据 `docs/reports/gsdesktop03-evidence/` 与
+  `gsdesktop04-evidence/gsdesktop03-phase3-after-fix.txt` **未被覆盖**）。
+- 未跑 `gsnext02-initial-camera.spec.ts` / `gsnext11-version-management.spec.ts` /
+  `gsnext12-spatial-reauthor.spec.ts`（§8.2.2 有各自的上次通过记录；本轮时间
+  预算内未重跑，**不计入**本轮通过数，验收时如需可另行补跑）。
+
+### 10.6 保留的既有行为（验收自查）
+
+| 既有行为 | 状态 |
+|---|---|
+| 官方 Reset / 键盘 `r` / 平台定位到已保存视角采用同一初始相机目标 | 不变（同步路径未动） |
+| 只有后端描述符确认采用新相机后才允许受控重建 | 收紧为「完整姿态 + 版本身份」 |
+| 保存失败不推进同步状态 | 不变（`markSaveFailed()` 保留） |
+| 重建后恢复用户原来的观察位置 | 不变（`cameraRestorePoseRef`；比较改用 `cameraPosesMatch`） |
+| 同一保存操作不重复写库 / 不重复重建 | 不变（签名 key 换成权威版本 ID） |
+| 不重置 React 页面、不改标注 / 观察点 / 媒体资产 | 不变 |
+| 一次用户动作最多一次受控重建 | 不变，且新增 generation 失效保护 |
+
+### 10.7 E2E
+
+`e2e/gsdesktop04-camera-sync.spec.ts` 新增 1 条针对性集成测试：
+
+```
+test('GS-DESKTOP-04 follow-up §四：保存期间版本切换（内容 URL 相同）→ 拒绝同步')
+```
+
+只拦截 `GET /scenes/{slug}/versions`（保存前回 V1、保存后回 V2，
+**内容 URL 保持服务端原值**），保存 / 描述符 / Viewer 全部走真实链路。
+断言：明确提示版本已切换、不出现同步进度、官方 Reset 仍回保存前的视角。
+未为此重写现有 e2e 框架（沿用 `openAuthoring` / `dragCanvas` /
+`dismissModal` / `viewerLifecycle` 等既有 helper）。
+
+#### 10.7.1 E2E 结果
+
+```
+Running 7 tests using 1 worker
+[1/7] §5.1/9 保存初始视角后，同会话官方 Reset 采用新视角且不自动跳远
+[2/7] §5.2/3 官方 Viewer Settings Reset 与键盘 Reset 都采用新视角
+[3/7] §5.4/5 Frame 之后 Reset 仍回新视角；刷新后同样回新视角
+[4/7] §5.10/12 多次保存后 WebGL context 不泄漏、无自动 Frame
+[5/7] §5.7 连续快速保存 B → D，最终 Reset 到最新保存的 D
+[6/7] §5.6/§四 保存失败后官方 Reset 仍回旧视角 A
+[7/7] follow-up §四 保存期间版本切换（内容 URL 相同）→ 拒绝同步
+  Slow test file: e2e/gsdesktop04-camera-sync.spec.ts (22.5m)
+  7 passed (22.5m)
+```
+
+新增的 follow-up 用例单独跑通用时 40.0s（先于全量跑，用于快速验证）；
+全套 7 个用例（含原有 6 个）22.5m 全通过 —— 原有 Reset / 键盘 /
+保存失败 / 连续保存 / Viewer 生命周期用例在新确认链下仍然通过。
+
+#### 10.7.2 关联回归结果
+
+| 套件 | 结果 | 用时 |
+|---|---|---|
+| `gsdesktop01-camera-stability.spec.ts` | **13/13 passed** | 9.7m |
+| `gsdesktop02-official-ui.spec.ts` | **13/13 passed** | 10.6m |
+| 合计 | **26 passed / 0 failed** | 20.3m |
+
+其中 gsdesktop02 用例 D「编辑相机 → 保存 → 重开后最终视角一致」实测重开距离
+`0.00051`，说明收紧为完整姿态确认后，「保存 → 重开」链路仍与保存值一致；
+用例 I/K（Streamed SOG / 单文件 SOG / WebGL context 不泄漏）同样通过。
+
+### 10.8 交付信息
+
+- 分支：`main`（follow-up 基线 `dbae006`）
+- 提交：见 `git log` 中 `fix(web): GS-DESKTOP-04 follow-up …`
+- 未改动：后端、数据库、已发布 SceneVersion、生产 current 指针、
+  SuperSplat 官方 Viewer 源码、历史取证证据。
 

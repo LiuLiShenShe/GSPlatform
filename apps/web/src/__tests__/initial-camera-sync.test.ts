@@ -42,27 +42,27 @@ const B: CameraPose = { position: [3.7083, 0.7145, 2.5372], target: [0.0009, 0.6
 const C: CameraPose = { position: [1.2420, 1.7603, 4.1609], target: [-0.0237, 0.5779, -0.0793], fov: 47 };
 const D: CameraPose = { position: [-1.5, 2.2, 5.0], target: [0.1, 0.4, 0.0], fov: 60 };
 
-function descriptorWith(pose: CameraPose | null): SceneRuntimeDescriptorV1 {
-  if (!pose) {
-    return {
-      ...runtimeDescriptorFixture,
-      presentation: {
-        ...runtimeDescriptorFixture.presentation,
-        initialCamera: { position: null, target: null, fov: null },
-      },
-    };
-  }
+function descriptorWithCamera(
+  initialCamera: SceneRuntimeDescriptorV1['presentation']['initialCamera'],
+): SceneRuntimeDescriptorV1 {
   return {
     ...runtimeDescriptorFixture,
     presentation: {
       ...runtimeDescriptorFixture.presentation,
-      initialCamera: {
-        position: { x: pose.position[0], y: pose.position[1], z: pose.position[2] },
-        target: { x: pose.target[0], y: pose.target[1], z: pose.target[2] },
-        fov: pose.fov,
-      },
+      initialCamera,
     },
   };
+}
+
+function descriptorWith(pose: CameraPose | null): SceneRuntimeDescriptorV1 {
+  if (!pose) {
+    return descriptorWithCamera({ position: null, target: null, fov: null });
+  }
+  return descriptorWithCamera({
+    position: { x: pose.position[0], y: pose.position[1], z: pose.position[2] },
+    target: { x: pose.target[0], y: pose.target[1], z: pose.target[2] },
+    fov: pose.fov,
+  });
 }
 
 describe('savedViewMatchesDescriptor（后端是否真的采用了该视角）', () => {
@@ -88,6 +88,74 @@ describe('savedViewMatchesDescriptor（后端是否真的采用了该视角）',
       position: [3.7083070278167725, 0.71451336145401, 2.537242889404297],
     });
     expect(savedViewMatchesDescriptor(B, noisy)).toBe(true);
+  });
+});
+
+describe('完整姿态契约（position + target + FOV，follow-up §三）', () => {
+  const saved: CameraPose = { position: [3.7, 0.7, 2.5], target: [0.0, 0.6, 0.0], fov: 47 };
+
+  it('position 正确、target 错误 → 拒绝', () => {
+    const desc = descriptorWithCamera({
+      position: { x: 3.7, y: 0.7, z: 2.5 },
+      target: { x: 0.5, y: 0.6, z: 0.0 },
+      fov: 47,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(false);
+  });
+
+  it('position、target 正确但 FOV 错误 → 拒绝（旧 FOV 不算已采用）', () => {
+    const desc = descriptorWithCamera({
+      position: { x: 3.7, y: 0.7, z: 2.5 },
+      target: { x: 0.0, y: 0.6, z: 0.0 },
+      fov: 85,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(false);
+  });
+
+  it('描述符 FOV 为 null → 不能确认完整姿态已被采用', () => {
+    const desc = descriptorWithCamera({
+      position: { x: 3.7, y: 0.7, z: 2.5 },
+      target: { x: 0.0, y: 0.6, z: 0.0 },
+      fov: null,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(false);
+  });
+
+  it('描述符 FOV 为非有限数 → 不能确认', () => {
+    const desc = descriptorWithCamera({
+      position: { x: 3.7, y: 0.7, z: 2.5 },
+      target: { x: 0.0, y: 0.6, z: 0.0 },
+      fov: Number.NaN,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(false);
+  });
+
+  it('完整姿态匹配 → 允许同步', () => {
+    const desc = descriptorWithCamera({
+      position: { x: 3.7, y: 0.7, z: 2.5 },
+      target: { x: 0.0, y: 0.6, z: 0.0 },
+      fov: 47,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(true);
+  });
+
+  it('position / target / FOV 的合理浮点尾差仍匹配', () => {
+    // 用运算生成尾差（避免写出会丢精度的字面量）：远小于 1e-4 / 1e-3 容差。
+    const desc = descriptorWithCamera({
+      position: { x: 3.7 + 1e-9, y: 0.7 - 1e-9, z: 2.5 + 1e-9 },
+      target: { x: 1e-12, y: 0.6 + 1e-9, z: -1e-12 },
+      fov: 47 + 1e-9,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(true);
+  });
+
+  it('FOV 尾差超出容差（0.01°）→ 拒绝', () => {
+    const desc = descriptorWithCamera({
+      position: { x: 3.7, y: 0.7, z: 2.5 },
+      target: { x: 0.0, y: 0.6, z: 0.0 },
+      fov: 47.01,
+    });
+    expect(savedViewMatchesDescriptor(saved, desc)).toBe(false);
   });
 });
 
@@ -165,6 +233,39 @@ describe('createInitialCameraSync（一次保存最多一次受控重建）', ()
     expect(sync.evaluate({ ...B, fov: 50 }, descriptorWith({ ...B, fov: 50 }))).toBe(
       'resync-needed',
     );
+  });
+
+  it('后端未采用新 FOV（描述符仍是旧 FOV）→ ignored，不得 synced / 不得重建', () => {
+    const sync = createInitialCameraSync();
+    // 当前 Viewer 的 Reset 目标 = B（fov 47）
+    sync.adopt(descriptorWith(B));
+    // 用户保存 { ...B, fov: 60 }，但后端描述符仍是 B
+    expect(sync.evaluate({ ...B, fov: 60 }, descriptorWith(B))).toBe('ignored');
+    sync.markSaveFailed();
+    expect(sync.evaluate({ ...B, fov: 60 }, descriptorWith(B))).toBe('ignored');
+    // 同步目标不得被推进到新 FOV，旧目标仍是 B
+    expect(sync.syncedKey()).toBe(initialCameraKey(descriptorWith(B)));
+  });
+
+  it('后端描述符 FOV 为 null（后端未采用 FOV）→ ignored，不得重建', () => {
+    const sync = createInitialCameraSync();
+    sync.adopt(descriptorWith(B));
+    const partial = descriptorWithCamera({
+      position: { x: B.position[0], y: B.position[1], z: B.position[2] },
+      target: { x: B.target[0], y: B.target[1], z: B.target[2] },
+      fov: null,
+    });
+    expect(sync.evaluate(B, partial)).toBe('ignored');
+  });
+
+  it('FOV 单独改变且后端已采用 → resync-needed（进入 synced）', () => {
+    const sync = createInitialCameraSync();
+    sync.adopt(descriptorWith(B));
+    const next: CameraPose = { ...B, fov: 60 };
+    expect(sync.evaluate(next, descriptorWith(next))).toBe('resync-needed');
+    sync.adopt(descriptorWith(next));
+    expect(sync.evaluate(next, descriptorWith(next))).toBe('already-synced');
+    expect(sync.syncedKey()).toBe(initialCameraKey(descriptorWith(next)));
   });
 
   it('C 与 B 不同：不得把 C 当成已同步目标', () => {

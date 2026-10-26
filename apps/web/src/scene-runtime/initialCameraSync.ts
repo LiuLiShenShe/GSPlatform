@@ -33,6 +33,7 @@
  *     key 变化才可能返回 resync-needed）。
  */
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
+import { compareVersionIdentity, type VersionIdentity } from './versionIdentity';
 import type { SceneRuntimeDescriptorV1 } from './types';
 
 /** 描述符初始相机的稳定 key（用于「这次保存是否需要重建」去重）。 */
@@ -45,22 +46,67 @@ export function initialCameraKey(descriptor: SceneRuntimeDescriptorV1 | null): s
   return `${p.x},${p.y},${p.z}|${t.x},${t.y},${t.z}|${fov}`;
 }
 
-/** 已保存视角（SCENE 空间）是否等于描述符里的初始相机。 */
+/**
+ * 浮点容差策略（GS-DESKTOP-04 follow-up §三）。
+ *
+ * 一次保存的 pose 要经过 `JSON.stringify`（axios）→ HTTP → Pydantic `float`
+ * → JSONB → 读回，双精度尾差远小于下列容差。位置/目标用场景单位，FOV 用
+ * 角度 —— 两者量纲不同，因此分别定义而不是写死一个「魔法数」。
+ *
+ * **这三个分量必须同时匹配**才算「后端已采用完整姿态」：只匹配位置会让
+ * 「朝向或 FOV 还没生效」的情况被误报为保存成功，并把半套姿态同步成新的
+ * Reset 目标。
+ */
+export const CAMERA_POSITION_TOLERANCE = 1e-4;
+/** FOV（度）的浮点容差；0.001° 在任何实际显示中都不可分辨。 */
+export const CAMERA_FOV_TOLERANCE = 1e-3;
+
+function near(a: number, b: number, tolerance: number): boolean {
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance;
+}
+
+/** 两个相机姿态的**完整**比较（position + target + FOV）。 */
+export function cameraPosesMatch(
+  a: CameraPose,
+  b: CameraPose,
+  positionTolerance = CAMERA_POSITION_TOLERANCE,
+  fovTolerance = CAMERA_FOV_TOLERANCE,
+): boolean {
+  return (
+    near(a.position[0], b.position[0], positionTolerance) &&
+    near(a.position[1], b.position[1], positionTolerance) &&
+    near(a.position[2], b.position[2], positionTolerance) &&
+    near(a.target[0], b.target[0], positionTolerance) &&
+    near(a.target[1], b.target[1], positionTolerance) &&
+    near(a.target[2], b.target[2], positionTolerance) &&
+    near(a.fov, b.fov, fovTolerance)
+  );
+}
+
+/**
+ * 已保存视角（SCENE 空间）是否**完整**等于描述符里的初始相机。
+ *
+ * FOV 规则（任务 §三.3）：描述符缺少 FOV（`null` / 非有限数）一律返回
+ * false —— 半套姿态不能确认「后端已采用」，否则会把旧 FOV 当成新目标。
+ */
 export function savedViewMatchesDescriptor(
   saved: CameraPose,
   descriptor: SceneRuntimeDescriptorV1 | null,
-  tolerance = 1e-4,
+  positionTolerance = CAMERA_POSITION_TOLERANCE,
+  fovTolerance = CAMERA_FOV_TOLERANCE,
 ): boolean {
   const cam = descriptor?.presentation.initialCamera;
   if (!cam?.position || !cam?.target) return false;
-  const near = (a: number, b: number) => Math.abs(a - b) <= tolerance;
-  return (
-    near(saved.position[0], cam.position.x) &&
-    near(saved.position[1], cam.position.y) &&
-    near(saved.position[2], cam.position.z) &&
-    near(saved.target[0], cam.target.x) &&
-    near(saved.target[1], cam.target.y) &&
-    near(saved.target[2], cam.target.z)
+  if (typeof cam.fov !== 'number' || !Number.isFinite(cam.fov)) return false;
+  return cameraPosesMatch(
+    saved,
+    {
+      position: [cam.position.x, cam.position.y, cam.position.z],
+      target: [cam.target.x, cam.target.y, cam.target.z],
+      fov: cam.fov,
+    },
+    positionTolerance,
+    fovTolerance,
   );
 }
 
@@ -80,6 +126,45 @@ export type InitialCameraSyncVerdict =
  *   failed   — 重建失败（保留重试入口）
  */
 export type CameraSyncStatus = 'idle' | 'syncing' | 'synced' | 'failed';
+
+/**
+ * 保存初始视角的完整确认链（GS-DESKTOP-04 follow-up §三 + §四）—— 纯函数，
+ * 页面（`SceneAuthoringPage.persistInitialView`）只负责驱动与提示。
+ *
+ * 页面侧的调用顺序是异步的（写库 → 回读描述符 → 再读版本身份），本函数把
+ * **判断规则**抽成可单测的纯逻辑，让「写库成功后」这段不再散落在 React 里：
+ *
+ *   1. 完整姿态确认：描述符必须实际采用 position + target + FOV；
+ *   2. 版本身份确认：保存前后的权威 `currentVersionId` 必须一致；
+ *   3. 两者都通过 → 允许同步当前 Viewer（由 initialCameraSync 判定是否重建）。
+ *
+ * @param saved - 刚保存的姿态（SCENE 空间）。
+ * @param descriptor - 保存后回读的运行时描述符（null = 回读失败）。
+ * @param before - 保存前记录的权威版本身份。
+ * @param after - 保存后重新读取的权威版本身份。
+ */
+export type InitialCameraSaveConfirmation =
+  /** 完整姿态 + 版本身份都确认 → 可以同步当前 Viewer。 */
+  | { status: 'confirmed' }
+  /** 描述符回读失败 / 未完整采用该姿态 → 绝不重建、绝不宣称同步成功。 */
+  | { status: 'not-adopted'; reason: 'descriptor-missing' | 'pose-mismatch' }
+  /** 保存期间版本切换 / 版本身份读取失败 → 旧姿态不得绑定到新版本。 */
+  | { status: 'version-unsafe'; stability: 'changed' | 'unknown' };
+
+export function confirmInitialCameraSave(
+  saved: CameraPose,
+  descriptor: SceneRuntimeDescriptorV1 | null,
+  before: VersionIdentity,
+  after: VersionIdentity,
+): InitialCameraSaveConfirmation {
+  if (!descriptor) return { status: 'not-adopted', reason: 'descriptor-missing' };
+  if (!savedViewMatchesDescriptor(saved, descriptor)) {
+    return { status: 'not-adopted', reason: 'pose-mismatch' };
+  }
+  const stability = compareVersionIdentity(before, after);
+  if (stability !== 'unchanged') return { status: 'version-unsafe', stability };
+  return { status: 'confirmed' };
+}
 
 /**
  * 初始相机同步状态机（纯逻辑；页面负责驱动重建）。

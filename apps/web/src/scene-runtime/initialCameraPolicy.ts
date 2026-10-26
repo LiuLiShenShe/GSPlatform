@@ -118,6 +118,10 @@ export type RuntimeInitialCameraUse =
 /**
  * 比对「已保存的初始视角」与「运行时描述符」。
  *
+ * 注意：这里只回答「描述符里**存在** authored 相机吗」（面板提示用），
+ * **不是**保存确认。保存后的完整姿态确认（position + target + FOV）一律走
+ * `initialCameraSync.savedViewMatchesDescriptor()`，两处不得混用。
+ *
  * @param savedPosition - `GET /presentation` 返回的 initialCameraPosition（null = 未保存）。
  * @param descriptor - 当前 `resolveSceneRuntimeDescriptor` 的结果（null = 尚未解析）。
  */

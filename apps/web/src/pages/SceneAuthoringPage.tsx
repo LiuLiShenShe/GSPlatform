@@ -31,13 +31,24 @@ import {
 // 闭包常量，公开 API 没有运行时更新入口；唯一受支持路径 = 用包含新视角的
 // settings 受控重建 Viewer。规则（去重/失败不重建/只换 Viewer 子树）集中在
 // initialCameraSync.ts，本页只负责驱动。
-import { createInitialCameraSync, type CameraSyncStatus } from '../scene-runtime/initialCameraSync';
+import {
+  createInitialCameraSync,
+  cameraPosesMatch,
+  confirmInitialCameraSave,
+  type CameraSyncStatus,
+  type InitialCameraSaveConfirmation,
+} from '../scene-runtime/initialCameraSync';
+import {
+  versionStabilityMessage,
+  type VersionIdentity,
+} from '../scene-runtime/versionIdentity';
 import { decideWalkSafety } from '../scene-runtime/walkSafetyPolicy';
 import { resolveRuntimeAssetUrl } from '../scene-runtime/assetUrl';import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { SceneRuntimeDescriptorV1 } from '../scene-runtime/types';
 import type { AuthoringCameraPose } from '../features/authoring/authoringTypes';
 import type { SceneViewpoint } from '../services/presentationApi';
 import type { SceneAnnotation } from '../services/annotationApi';
+import { listSceneVersions } from '../services/versionApi';
 import {
   listAnnotations,
   createAnnotation as apiCreateAnnotation,
@@ -58,20 +69,6 @@ function useDocumentTitle(title: string) {
  *
  * 类型与判定规则同源：`scene-runtime/initialCameraSync.ts`。
  */
-
-/** 两个相机 pose 是否视为同一构图（位置/朝向/FOV）。 */
-function cameraPoseEquals(a: CameraPose, b: CameraPose, tolerance = 1e-3): boolean {
-  const near = (x: number, y: number) => Math.abs(x - y) <= tolerance;
-  return (
-    near(a.position[0], b.position[0]) &&
-    near(a.position[1], b.position[1]) &&
-    near(a.position[2], b.position[2]) &&
-    near(a.target[0], b.target[0]) &&
-    near(a.target[1], b.target[1]) &&
-    near(a.target[2], b.target[2]) &&
-    near(a.fov, b.fov)
-  );
-}
 
 export default function SceneAuthoringPage() {
   const { sceneId } = useParams<{ sceneId: string }>();
@@ -96,6 +93,11 @@ export default function SceneAuthoringPage() {
 
   // GS-NEXT-02：当前预览 runtime 使用的描述符（用于「已保存≠运行时采用」提示）。
   const [activeDescriptor, setActiveDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
+  /**
+   * 当前描述符是否来自仓库级 manifest 回退（非 DB 场景）。
+   * manifest 场景没有 SceneVersion —— 版本身份因此是 `known(null)` 而不是「未知」。
+   */
+  const activeFromManifestRef = useRef(false);
 
   // GS-NEXT-11：版本切换成功后递增 —— 描述符/预览必须重新读取（不做乐观假设）。
   const [versionRevision, setVersionRevision] = useState(0);
@@ -117,6 +119,11 @@ export default function SceneAuthoringPage() {
   /** 上一次真正写入成功的「版本 + pose」签名（GS-DESKTOP-04 §三/§四：一次用户
    *  动作最多一次保存 / 一次重建；同签名重复触发直接 no-op）。 */
   const lastSavedPayloadRef = useRef<string | null>(null);
+  /**
+   * GS-DESKTOP-04 follow-up §四.7：保存请求单调编号。任何新的保存或版本切换
+   * 都会让在途的旧请求失效 —— 旧结果不得覆盖较新版本的同步状态。
+   */
+  const saveGenerationRef = useRef(0);
 
   const authoring = useSceneAuthoring(effectiveSceneId);
 
@@ -138,12 +145,13 @@ export default function SceneAuthoringPage() {
 
     const boot = async () => {
       try {
-        const { descriptor } = await resolveSceneRuntimeDescriptor(effectiveSceneId);
+        const { descriptor, fromManifest } = await resolveSceneRuntimeDescriptor(effectiveSceneId);
         if (cancelled) return;
         if (!descriptor.content.url) {
           throw new Error('场景尚未发布，无法预览');
         }
         setActiveDescriptor(descriptor);
+        activeFromManifestRef.current = fromManifest;
         const settings = buildExperienceSettings(descriptor);
         // GS-DESKTOP-04 §六：创作页预览与 /scene 走**同一个** walk 安全闸门。
         // 平台判定不安全（未校准 / STALE / 未 attach）就不注入碰撞资源，
@@ -258,15 +266,25 @@ export default function SceneAuthoringPage() {
    * 读取**最新**运行时描述符（GS-DESKTOP-04 §四：保存后必须以后端为准，
    * 不得把旧版本的视角绑定到新 SceneVersion）。
    */
-  const currentDescriptor = useCallback(async (): Promise<SceneRuntimeDescriptorV1 | null> => {
-    try {
-      const { descriptor } = await resolveSceneRuntimeDescriptor(effectiveSceneId);
-      setActiveDescriptor(descriptor);
-      return descriptor;
-    } catch {
-      return null;
-    }
-  }, [effectiveSceneId]);
+  const currentDescriptor = useCallback(
+    async (
+      options?: { updateState?: boolean },
+    ): Promise<{ descriptor: SceneRuntimeDescriptorV1; fromManifest: boolean } | null> => {
+      try {
+        const resolved = await resolveSceneRuntimeDescriptor(effectiveSceneId);
+        // GS-DESKTOP-04 follow-up §四.7：在途的旧保存请求不得回写 activeDescriptor
+        // （调用方会在检查 generation 之后自行决定是否采用）。
+        if (options?.updateState !== false) {
+          setActiveDescriptor(resolved.descriptor);
+          activeFromManifestRef.current = resolved.fromManifest;
+        }
+        return resolved;
+      } catch {
+        return null;
+      }
+    },
+    [effectiveSceneId],
+  );
 
   /**
    * 当前相机 pose —— 经 SuperSplatRuntime 封装读取（页面不触碰 app）。
@@ -309,6 +327,39 @@ export default function SceneAuthoringPage() {
   }, []);
 
   /**
+   * GS-DESKTOP-04 follow-up §四：读取**权威** SceneVersion 身份。
+   *
+   * 来源是已经存在的 `GET /scenes/{slug}/versions`（服务端直接读
+   * `Scene.current_version_id`，`VersionPanel` 同款端点）。内容 URL 只作
+   * 诊断用途，**绝不**参与比较：不同版本可能复用同一内容地址。
+   *
+   * 仓库级 manifest 场景（`fromManifest`）根本没有 SceneVersion —— 它连
+   * `GET /runtime` 都是 404 回退出来的，版本切换在该场景上不存在。这是
+   * **明确观测到的「无版本」**（`known(null)`），不是读取失败。
+   *
+   * @returns `unknown` —— 读取失败（网络 / 鉴权）。调用方必须把 unknown
+   *          当成「版本稳定性未确认」，绝不能当成「未变化」。
+   */
+  const readVersionIdentity = useCallback(
+    async (
+      descriptor: SceneRuntimeDescriptorV1 | null,
+      fromManifest: boolean,
+    ): Promise<VersionIdentity> => {
+      const contentUrl = descriptor?.content?.url ?? null;
+      if (fromManifest) {
+        return { status: 'known', versionId: null, contentUrl };
+      }
+      try {
+        const listing = await listSceneVersions(effectiveSceneId, { limit: 1 });
+        return { status: 'known', versionId: listing.currentVersionId, contentUrl };
+      } catch {
+        return { status: 'unknown' };
+      }
+    },
+    [effectiveSceneId],
+  );
+
+  /**
    * GS-NEXT-02 + GS-DESKTOP-04：保存后**必须**回读运行时描述符再宣称成功，
    * 并据其结果决定是否需要把新视角同步进当前 Viewer。
    *
@@ -318,42 +369,73 @@ export default function SceneAuthoringPage() {
    * 宣称成功，并且**只有这时**才允许触发同步重建；否则明确告知失败原因，
    * 官方 Reset 继续指向旧视角（不会把未采用的视角当成新目标）。
    *
-   * @returns true = 后端已采用该视角（可安全触发同步）。
+   * GS-DESKTOP-04 follow-up §三：确认必须是**完整姿态**（position + target +
+   * FOV），与 `createInitialCameraSync().evaluate()` 共用同一套比较规则
+   * （`confirmInitialCameraSave` → `savedViewMatchesDescriptor`）—— 页面侧
+   * 不得再写一套自己的比较逻辑。
+   *
+   * @param saved - 刚保存的姿态（SCENE 空间）。
+   * @param descriptor - 保存后回读的运行时描述符（null = 回读失败）。
+   * @param before - 保存前记录的权威版本身份。
+   * @param after - 保存后重新读取的权威版本身份。
+   * @returns 完整确认结果；`confirmed` 才允许同步当前 Viewer。
    */
-  const verifyInitialViewUsed = useCallback(async (saved: CameraPose): Promise<boolean> => {
-    let fresh: SceneRuntimeDescriptorV1 | null = null;
-    try {
-      fresh = (await resolveSceneRuntimeDescriptor(effectiveSceneId)).descriptor;
-      setActiveDescriptor(fresh);
-    } catch {
-      Modal.warning({ content: '初始视角已保存，但未能读取运行时描述符，无法确认是否已采用；当前 Viewer 的 Reset 仍是旧视角' });
-      return false;
-    }
-    const use = runtimeInitialCameraUse(
-      { x: saved.position[0], y: saved.position[1], z: saved.position[2] },
-      fresh,
-    );
-    if (use.status !== 'authored') {
-      Modal.error({
-        content:
-          '初始视角已写入数据库，但运行时未采用它：打开场景仍会使用官方默认相机。'
-          + '这通常是因为场景几何变更后空间绑定被判定为失效，需要重新校验后再次保存。',
-      });
-      return false;
-    }
-    return true;
-  }, [effectiveSceneId]);
+  const verifyInitialViewUsed = useCallback(
+    (
+      saved: CameraPose,
+      descriptor: SceneRuntimeDescriptorV1 | null,
+      before: VersionIdentity,
+      after: VersionIdentity,
+    ): InitialCameraSaveConfirmation => {
+      // 单一判定入口：与 createInitialCameraSync().evaluate() 共用
+      // savedViewMatchesDescriptor，页面不再复写任何姿态比较。
+      const check = confirmInitialCameraSave(saved, descriptor, before, after);
+      if (check.status === 'not-adopted') {
+        if (check.reason === 'descriptor-missing') {
+          Modal.warning({
+            content: '初始视角已保存，但未能读取运行时描述符，无法确认是否已采用；当前 Viewer 的 Reset 仍是旧视角',
+          });
+          return check;
+        }
+        const cam = descriptor?.presentation.initialCamera;
+        const reason =
+          !cam?.position || !cam?.target
+            ? '运行时未采用它：打开场景仍会使用官方默认相机。'
+            : typeof cam.fov !== 'number' || !Number.isFinite(cam.fov)
+              ? '运行时描述符缺少 FOV：无法确认完整姿态已被采用。'
+              : '运行时采用的姿态与保存值不一致（位置 / 目标 / FOV 至少有一项不匹配）。';
+        Modal.error({
+          content:
+            `初始视角已写入数据库，但${reason}`
+            + '这通常是因为场景几何变更后空间绑定被判定为失效，需要重新校验后再次保存。',
+        });
+        return check;
+      }
+      if (check.status === 'version-unsafe') {
+        Modal.error({ content: versionStabilityMessage(check.stability) });
+      }
+      return check;
+    },
+    [],
+  );
 
   /**
    * 保存成功后把新视角同步进**当前** Viewer（一次受控重建）。
    *
    * 只有两个条件同时成立才重建：
-   *   1. 后端描述符确认采用（verifyInitialViewUsed === true）；
+   *   1. 后端描述符确认**完整姿态**采用（verifyInitialViewUsed === true）；
    *   2. 当前 Viewer 的 Reset 目标 key ≠ 新视角（initialCameraSync 判定）。
    * 满足时记录用户当前所在视角，重建完成后恢复它 —— 保存动作不会造成跳远。
+   *
+   * @param stale - 交错保护：更新的保存 / 版本切换已经发生 → 旧请求不得再
+   *                写同步状态或触发重建（任务 §四.7）。
    */
   const syncInitialCameraIfNeeded = useCallback(
-    async (saved: CameraPose, descriptor: SceneRuntimeDescriptorV1 | null) => {
+    async (
+      saved: CameraPose,
+      descriptor: SceneRuntimeDescriptorV1 | null,
+      stale: () => boolean,
+    ) => {
       const verdict = cameraSyncState.current.evaluate(saved, descriptor);
       if (verdict === 'ignored') {
         // 已在 verifyInitialViewUsed 中明确报错；这里不做任何重建。
@@ -367,7 +449,8 @@ export default function SceneAuthoringPage() {
       }
       // resync-needed：记录「用户当时在哪」，避免重建后画面跳远。
       const current = await getCurrentPose();
-      cameraRestorePoseRef.current = current && !cameraPoseEquals(current, saved) ? current : null;
+      if (stale()) return;
+      cameraRestorePoseRef.current = current && !cameraPosesMatch(current, saved) ? current : null;
       setCameraSync('syncing');
       setCameraSyncError(null);
       // 一条消息说清两件事：视角**已保存**、且正在把这个新目标同步进当前 Viewer。
@@ -380,6 +463,89 @@ export default function SceneAuthoringPage() {
       setCameraResyncKey((k) => k + 1);
     },
     [getCurrentPose],
+  );
+
+  /**
+   * 一次初始视角保存的完整链路（普通保存与 FOV 单独保存**共用**）。
+   *
+   *   记录权威版本身份 → 去重 → 写库 → 回读描述符 →
+   *   完整姿态确认（position + target + FOV）→ 版本身份再确认 → 同步 Viewer
+   *
+   * GS-DESKTOP-04 follow-up §四.7：用单调递增的 generation 给每次保存编号。
+   * 任何更新的保存或版本切换都会让旧请求的后续步骤失效（不再改同步状态 /
+   * 不再触发重建），避免「旧版本的保存结果覆盖新版本的同步状态」。
+   */
+  const persistInitialView = useCallback(
+    async (
+      pose: CameraPose,
+      failureMessage: string,
+    ): Promise<'saved' | 'duplicate' | 'not-adopted' | 'version-changed' | 'version-unknown' | 'save-failed' | 'superseded'> => {
+      const generation = ++saveGenerationRef.current;
+      const stale = () => generation !== saveGenerationRef.current;
+
+      // 1. 保存前记录**权威 SceneVersion 身份**（不是 content.url）。
+      const beforeVersion = await readVersionIdentity(activeDescriptor, activeFromManifestRef.current);
+      if (stale()) return 'superseded';
+
+      // 2. 同一个 pose + 同一个版本重复保存是 no-op（PCUI 回显 / 双击）。
+      const payloadKey = [
+        beforeVersion.status === 'known' ? beforeVersion.versionId ?? '' : 'unknown',
+        pose.position.join(','),
+        pose.target.join(','),
+        pose.fov,
+      ].join('|');
+      if (lastSavedPayloadRef.current === payloadKey) return 'duplicate';
+
+      // 3. 写库。
+      try {
+        await authoring.setInitialView(pose);
+      } catch {
+        if (stale()) return 'superseded';
+        cameraSyncState.current.markSaveFailed();
+        setCameraSync('idle');
+        Modal.error({ content: failureMessage });
+        return 'save-failed';
+      }
+      if (stale()) return 'superseded';
+
+      // 4. 回读真实运行时描述符，并再读一次权威版本身份。
+      const resolved = await currentDescriptor({ updateState: false });
+      if (stale()) return 'superseded';
+      const fresh = resolved?.descriptor ?? null;
+      if (resolved) {
+        setActiveDescriptor(resolved.descriptor);
+        activeFromManifestRef.current = resolved.fromManifest;
+      }
+      const afterVersion = await readVersionIdentity(fresh, resolved?.fromManifest ?? false);
+      if (stale()) return 'superseded';
+
+      // 5. 单一判定：完整姿态（position + target + FOV）与版本身份都必须确认。
+      const check = verifyInitialViewUsed(pose, fresh, beforeVersion, afterVersion);
+      if (check.status === 'not-adopted') {
+        lastSavedPayloadRef.current = null;
+        setCameraSync('idle');
+        return 'not-adopted';
+      }
+      if (check.status === 'version-unsafe') {
+        // 旧版本的相机姿态绝不成为新版本的 Reset 目标，也不报告「已同步」。
+        lastSavedPayloadRef.current = null;
+        setCameraSync('idle');
+        return check.stability === 'changed' ? 'version-changed' : 'version-unknown';
+      }
+
+      // 6. 两项确认都通过才允许同步当前 Viewer。
+      lastSavedPayloadRef.current = payloadKey;
+      await syncInitialCameraIfNeeded(pose, fresh, stale);
+      return stale() ? 'superseded' : 'saved';
+    },
+    [
+      activeDescriptor,
+      authoring,
+      currentDescriptor,
+      readVersionIdentity,
+      verifyInitialViewUsed,
+      syncInitialCameraIfNeeded,
+    ],
   );
 
   /** 初始视角面板的保存走同一条「保存 → 校验运行时 → 同步 Viewer」链路。 */
@@ -395,49 +561,13 @@ export default function SceneAuthoringPage() {
       Modal.error({ content: '保存失败：Viewer 未就绪' });
       return;
     }
-    // GS-DESKTOP-04 §四：保存期间版本可能切换。记录当前版本，保存后用**新读到的**
-    // 描述符校验：若版本已变（描述符 content 变了），这个视角属于旧内容，
-    // 绝不把它同步成新版本的 Reset 目标。
-    const before = activeDescriptor?.content?.url ?? null;
-    // GS-DESKTOP-04 §三/§四：同一个 pose + 同一个版本重复保存是 no-op —— 不写库、
-    // 不重建、不弹窗。典型来源是 PCUI 控件的 prop 回显（见 PcuiNumericInput）与
-    // 双击；一次用户动作最多触发 **一次** Viewer 重建。
-    const payloadKey = [
-      before ?? '',
-      pose.position.join(','),
-      pose.target.join(','),
-      pose.fov,
-    ].join('|');
-    if (lastSavedPayloadRef.current === payloadKey) return;
-    try {
-      await authoring.setInitialView(pose);
-    } catch {
-      // 保存失败：不推进同步状态，官方 Reset 仍是旧视角（需求 §四）。
-      cameraSyncState.current.markSaveFailed();
-      setCameraSync('idle');
-      Modal.error({
-        content: '保存失败：请确认你对该场景有编辑权限，且 Viewer 已就绪',
-      });
-      return;
-    }
-    const adopted = await verifyInitialViewUsed(pose);
-    setCameraEdit(false);
-    if (!adopted) {
-      lastSavedPayloadRef.current = null;
-      setCameraSync('idle');
-      return;
-    }
-    lastSavedPayloadRef.current = payloadKey;
-    const fresh = await currentDescriptor();
-    if (before !== null && fresh && fresh.content.url !== before) {
-      Modal.error({
-        content: '保存期间场景版本已切换：这个视角属于旧版本，已不同步到当前 Viewer。请重新保存。',
-      });
-      setCameraSync('idle');
-      return;
-    }
-    await syncInitialCameraIfNeeded(pose, fresh);
-  }, [authoring, getCurrentPose, verifyInitialViewUsed, syncInitialCameraIfNeeded, currentDescriptor, cameraSync, activeDescriptor]);
+    const outcome = await persistInitialView(
+      pose,
+      '保存失败：请确认你对该场景有编辑权限，且 Viewer 已就绪',
+    );
+    // 保存动作已真正发生（不是被更新的请求取代）→ 退出编辑模式。
+    if (outcome !== 'superseded') setCameraEdit(false);
+  }, [cameraSync, getCurrentPose, persistInitialView]);
 
   /** 相机编辑模式：进入 → 复位到已保存视角 → 用户取景 → Apply / Cancel。 */
   const handleEnterCameraEdit = useCallback(() => {
@@ -460,34 +590,22 @@ export default function SceneAuthoringPage() {
     setCameraEdit(false);
   }, [handleResetToSaved]);
 
+  /**
+   * FOV 单独保存（GS-DESKTOP-04 follow-up §三.6）。
+   *
+   * 与普通初始视角保存**共用** `persistInitialView`：保存 → 回读描述符 →
+   * 完整姿态确认（FOV 本身必须实际匹配）→ 版本身份校验 → 同步 Viewer。
+   * 不得因为「只改 FOV」就走一套更宽松的确认规则。
+   */
   const handleSetFov = useCallback(async (fov: number) => {
+    if (cameraSync === 'syncing') {
+      Modal.warning({ content: '正在同步初始视角，请稍候再保存' });
+      return;
+    }
     const pose = await getCurrentPose();
     if (!pose) return;
-    const next: CameraPose = { ...pose, fov };
-    // 与保存视角同一条防线：同样的 FOV + 同样的版本不重复写入 / 不重复重建。
-    const payloadKey = [
-      activeDescriptor?.content?.url ?? '',
-      next.position.join(','),
-      next.target.join(','),
-      next.fov,
-    ].join('|');
-    if (lastSavedPayloadRef.current === payloadKey) return;
-    try {
-      await authoring.setInitialView(next);
-    } catch {
-      cameraSyncState.current.markSaveFailed();
-      Modal.error({ content: '保存 FOV 失败' });
-      return;
-    }
-    lastSavedPayloadRef.current = payloadKey;
-    const adopted = await verifyInitialViewUsed(next);
-    if (!adopted) {
-      lastSavedPayloadRef.current = null;
-      return;
-    }
-    const fresh = await currentDescriptor();
-    await syncInitialCameraIfNeeded(next, fresh);
-  }, [authoring, getCurrentPose, verifyInitialViewUsed, syncInitialCameraIfNeeded, currentDescriptor, activeDescriptor]);
+    await persistInitialView({ ...pose, fov }, '保存 FOV 失败');
+  }, [cameraSync, getCurrentPose, persistInitialView]);
 
   /**
    * 重新同步入口（任务 §三：重建失败必须保留可重试入口）。
@@ -498,8 +616,8 @@ export default function SceneAuthoringPage() {
       Modal.warning({ content: '尚未保存初始视角，无需同步' });
       return;
     }
-    const fresh = await currentDescriptor();
-    if (!fresh) {
+    const resolved = await currentDescriptor();
+    if (!resolved) {
       Modal.error({ content: '无法读取运行时描述符，请稍后重试' });
       return;
     }
@@ -723,6 +841,10 @@ export default function SceneAuthoringPage() {
    */
   const handleVersionSwitched = useCallback(
     (result: { currentVersionId: string; spatialStale: boolean }) => {
+      // GS-DESKTOP-04 follow-up §四.7：版本已切换 → 在途的旧版本保存请求失效。
+      // 它后续不得再改同步状态 / 触发重建（旧视角不属于新版本）。
+      saveGenerationRef.current += 1;
+      lastSavedPayloadRef.current = null;
       setVersionRevision((n) => n + 1);
       void authoring.refreshPresentation();
       void listAnnotations(effectiveSceneId)

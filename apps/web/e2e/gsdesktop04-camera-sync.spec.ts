@@ -582,3 +582,70 @@ test('GS-DESKTOP-04 §5.6/§四：保存失败后官方 Reset 仍回旧视角 A'
   const reset = (await readPose(page))!;
   expect(distance(reset.position, a.position)).toBeLessThan(0.05);
 });
+
+/**
+ * GS-DESKTOP-04 follow-up §四 —— 版本身份校验（真实保存链路）。
+ *
+ * 只拦截 `GET /scenes/{slug}/versions`：第一次（保存前）返回版本 V1，之后
+ * （保存后）返回 V2，且**内容 URL 完全相同**（两个版本复用同一内容地址）。
+ * 这正是「content.url 相同不能证明版本未切换」的真实反例。
+ *
+ * 期望：
+ *   - 明确提示版本已切换；
+ *   - 不出现同步进度（绝不重建当前 Viewer）；
+ *   - 官方 Reset 仍回保存前的视角 A（旧姿态不得成为新版本的目标）。
+ *
+ * 这里只替换版本端点的响应，保存/描述符/Viewer 全部走真实链路 —— 不重写
+ * 现有 e2e 框架。
+ */
+test('GS-DESKTOP-04 follow-up §四：保存期间版本切换（内容 URL 相同）→ 拒绝同步', async ({ page }) => {
+  await openAuthoring(page);
+  await pumpFrames(page, RESET_SETTLE_MS);
+  const a = (await readPose(page))!;
+
+  const V1 = '11111111-1111-4111-8111-111111111111';
+  const V2 = '22222222-2222-4222-8222-222222222222';
+  let versionCalls = 0;
+  await page.route(`${API}/${SCENE}/versions*`, async (route) => {
+    versionCalls += 1;
+    // 保存前（第 1 次）= V1；保存后（第 2 次起）= V2。
+    const versionId = versionCalls === 1 ? V1 : V2;
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      // 故意保留服务端原始 items / content URL，只替换 currentVersionId。
+      body: JSON.stringify({ ...body, currentVersionId: versionId }),
+    });
+  });
+
+  await waitForViewerIdle(page);
+  await dragCanvas(page, -220, -60);
+  const moved = (await readPose(page))!;
+  expect(distance(moved.position, a.position)).toBeGreaterThan(0.5);
+  await page.getByRole('button', { name: '将当前视角设为初始视角' }).click();
+
+  // 必须明确提示版本已切换（而不是「已保存 + 正在同步」）。
+  await page.waitForSelector('.ant-modal', { timeout: 30_000 });
+  const modalText = (await page.locator('.ant-modal').first().innerText()).replace(/\s+/g, ' ');
+  expect(modalText).toContain('版本');
+  expect(modalText).not.toContain('正在把新初始视角同步');
+  await dismissModal(page);
+
+  // 版本不安全 → 绝不触发受控重建。
+  expect(await page.locator('[data-testid="camera-sync-progress"]').count()).toBe(0);
+
+  // 官方 Reset 仍回 A：旧姿态不得成为（伪造的）新版本 Reset 目标。
+  await waitForViewerIdle(page);
+  await dragCanvas(page, 260, 90);
+  await page.locator('.sse-settings').first().click();
+  await page.waitForSelector('.sse-reset', { state: 'visible', timeout: 10_000 });
+  await page.locator('.sse-reset').first().click();
+  await pumpFrames(page, RESET_SETTLE_MS);
+  const reset = (await readPose(page))!;
+  expect(distance(reset.position, a.position)).toBeLessThan(0.05);
+
+  // 保存前后各读一次权威版本身份。
+  expect(versionCalls).toBeGreaterThanOrEqual(2);
+});
