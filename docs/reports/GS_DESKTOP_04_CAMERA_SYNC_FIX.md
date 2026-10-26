@@ -685,7 +685,7 @@ Running 7 tests using 1 worker
 ### 10.8 交付信息
 
 - 分支：`main`（follow-up 基线 `dbae006`）
-- 提交：见 `git log` 中 `fix(web): GS-DESKTOP-04 follow-up …`
+- 提交：`326953c`（`fix(web): GS-DESKTOP-04 follow-up 完整相机姿态确认 + SceneVersion 身份校验`）
 - 未改动：后端、数据库、已发布 SceneVersion、生产 current 指针、
   SuperSplat 官方 Viewer 源码、历史取证证据。
 
