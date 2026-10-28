@@ -46,6 +46,16 @@ describe('我的作品页', () => {
     expect(await screen.findByText('编辑作品 — 我的街拍作品 A')).toBeInTheDocument();
   });
 
+  it('「场景编辑」按钮跳转 3D 场景编辑器（无需重新上传）', async () => {
+    const { router } = renderApp({ route: '/works' });
+    const card = await screen.findByTestId('works-card-work-01');
+    const sceneEditBtn = within(card).getByRole('button', { name: '场景编辑' });
+    expect(sceneEditBtn).toBeEnabled();
+    await userEvent.click(sceneEditBtn);
+    // 路由跳转到编辑页，URL 携带该作品的 sceneId。
+    expect(router.state.location.pathname).toBe('/model/edit/street-scene-a');
+  });
+
   it('删除按钮触发二次确认弹窗', async () => {
     renderApp({ route: '/works' });
     const card = await screen.findByTestId('works-card-work-01');

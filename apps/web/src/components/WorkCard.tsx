@@ -12,6 +12,7 @@ import {
   Tooltip,
 } from 'antd';
 import {
+  AppstoreOutlined,
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
@@ -100,6 +101,19 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
       visibility: 'PUBLIC',
     });
     setEditing(true);
+  };
+
+  /**
+   * 打开 3D 场景编辑器（/model/edit/:sceneId）—— 与「编辑」作品信息弹窗区分：
+   * 这里直接进入标注 / 视角 / 相机等场景内容的编辑，不需要重新上传。
+   * 没有已发布场景的作品（草稿 / 处理中 / 失败）如实提示，不给死按钮链接。
+   */
+  const openSceneEditor = (): void => {
+    if (work.sceneId) {
+      navigate(`/model/edit/${work.sceneId}`);
+    } else {
+      message.info('当前状态下无已发布场景可编辑。');
+    }
   };
 
   const submitEdit = async (): Promise<void> => {
@@ -228,6 +242,17 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
               >
                 编辑
               </Button>
+              <Tooltip title="进入 3D 场景编辑器（标注 / 视角 / 相机，无需重新上传）">
+                <Button
+                  size="small"
+                  icon={<AppstoreOutlined aria-hidden />}
+                  onClick={openSceneEditor}
+                  disabled={acting}
+                  data-testid={`works-scene-edit-${work.id}`}
+                >
+                  场景编辑
+                </Button>
+              </Tooltip>
               <Tooltip title="查看处理任务（Phase 08 已接入服务端任务查询）">
                 <Button
                   size="small"
