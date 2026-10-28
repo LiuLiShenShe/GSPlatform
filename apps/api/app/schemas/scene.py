@@ -40,6 +40,14 @@ class SceneSummaryOut(BaseModel):
     posterUrl: str | None = Field(default=None, alias="posterUrl")
     manifestUrl: str | None = Field(default=None, alias="manifestUrl")
     publishedAt: datetime | None = Field(default=None, alias="publishedAt")
+    # GS-UI-01: real upload provenance, derived from the UploadSession that
+    # produced this scene. Never a converted/published artifact: ``uploadedAt``
+    # is when the original bytes were submitted and ``originalFormat`` is the
+    # extension of the uploaded file (ply / zip / …). Both are null for scenes
+    # with no recorded upload session (seeded/dev rows) — clients must hide the
+    # metadata rather than guess a value.
+    uploadedAt: datetime | None = Field(default=None, alias="uploadedAt")
+    originalFormat: str | None = Field(default=None, alias="originalFormat")
     # GS-NEXT-10: soft-deleted (recycle bin). The row and its assets still
     # exist; the owner can restore it. Never true for public listings.
     isDeleted: bool = Field(default=False, alias="isDeleted")

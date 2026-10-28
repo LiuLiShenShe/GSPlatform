@@ -83,15 +83,12 @@ async function readDiag(page: Page): Promise<Diag> {
     JSON.parse(document.querySelector('[data-testid="ov-diagnostics"]')!.textContent ?? '{}'));
 }
 
-/** 官方原生控件是否真实可见（有渲染尺寸，不是 display:none 的空壳）。 */
+/**
+ * 官方标注能力是否真实可见（有渲染尺寸，不是 display:none 的空壳）。
+ * GS-UI-01 起底部控制条由宿主承接，这里只校验不会被接管的官方标注层。
+ */
 async function officialControlVisibility(page: Page): Promise<Record<string, boolean>> {
   const selectors: Record<string, string> = {
-    controls: '.sse-controlsWrap',
-    orbit: '.sse-orbitCamera',
-    fly: '.sse-flyCamera',
-    settings: '.sse-settings',
-    info: '.sse-info',
-    fullscreen: '.sse-enterFullscreen',
     annotationNav: '.sse-annotationNav',
     hotspot: '.sse-annotation-hotspots .sse-annotation-hotspot',
   };
@@ -102,6 +99,22 @@ async function officialControlVisibility(page: Page): Promise<Record<string, boo
   }
   return out;
 }
+
+/**
+ * GS-UI-01 Req2：官方底部控制条已由宿主底部浮动控制栏**完整承接**后收起，
+ * 不允许新旧两套工具栏。这里校验：官方原能力（Reset/Frame/Settings/Info/
+ * Annotations/全屏）都还能通过宿主控制栏或官方面板真实触达。
+ */
+const HOST_TOOLBAR_TESTIDS = [
+  'ov2-toolbar',
+  'ov2-reset',
+  'ov2-mode',
+  'ov2-speed',
+  'ov2-quality',
+  'ov2-settings',
+  'ov2-help',
+  'ov2-more',
+];
 
 /** 宿主自绘重复工具条必须全部消失（这些 data-testid 曾在 SSV-03→GS-NEXT-04 使用）。 */
 const HOST_DUPLICATE_IDS = [
@@ -115,35 +128,47 @@ const HOST_DUPLICATE_IDS = [
   'ov-camera-mode',
 ];
 
-test.describe('GS-DESKTOP-02 A/B —— 官方 Viewer 原生 UI 真实可见、无重复工具栏', () => {
-  test('A/B：官方控件真实可见可点击；宿主重复控件全部消失', async ({ page }) => {
+/** 打开官方设置面板：宿主「设置」按钮转发到官方 `.sse-settings`（官方 DOM 不变）。 */
+async function openOfficialSettingsFromHost(page: Page): Promise<void> {
+  await page.locator('[data-testid="ov2-settings"]').click();
+  await page.waitForTimeout(400);
+}
+
+test.describe('GS-DESKTOP-02 A/B —— 宿主控制栏完整承接官方 Viewer UI，无重复工具栏', () => {
+  test('A/B：官方控制条收起、宿主四组控制栏可见，官方设置面板仍真实可用', async ({ page }) => {
     await openViewer(page);
 
-    const vis = await officialControlVisibility(page);
-    console.log('official control visibility:', JSON.stringify(vis));
-    // 官方 chrome 必须真实可见（有尺寸），不只是存在于 DOM。
-    for (const [name, visible] of Object.entries(vis)) {
-      expect(visible, `官方控件 ${name} 必须真实可见`).toBe(true);
+    // 官方底层控制条由宿主承接后收起（不允许两套工具栏）。
+    await expect(page.locator('.sse-controlsWrap')).toBeHidden();
+    // 宿主底部控制栏四组 + 官方能力入口必须真实可见（有尺寸）。
+    for (const id of HOST_TOOLBAR_TESTIDS) {
+      await expect(page.locator(`[data-testid="${id}"]`), `${id} 必须真实可见`).toBeVisible();
     }
+    // 官方标注导览器 / hotspot 层仍由官方渲染且可见（未回归）。
+    await expect(page.locator('.sse-annotationNav')).toBeVisible();
+    await expect(
+      page.locator('.sse-annotation-hotspots .sse-annotation-hotspot').first(),
+    ).toBeVisible();
 
-    // 官方 Reset / Frame 位于官方设置面板内（1.35.0 的实际布局）——打开设置后必须可见。
-    await page.locator('.sse-settings').first().click();
-    await page.waitForTimeout(400);
+    // 宿主「设置」转发到官方设置面板；官方 Reset / Frame 仍在其中且可见。
+    await openOfficialSettingsFromHost(page);
+    await expect(page.locator('.sse-settingsPanel')).toBeVisible();
     await expect(page.locator('.sse-reset')).toBeVisible();
     await expect(page.locator('.sse-frame')).toBeVisible();
 
-    // 官方按钮可交互（enabled + 有点击命中区域）。
-    for (const sel of ['.sse-reset', '.sse-frame', '.sse-orbitCamera', '.sse-settings', '.sse-info']) {
-      const box = await page.locator(sel).first().boundingBox();
-      expect(box, `${sel} 应有命中区域`).not.toBeNull();
+    // 宿主按钮有真实命中区域。
+    for (const id of ['ov2-reset', 'ov2-mode', 'ov2-speed', 'ov2-quality', 'ov2-settings']) {
+      const box = await page.locator(`[data-testid="${id}"]`).boundingBox();
+      expect(box, `${id} 应有命中区域`).not.toBeNull();
       expect(box!.width).toBeGreaterThan(8);
       expect(box!.height).toBeGreaterThan(8);
     }
 
-    // 宿主自绘重复工具条必须不存在（没有两套相机/显示/导航控件）。
+    // 没有旧宿主重复控件；唯一控制栏是 ov2-toolbar。
     for (const id of HOST_DUPLICATE_IDS) {
       await expect(page.locator(`[data-testid="${id}"]`)).toHaveCount(0);
     }
+    await expect(page.locator('[data-testid="ov2-toolbar"]')).toHaveCount(1);
     // 平台级导航保留：作品信息面板 + Saved Views 扩展入口。
     await expect(page.locator('[data-testid="ov-saved-views"]')).toHaveCount(1);
     await expect(page.locator('.gs-viewer__right-panel')).toBeVisible();
@@ -153,9 +178,8 @@ test.describe('GS-DESKTOP-02 A/B —— 官方 Viewer 原生 UI 真实可见、�
     await openViewer(page);
     const before = await readDiag(page);
 
-    // 官方 Reset / Frame 在设置面板内：先打开官方设置。
-    await page.locator('.sse-settings').first().click();
-    await page.waitForTimeout(400);
+    // 官方 Reset / Frame 在设置面板内：经宿主「设置」入口打开官方设置。
+    await openOfficialSettingsFromHost(page);
 
     // 官方 Reset：应回到 authored initial（夹具已保存初始视角）。
     await page.locator('.sse-reset').first().click();
@@ -194,30 +218,26 @@ test.describe('GS-DESKTOP-02 A/B —— 官方 Viewer 原生 UI 真实可见、�
     expect(distToReset, 'Reset 应恢复到初始视角').toBeLessThan(0.2);
   });
 
-  test('A/B：官方 Orbit / Fly 切换真实生效', async ({ page }) => {
+  test('A/B：查看方式切换（宿主 → 官方 Orbit / Fly）真实生效', async ({ page }) => {
     await openViewer(page);
-    await page.locator('.sse-flyCamera').first().click();
-    // 同 Annotations 开关：输入模式变更经官方事件传播，用条件轮询而非固定等待。
+    // 宿主控制栏「查看方式」转发到官方 writable cameraMode，状态由官方维护。
+    await page.getByText('自由飞行', { exact: true }).click();
     await expect.poll(async () => (await readDiag(page)).cameraMode, { timeout: 15_000 }).toBe('fly');
 
-    await page.locator('.sse-orbitCamera').first().click();
+    await page.getByText('环绕', { exact: true }).click();
     await expect.poll(async () => (await readDiag(page)).cameraMode, { timeout: 15_000 }).toBe('orbit');
   });
 
   test('A/B：官方 Settings 面板与 Annotations 开关真实可用', async ({ page }) => {
     await openViewer(page);
-    // 设置按钮打开官方设置面板（含 Annotations 显隐行）。
-    await page.locator('.sse-settings').first().click();
-    await page.waitForTimeout(400);
+    // 「设置」按钮打开官方设置面板（含 Annotations 显隐行）。
+    await openOfficialSettingsFromHost(page);
     const panelVisible = await page.locator('.sse-settingsPanel').first().isVisible();
     expect(panelVisible, '官方设置面板应可见').toBe(true);
     const annotationsRow = await page.locator('.sse-annotationsRow').first().isVisible();
     expect(annotationsRow, '官方 Annotations 开关应可见').toBe(true);
 
     // 点击官方 Annotations 行 → 官方 state.showAnnotations 翻转。
-    // 注意：翻转经官方 `showAnnotations:changed` 事件与渲染循环传播，实测在
-    // SwiftShader 负载下可延迟到 ~650ms；固定 waitForTimeout 会偶发假失败。
-    // 用条件轮询等待真实状态变更（断言本身没有放松）。
     await page.locator('.sse-annotationsRow').first().click();
     await expect
       .poll(async () => (await readDiag(page)).showAnnotations, { timeout: 15_000 })
@@ -250,13 +270,12 @@ test.describe('GS-DESKTOP-02 A/B —— 官方 Viewer 原生 UI 真实可见、�
     expect(back.number).toBe(first.number);
   });
 
-  test('A/B：没有鼠标事件遮罩吞掉官方控件（canvas 命中测试）', async ({ page }) => {
+  test('A/B：没有鼠标事件遮罩吞掉宿主/官方控件（canvas 命中测试）', async ({ page }) => {
     await openViewer(page);
-    // Reset/Frame 在官方设置面板内：打开设置后再做命中测试。
-    await page.locator('.sse-settings').first().click();
-    await page.waitForTimeout(400);
+    // 设置面板经宿主入口打开后再做命中测试（Reset/Frame 在官方设置面板内）。
+    await openOfficialSettingsFromHost(page);
     // 官方控件中心点的元素必须是控件自身或其子元素（不是宿主覆盖层）。
-    for (const sel of ['.sse-reset', '.sse-frame', '.sse-orbitCamera', '.sse-annotationNext']) {
+    for (const sel of ['.sse-reset', '.sse-frame', '.sse-annotationNext']) {
       const hit = await page.evaluate((s) => {
         const el = document.querySelector(s);
         if (!el) return null;
@@ -271,6 +290,15 @@ test.describe('GS-DESKTOP-02 A/B —— 官方 Viewer 原生 UI 真实可见、�
       console.log('hit test:', JSON.stringify(hit));
       expect(hit?.hitInside, `${sel} 不应被宿主覆盖层遮挡`).toBe(true);
     }
+    // 宿主控制栏自身也不能被遮挡。
+    const hostHit = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="ov2-toolbar"]');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return { hitInside: top ? el.contains(top) || (top as HTMLElement).contains(el) : false };
+    });
+    expect(hostHit?.hitInside, '宿主控制栏不应被遮挡').toBe(true);
   });
 });
 
@@ -309,19 +337,21 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
       const root = document.querySelector('[data-testid="scene-authoring-page"]')!;
       return {
         pcui: root.querySelectorAll('.pcui-element').length,
-        panels: root.querySelectorAll('.pcui-panel').length,
+        tabs: root.querySelectorAll('.ant-tabs-tab').length,
         buttons: root.querySelectorAll('.pcui-button').length,
         canvas: root.querySelectorAll('canvas').length,
         officialControls: root.querySelectorAll('.sse-controlsWrap').length,
+        // GS-UI-01 Req3：旧的 250px 左栏已取消，场景/标注/视角收进右侧属性面板。
         left: !!root.querySelector('.gs-workspace__left'),
         right: !!root.querySelector('.gs-workspace__right'),
       };
     });
     console.log('authoring workspace:', JSON.stringify(info));
-    expect(info.panels, 'PCUI 分组面板应存在').toBeGreaterThanOrEqual(3);
+    expect(info.tabs, '属性面板应含 场景设置/标注管理/视角管理 三个分区').toBe(3);
     expect(info.buttons, 'PCUI 控件应存在').toBeGreaterThanOrEqual(10);
     expect(info.canvas, '官方 Viewer 画布应存在').toBe(1);
-    expect(info.left && info.right).toBe(true);
+    expect(info.right, '右侧属性面板应存在').toBe(true);
+    expect(info.left, '旧左栏已移除（Viewer 面积释放）').toBe(false);
 
     // 没有第二套相机控制器：创作页不再渲染 antd 相机面板（InitialViewPanel 等）。
     await expect(page.locator('.ant-card')).toHaveCount(0);
@@ -462,7 +492,8 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
 
     let createdId: string | null = null;
     try {
-      // 进入标注放置模式（PCUI 左侧面板）。
+      // 进入标注放置模式（GS-UI-01：标注入口在右侧「标注管理」分区）。
+      await page.getByRole('tab', { name: '标注管理' }).click();
       await page.getByRole('button', { name: /添加标注/ }).click();
       await expect(page.locator('[data-testid="annotation-pick-badge"]')).toBeVisible();
 
@@ -544,12 +575,16 @@ test.describe('GS-DESKTOP-02 I/K —— Streamed SOG / 单文件 SOG / 无泄漏
         .toContain(runtime.content.format);
 
       await openViewer(page, sceneId);
+      // GS-UI-01 Req2：官方底部控制条由宿主控制栏收起，但官方能力仍真实可触达。
       const vis = await officialControlVisibility(page);
       console.log(`${runtime.content.format} official controls:`, JSON.stringify(vis));
-      expect(vis.controls && vis.settings, `${sceneId} 官方工具条应可见`).toBe(true);
+      expect(vis.annotationNav && vis.hotspot, `${sceneId} 官方标注能力应可见`).toBe(true);
+      // 宿主控制栏四组 + 官方能力入口可见（不出现第二套工具栏）。
+      await expect(page.locator('[data-testid="ov2-toolbar"]')).toBeVisible();
+      await expect(page.locator('.sse-controlsWrap')).toBeHidden();
 
-      // 主动 Reset 真实生效（单文件 / streamed 路径都不能静默失败）。
-      await page.locator('.sse-settings').first().click();
+      // 经宿主「设置」入口打开官方设置面板，Reset / Frame 仍真实可见可点。
+      await page.locator('[data-testid="ov2-settings"]').click();
       await page.waitForTimeout(400);
       await expect(page.locator('.sse-reset')).toBeVisible();
       await expect(page.locator('.sse-frame')).toBeVisible();

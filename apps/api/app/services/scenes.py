@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -91,11 +92,13 @@ def _summary_from_scene(
     is_favorited: bool = False,
     favorite_count: int | None = None,
     share_count: int | None = None,
+    upload_meta: dict[str, Any] | None = None,
 ) -> SceneSummaryOut:
     """Assemble a public summary without touching ORM internals."""
     version = scene.current_version
     size_bytes = scene.size_bytes
     size_mb = round(size_bytes / (1024 * 1024), 1) if size_bytes else None
+    meta = upload_meta or {}
     manifest_url = (
         _scene_asset_url(scene.slug, "current/manifest.json")
         if version is not None or scene.status in ("READY", "PUBLISHED")
@@ -116,6 +119,8 @@ def _summary_from_scene(
         posterUrl=resolve_poster_url(session, scene, version),
         manifestUrl=manifest_url,
         publishedAt=scene.published_at,
+        uploadedAt=meta.get("uploadedAt"),
+        originalFormat=meta.get("originalFormat"),
         updatedAt=scene.updated_at,
         # GS-NEXT-10: the owner works list needs to tell a soft-deleted scene
         # (recoverable from the recycle bin) from a missing one.
@@ -140,6 +145,7 @@ def _detail_from_scene(
         is_favorited=is_favorited,
         favorite_count=favorite_count,
         share_count=share_count,
+        upload_meta=SceneRepository(session).upload_metadata([scene.id]).get(scene.id),
     )
     return SceneDetailOut(
         **summary.model_dump(by_alias=True, exclude_none=True),
@@ -174,9 +180,15 @@ class SceneService:
             fav_ids = self._repo.favorite_ids(user_id, [s.id for s in items])
         else:
             fav_ids = set()
+        upload_meta = self._repo.upload_metadata([s.id for s in items])
         return SceneListPage(
             items=[
-                _summary_from_scene(self._session, s, is_favorited=s.id in fav_ids)
+                _summary_from_scene(
+                    self._session,
+                    s,
+                    is_favorited=s.id in fav_ids,
+                    upload_meta=upload_meta.get(s.id),
+                )
                 for s in items
             ],
             meta=PageMeta(limit=limit, nextCursor=next_cursor),
@@ -247,8 +259,12 @@ class SceneService:
             sort=sort,
             include_deleted=include_deleted,
         )
+        upload_meta = self._repo.upload_metadata([s.id for s in items])
         return SceneListPage(
-            items=[_summary_from_scene(self._session, s) for s in items],
+            items=[
+                _summary_from_scene(self._session, s, upload_meta=upload_meta.get(s.id))
+                for s in items
+            ],
             meta=PageMeta(limit=limit, nextCursor=next_cursor),
         )
 

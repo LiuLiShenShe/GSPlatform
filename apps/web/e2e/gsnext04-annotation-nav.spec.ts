@@ -162,14 +162,17 @@ test.describe('GS-NEXT-04 Desktop —— 放行的官方标注导览器', () => 
     await waitCameraNear(page, cam(2));
   });
 
-  test('GS-DESKTOP-02：官方原生 chrome 可见，且不拦截 canvas 拖拽', async ({ page }) => {
+  test('GS-UI-01：官方控制条由宿主控制栏承接，官方标注导览仍可见且不拦截 canvas 拖拽', async ({ page }) => {
     await openViewer(page);
 
-    // ① GS-DESKTOP-02：官方 chrome 现在可见（原生 UI 完整保留）。
-    await expect(page.locator('.sse-controlsWrap')).toBeVisible();
-    // 官方控件中心点不被宿主覆盖层遮挡（否则会吃掉 canvas 鼠标事件）。
+    // ① GS-UI-01：官方底部控制条收起（不允许两套工具栏），宿主控制栏可见；
+    //    官方标注导览器仍由官方渲染且可见。
+    await expect(page.locator('.sse-controlsWrap')).toBeHidden();
+    await expect(page.locator('[data-testid="ov2-toolbar"]')).toBeVisible();
+    await expect(page.locator('.sse-annotationNav')).toBeVisible();
+    // 宿主控制栏中心点命中自身（不被宿主覆盖层遮挡）。
     const hit = await page.evaluate(() => {
-      const el = document.querySelector('.sse-controlsWrap');
+      const el = document.querySelector('[data-testid="ov2-toolbar"]');
       if (!el) return null;
       const r = el.getBoundingClientRect();
       const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);

@@ -208,7 +208,7 @@ test.describe('FIX-02 §19 Desktop（authored camera / frame / reset / viewpoint
     // Frame：相机应离开 authored 初始构图（取景整个场景）。
     // GS-NEXT-10：不用固定 sleep（软件渲染下官方阻尼过渡要几十秒才收敛），改为
     // 轮询到「确实离开」为止 —— 断言本身（距离 > 1.0）没有被放松。
-    await page.locator('.sse-settings').first().click();
+    await page.locator('[data-testid="ov2-settings"]').click();
     await page.waitForTimeout(300);
     await page.locator('.sse-frame').first().click();
     const frameCam = await waitCameraAway(page, DB.initial.position, 1.0);

@@ -119,10 +119,9 @@ async function phase2() {
     return d;
   };
 
-  // 控件可见性 + 命中测试（官方控件中心点是否被宿主遮挡）
+  // GS-UI-01：官方底部控制条由宿主控制栏收起，但官方能力仍真实可触达。
+  // 这里只校验不会被接管的官方标注层（命中测试仍针对官方控件中心）。
   const selectors = {
-    controls: '.sse-controlsWrap', orbit: '.sse-orbitCamera', fly: '.sse-flyCamera',
-    settings: '.sse-settings', info: '.sse-info', fullscreen: '.sse-enterFullscreen',
     annotationNav: '.sse-annotationNav', hotspot: '.sse-annotation-hotspots .sse-annotation-hotspot',
   };
   const visibility = {};
@@ -147,7 +146,7 @@ async function phase2() {
     }, [x, y, sel]);
   };
   result.hitTests = [];
-  for (const sel of ['.sse-orbitCamera', '.sse-flyCamera', '.sse-settings', '.sse-info', '.sse-enterFullscreen', '.sse-annotationNav']) {
+  for (const sel of ['.sse-annotationNav']) {
     result.hitTests.push(await hitTest(sel));
   }
 
@@ -160,16 +159,16 @@ async function phase2() {
   await shot(page, '05-viewer-official-ui.png');
   await record('initial');
 
-  // Orbit → Fly → Orbit
-  await page.locator('.sse-flyCamera').first().click();
+  // Orbit → Fly → Orbit（经宿主「查看方式」转发到官方 cameraMode）
+  await page.getByText('自由飞行', { exact: true }).click();
   await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="ov-diagnostics"]').textContent).cameraMode === 'fly', { timeout: 10_000 });
   await record('click-fly');
-  await page.locator('.sse-orbitCamera').first().click();
+  await page.getByText('环绕', { exact: true }).click();
   await page.waitForFunction(() => JSON.parse(document.querySelector('[data-testid="ov-diagnostics"]').textContent).cameraMode === 'orbit', { timeout: 10_000 });
   await record('click-orbit');
 
-  // Settings 面板 + Frame / Reset / Annotations / Performance
-  await page.locator('.sse-settings').first().click();
+  // Settings 面板 + Frame / Reset / Annotations / Performance（经宿主「设置」转发）
+  await page.locator('[data-testid="ov2-settings"]').click();
   await page.waitForSelector('.sse-frame', { state: 'visible', timeout: 5000 });
   const panelBox = await page.locator('.sse-settingsPanel').first().boundingBox();
   result.settingsPanel = { box: panelBox, visible: true };
@@ -201,8 +200,8 @@ async function phase2() {
   const afterReset = (await diag(page)).camera;
   result.reset = { initialProfile: result.initialCamera, afterReset, error: dist(result.initialCamera.position, afterReset.position) };
 
-  // Info 面板
-  await page.locator('.sse-info').first().click();
+  // Info 面板（经宿主「帮助」转发到官方 info）
+  await page.locator('[data-testid="ov2-help"]').click();
   await page.waitForTimeout(700);
   result.infoPanel = {
     visible: await page.locator('.sse-infoPanel').first().isVisible().catch(() => false),
@@ -212,8 +211,9 @@ async function phase2() {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
 
-  // 全屏
-  await page.locator('.sse-enterFullscreen').first().click();
+  // 全屏（经宿主溢出菜单）
+  await page.locator('[data-testid="ov2-more"]').click();
+  await page.getByRole('menuitem', { name: '全屏' }).click();
   await page.waitForTimeout(1500);
   result.fullscreen = await page.evaluate(() => ({
     fullscreenElement: document.fullscreenElement?.className ?? null,
@@ -408,7 +408,7 @@ async function phase3() {
   const afterReloadLoad = await waitLoaded(page);
   await page.waitForTimeout(2500);
   out.afterReloadLoad = afterReloadLoad.camera;
-  await page.locator('.sse-settings').first().click();
+  await page.locator('[data-testid="ov2-settings"]').click();
   await page.waitForSelector('.sse-reset', { state: 'visible', timeout: 5000 });
   await page.locator('.sse-reset').first().click();
   await page.waitForTimeout(4500);
@@ -578,13 +578,16 @@ async function phase5() {
     if (w === 1920) await shot(page, '17-authoring-1920x1080.png');
     if (w === 1280) await shot(page, '18-authoring-1280x720.png');
 
-    // 三块属性面板
+    // 三块属性面板（GS-UI-01 Req3：右侧属性面板按 场景设置/标注管理/视角管理 分区）
+    await page.getByRole('tab', { name: '场景设置' }).click();
     await page.getByRole('button', { name: '初始相机', exact: true }).click();
     await page.waitForTimeout(600);
     await shot(page, w === 1920 ? '19-authoring-camera-properties.png' : `19b-camera-${tag}.png`);
+    await page.getByRole('tab', { name: '标注管理' }).click();
     await page.getByRole('button', { name: '标注A', exact: false }).first().click();
     await page.waitForTimeout(600);
     await shot(page, w === 1920 ? '20-authoring-annotation-properties.png' : `20b-annotation-${tag}.png`);
+    await page.getByRole('tab', { name: '视角管理' }).click();
     await page.getByRole('button', { name: '正门视角', exact: false }).first().click();
     await page.waitForTimeout(600);
     await shot(page, w === 1920 ? '21-authoring-viewpoint-properties.png' : `21b-viewpoint-${tag}.png`);
@@ -611,7 +614,8 @@ async function phase6() {
   const annotationsBefore = await (await page.request.get(`/api/v1/scenes/${SCENE_A}/annotations`)).json();
   out.annotationsBefore = annotationsBefore.map((a) => ({ id: a.id, title: a.title, enabled: a.enabled }));
 
-  // 进入拾取模式
+  // 进入拾取模式（GS-UI-01：标注入口在右侧「标注管理」分区）
+  await page.getByRole('tab', { name: '标注管理' }).click();
   await page.getByRole('button', { name: '＋ 添加标注' }).click();
   await page.waitForTimeout(500);
   await shot(page, '22-annotation-pick-mode.png');
@@ -843,7 +847,7 @@ async function phase7() {
   // 官方 Frame（用户主动点击）→ 全景
   const openSettings = async (target) => {
     if (!(await page.locator(target).first().isVisible().catch(() => false))) {
-      await page.locator('.sse-settings').first().click();
+      await page.locator('[data-testid="ov2-settings"]').click();
     }
     await page.waitForSelector(target, { state: 'visible', timeout: 8000 });
   };

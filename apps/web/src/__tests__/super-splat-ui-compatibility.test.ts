@@ -27,6 +27,7 @@ import {
   OFFICIAL_ANNOTATIONS_ROW_CLASS,
   OFFICIAL_INFO_BUTTON_CLASS,
   OFFICIAL_FULLSCREEN_BUTTON_CLASS,
+  OFFICIAL_PLAY_BUTTON_CLASS,
   UI_SCOPE_CLASS,
   UI_SCOPE_STYLE_ID,
   WALK_BLOCKED_CLASS,
@@ -34,6 +35,10 @@ import {
   applyUiScopeStyles,
   setWalkGateBlocked,
   validateUiCompatibility,
+  prepareOfficialUiDefaults,
+  isOfficialControlsPanelOpen,
+  setOfficialControlsToolbarHidden,
+  clickOfficialControl,
 } from '../scene-runtime/superSplatUiCompatibility';
 
 describe('SuperSplat UI Compatibility 契约（GS-DESKTOP-02）', () => {
@@ -192,5 +197,53 @@ describe('SuperSplat UI Compatibility 契约（GS-DESKTOP-02）', () => {
     const report = validateUiCompatibility(root);
     expect(report.hotspotsContainer).toBe(false);
     expect(report.hotspotCount).toBe(0);
+  });
+
+  // ------------------------------------------------------------------
+  // GS-UI-01：底部控制栏承接官方能力
+  // ------------------------------------------------------------------
+
+  it('GS-UI-01：无既有用户偏好时默认收起官方操作说明浮层；已有偏好不被覆盖', () => {
+    localStorage.removeItem('controlsPanelOpen');
+    prepareOfficialUiDefaults();
+    expect(localStorage.getItem('controlsPanelOpen')).toBe('false');
+    expect(isOfficialControlsPanelOpen()).toBe(false);
+
+    // 用户主动展开过（官方面板打开时写 true）→ 首选项被尊重。
+    localStorage.setItem('controlsPanelOpen', 'true');
+    prepareOfficialUiDefaults();
+    expect(localStorage.getItem('controlsPanelOpen')).toBe('true');
+    expect(isOfficialControlsPanelOpen()).toBe(true);
+  });
+
+  it('GS-UI-01：宿主工具栏承接时以行内 style 收起官方控制条（不走 CSS display 规则）', () => {
+    const container = document.createElement('div');
+    const controls = document.createElement('div');
+    controls.className = OFFICIAL_CONTROLS_CLASS;
+    container.appendChild(controls);
+    setOfficialControlsToolbarHidden(container, true);
+    expect(controls.style.display).toBe('none');
+    setOfficialControlsToolbarHidden(container, false);
+    expect(controls.style.display).toBe('');
+  });
+
+  it('GS-UI-01：程序点击官方按钮只转发事件，官方状态自己维护', () => {
+    const container = document.createElement('div');
+    const settings = document.createElement('button');
+    settings.className = OFFICIAL_SETTINGS_BUTTON_CLASS;
+    const info = document.createElement('button');
+    info.className = OFFICIAL_INFO_BUTTON_CLASS;
+    const play = document.createElement('button');
+    play.className = OFFICIAL_PLAY_BUTTON_CLASS;
+    const clicked: string[] = [];
+    for (const [el, name] of [[settings, 'settings'], [info, 'info'], [play, 'play']] as const) {
+      el.addEventListener('click', () => clicked.push(name));
+      container.appendChild(el);
+    }
+    expect(clickOfficialControl(container, OFFICIAL_SETTINGS_BUTTON_CLASS)).toBe(true);
+    expect(clickOfficialControl(container, OFFICIAL_INFO_BUTTON_CLASS)).toBe(true);
+    expect(clickOfficialControl(container, OFFICIAL_PLAY_BUTTON_CLASS)).toBe(true);
+    expect(clickOfficialControl(container, 'sse-does-not-exist')).toBe(false);
+    expect(clicked).toEqual(['settings', 'info', 'play']);
   });
 });

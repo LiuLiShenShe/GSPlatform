@@ -45,6 +45,9 @@ interface BackendSceneSummary {
   views: number;
   likes: number;
   posterUrl: string | null;
+  /** GS-UI-01: real upload provenance (null when no upload session recorded). */
+  uploadedAt?: string | null;
+  originalFormat?: string | null;
 }
 
 // Deterministic SVG poster fallback (project-owned, no third-party assets).
@@ -94,6 +97,8 @@ function toSceneSummary(raw: BackendSceneSummary): SceneSummary {
     likes: raw.likes,
     status,
     poster: raw.posterUrl ?? fallbackPoster(raw.id, raw.title),
+    uploadedAt: raw.uploadedAt ?? null,
+    originalFormat: raw.originalFormat ?? null,
   };
 }
 

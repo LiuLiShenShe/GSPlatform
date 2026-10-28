@@ -4,6 +4,7 @@ import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { findScene } from '../services/sceneApi';
 import type { SceneSummary } from '../fixtures/scenes';
 import { ViewerRightPanel } from '../features/viewer-shell/ViewerRightPanel';
+import { ViewerControlBar } from '../features/viewer-shell/ViewerControlBar';
 import { OfficialViewerCanvas } from '../features/viewer-official/OfficialViewerCanvas';
 import { AnnotationMediaOverlay } from '../features/viewer-official/AnnotationMediaOverlay';
 import { useSuperSplatDesktop } from '../features/viewer-official/useSuperSplatDesktop';
@@ -109,6 +110,41 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
           // Orbit/Fly/Reset/Frame/设置/帮助等原生控件明确区分。
           viewpoints={state.viewpoints}
           onSelectViewpoint={state.selectViewpoint}
+        />
+        {/* GS-UI-01：底部中央浮动控制栏 —— 四组操作全部转发到现有官方能力。
+            官方底部控制条已由 host 收起（useSuperSplatDesktop），不存在两套工具栏。 */}
+        <ViewerControlBar
+          cameraMode={state.cameraMode}
+          performanceMode={state.performanceMode}
+          moveSpeedMultiplier={state.moveSpeedMultiplier}
+          showAnnotations={state.showAnnotations}
+          isFullscreen={state.isFullscreen}
+          walkAllowed={state.effectiveWalkAllowed}
+          hasAnimation={state.hasAnimation}
+          canStartVR={state.canStartVR}
+          disabled={!state.loaded}
+          onReset={state.resetCamera}
+          onCameraMode={(mode) => {
+            // walk 必须走官方 toggleWalk（进入/退出语义 + 安全闸门）；
+            // orbit / fly 是官方 writable state，直接切换真实控制器。
+            if (mode === 'walk') {
+              if (state.effectiveWalkAllowed) state.toggleWalk();
+              return;
+            }
+            state.setCameraMode(mode);
+          }}
+          onMoveSpeed={state.setMoveSpeedMultiplier}
+          onPerformanceMode={state.setPerformanceMode}
+          onFrame={state.frameScene}
+          onToggleAnnotations={state.toggleAnnotationsVisibility}
+          onOpenSettings={state.openOfficialSettings}
+          onToggleHelp={state.toggleOfficialHelp}
+          onToggleAnimation={state.toggleAnimationPlayback}
+          onToggleFullscreen={() => {
+            if (state.isFullscreen) state.exitFullscreen();
+            else state.requestFullscreen();
+          }}
+          onEnterVR={state.enterVR}
         />
         {/* 视觉隐藏的真实运行态读数（e2e 取证：renderer / 已渲染 Gaussian 数 / 首帧） */}
         <span

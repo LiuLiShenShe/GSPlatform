@@ -15,15 +15,15 @@ test('viewer ui controls probe', async ({ browser }) => {
   await p.goto(`/scene/${SCENE}`, { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('[data-testid="scene-viewer-page"]', { timeout: 60000 }).catch(()=>{});
   await p.waitForTimeout(25000);
-  // GS-DESKTOP-02：官方原生控件 class 取代宿主 ov-* data-testid。
-  const ids = ['.sse-frame','.sse-reset','.sse-settings','[data-testid="ov-diagnostics"]','.sse-fpsCamera','.sse-enterFullscreen'];
+  // GS-UI-01：官方控制条由宿主控制栏承接；官方能力经宿主入口转发。
+  const ids = ['[data-testid="ov2-toolbar"]','[data-testid="ov2-settings"]','[data-testid="ov-diagnostics"]','.sse-annotationNav'];
   const out: Record<string, unknown> = {};
   for (const id of ids) out[id] = await p.locator(id).count().catch(()=>-1);
   out.buttons = await p.evaluate(() => Array.from(document.querySelectorAll('button')).map(b=>b.textContent?.trim()).filter(Boolean).slice(0,25));
   const diag0 = await p.evaluate(()=>document.querySelector('[data-testid="ov-diagnostics"]')?.textContent ?? null);
   out.cam0 = diag0 ? JSON.parse(diag0).camera : null;
-  // try frame
-  await p.locator('.sse-settings').first().click({ timeout: 5000 }).catch(()=>{});
+  // try frame（经宿主「设置」打开官方设置面板）
+  await p.locator('[data-testid="ov2-settings"]').first().click({ timeout: 5000 }).catch(()=>{});
   await p.waitForTimeout(400);
   const f = p.locator('.sse-frame');
   if (await f.count()) { await f.first().click().catch(()=>{}); await p.waitForTimeout(2500); }

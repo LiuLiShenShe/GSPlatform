@@ -2,6 +2,7 @@ import { App, Button, Tag, Tooltip } from 'antd';
 import { EyeOutlined, LikeOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { SceneSummary } from '../fixtures/scenes';
+import { formatOriginalFormat, formatUploadTime } from '../utils/provenance';
 import { addFavorite, removeFavorite } from '../services/favoritesApi';
 import { useAuthStore } from '../stores/authStore';
 
@@ -59,6 +60,9 @@ export function SceneCard({
     }
   };
 
+  const uploadTime = formatUploadTime(scene.uploadedAt);
+  const originalFormat = formatOriginalFormat(scene.originalFormat);
+
   return (
     <article
       className="gs-scene-card"
@@ -83,6 +87,28 @@ export function SceneCard({
             </Tag>
           )}
         </span>
+        {/* GS-UI-01：真实上传元数据浮层 —— 无记录时整体隐藏，不伪造值。
+            上传时间右上角、原始格式右下角；与左上分类/左下状态互不重叠。 */}
+        {(uploadTime || originalFormat) && (
+          <>
+            {uploadTime && (
+              <span
+                className="gs-scene-card__upload-time"
+                data-testid={`scene-upload-time-${scene.id}`}
+              >
+                {uploadTime}
+              </span>
+            )}
+            {originalFormat && (
+              <span
+                className="gs-scene-card__format"
+                data-testid={`scene-format-${scene.id}`}
+              >
+                {originalFormat}
+              </span>
+            )}
+          </>
+        )}
       </div>
       <div className="gs-scene-card__body">
         <h3 className="gs-scene-card__title">{scene.title}</h3>

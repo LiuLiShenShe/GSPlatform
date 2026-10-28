@@ -66,11 +66,71 @@ export const OFFICIAL_INFO_BUTTON_CLASS = 'sse-info';
 export const OFFICIAL_INFO_PANEL_CLASS = 'sse-infoPanel';
 /** 全屏按钮。 */
 export const OFFICIAL_FULLSCREEN_BUTTON_CLASS = 'sse-enterFullscreen';
+/** 动画播放 / 暂停按钮（只有带相机动画的场景才出现）。 */
+export const OFFICIAL_PLAY_BUTTON_CLASS = 'sse-play';
 
 /** 宿主作用域 class（施加到挂载容器，限定本层 CSS 只影响 GSPlatform 宿主）。 */
 export const UI_SCOPE_CLASS = 'gs-supersplat-host';
 /** 安全闸门 class：尺度未校准 → 隐藏官方 Walk 按钮（本层唯一的隐藏规则）。 */
 export const WALK_BLOCKED_CLASS = 'gs-walk-blocked';
+
+/**
+ * GS-UI-01：官方"操作说明"大浮层的持久化 key（官方 1.35 内部 key）。
+ *
+ * 官方默认把它**展开**（`readOpen()` = `getItem !== 'false'`），在场景中央占据
+ * 很大一块并遮挡画面。产品要求默认收起、由宿主工具条的帮助入口按需打开；
+ * 这里只在用户从未表达过偏好时写入 `false`，用户主动打开的选择会被保留。
+ */
+export const CONTROLS_PANEL_OPEN_KEY = 'controlsPanelOpen';
+
+/**
+ * 首次进入时收起官方操作说明浮层（幂等；已有用户偏好时不覆盖）。
+ * 必须在 `createViewer` **之前**调用 —— 官方只在 initUI 时读一次该 key。
+ */
+export function prepareOfficialUiDefaults(): void {
+  try {
+    if (localStorage.getItem(CONTROLS_PANEL_OPEN_KEY) === null) {
+      localStorage.setItem(CONTROLS_PANEL_OPEN_KEY, 'false');
+    }
+  } catch {
+    // 存储被禁用：官方默认展开，宿主工具条的帮助入口仍然可用。
+  }
+}
+
+/** 官方操作说明浮层当前是否展开（readOpen 语义）。 */
+export function isOfficialControlsPanelOpen(): boolean {
+  try {
+    return localStorage.getItem(CONTROLS_PANEL_OPEN_KEY) !== 'false';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 宿主工具条接管底部控制时的显隐。用行内 style 而不是作用域 CSS ——
+ * 契约测试把 `.sse-*` 的 display:none 规则数量锁死为 1（Walk 安全闸门），
+ * 这里只改官方容器自身的 style，DOM/事件/契约探测都保持不变。
+ */
+export function setOfficialControlsToolbarHidden(
+  container: HTMLElement | null,
+  hidden: boolean,
+): void {
+  if (!container) return;
+  const el = container.querySelector<HTMLElement>(`.${OFFICIAL_CONTROLS_CLASS}`);
+  if (el) el.style.display = hidden ? 'none' : '';
+}
+
+/** 以程序方式点击官方控件（宿主入口承接官方能力，不复制官方实现）。 */
+export function clickOfficialControl(
+  container: HTMLElement | null,
+  controlClass: string,
+): boolean {
+  if (!container) return false;
+  const el = container.querySelector<HTMLElement>(`.${controlClass}`);
+  if (!el) return false;
+  el.click();
+  return true;
+}
 
 /** 作用域样式 id（幂等注入）。 */
 export const UI_SCOPE_STYLE_ID = 'gs-supersplat-ui-scope';

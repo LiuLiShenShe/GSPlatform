@@ -35,7 +35,15 @@ import {
   type AdapterVec3,
 } from './SceneTransformAdapter';
 import type { ScenePickingAdapter } from './ScenePickingAdapter';
-import { applyUiScopeStyles } from './superSplatUiCompatibility';
+import {
+  applyUiScopeStyles,
+  clickOfficialControl,
+  OFFICIAL_INFO_BUTTON_CLASS,
+  OFFICIAL_PLAY_BUTTON_CLASS,
+  OFFICIAL_SETTINGS_BUTTON_CLASS,
+  prepareOfficialUiDefaults,
+  setOfficialControlsToolbarHidden,
+} from './superSplatUiCompatibility';
 import {
   buildXrDestinations,
   destinationIndexByKey,
@@ -198,6 +206,8 @@ export interface XrMenuInfo {
 export class SuperSplatRuntime implements ScenePickingAdapter {
   /** 引擎 app（只读，用于 renderer 类型 / frame.stats 诊断）。 */
   readonly app: RuntimeEngineApp;
+  /** 宿主挂载容器（官方 root / 底部控制条 / 设置入口都在其 DOM 子树内）。 */
+  readonly container: HTMLElement;
   /** 官方 Observable state（只读视图；写入被官方忽略/覆盖）。 */
   readonly state: ViewerState;
   /** 官方 annotations（settings 顺序，只读）。 */
@@ -296,6 +306,7 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     this.handle = handle;
     this.mode = viewerOptions.renderer === 'webgl' ? 'xr' : 'desktop';
     this.app = handle.app;
+    this.container = viewerOptions.container;
     this.state = handle.state;
     this.annotations = handle.annotations;
     const options = viewerOptions as CreateViewerOptions & {
@@ -324,6 +335,8 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
    */
   static async create(options: SuperSplatRuntimeOptions): Promise<SuperSplatRuntime> {
     if (options.ui) {
+      // GS-UI-01：官方操作说明浮层默认收起（用户已有偏好时不覆盖）。
+      prepareOfficialUiDefaults();
       applyUiScopeStyles(options.container);
     }
     const viewerOptions = toCreateViewerOptions(options);
@@ -396,6 +409,22 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
 
   get performanceMode(): boolean {
     return this.requiredState().performanceMode;
+  }
+
+  get showAnnotations(): boolean {
+    return this.requiredState().showAnnotations;
+  }
+
+  get hasAnimation(): boolean {
+    return this.requiredState().hasAnimation;
+  }
+
+  get hasAR(): boolean {
+    return this.requiredState().hasAR;
+  }
+
+  get hasVR(): boolean {
+    return this.requiredState().hasVR;
   }
 
   getPerformanceMode(): boolean {
@@ -614,6 +643,65 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   /** 进入/退出 walk 模式（walkAllowed 为 false 时无效）。需要 state.loaded。 */
   toggleWalk(): void {
     this.requireLive().toggleWalk();
+  }
+
+  // ------------------------------------------------------------------ #
+  // GS-UI-01：官方 chrome 宿主入口 —— 承接（而非复制）官方原生能力
+  // ------------------------------------------------------------------ #
+
+  /**
+   * 底部控制条显隐（GS-UI-01：宿主工具条接管底部控制时收起官方控制条）。
+   * 行内 style，不改官方 DOM 结构 / 事件 / 契约（.sse-* 的 CSS display:none
+   * 规则数量仍只有 Walk 安全闸门一条）。
+   */
+  setOfficialControlsToolbarHidden(hidden: boolean): void {
+    setOfficialControlsToolbarHidden(this.container, hidden);
+  }
+
+  /**
+   * 打开官方设置面板（Performance / Annotations / Gaming controls）。
+   * 以程序方式点击官方按钮 —— 官方自己维护选中态与事件。
+   */
+  openOfficialSettingsPanel(): boolean {
+    return clickOfficialControl(this.container, OFFICIAL_SETTINGS_BUTTON_CLASS);
+  }
+
+  /**
+   * 打开 / 关闭官方操作说明浮层（快捷键帮助）。官方 toggle 语义：
+   * 已展开时点击会收起，由官方按钮自己维护状态。
+   */
+  toggleOfficialHelpPanel(): boolean {
+    return clickOfficialControl(this.container, OFFICIAL_INFO_BUTTON_CLASS);
+  }
+
+  /** 官方播放 / 暂停（仅带动画的场景；官方自己处理进入 anim 模式）。 */
+  toggleOfficialAnimation(): boolean {
+    return clickOfficialControl(this.container, OFFICIAL_PLAY_BUTTON_CLASS);
+  }
+
+  /**
+   * 移动速度乘数（GS-UI-01 底部工具栏「调节速度」）。
+   *
+   * 官方 1.35.0 没有公开的速度设置 API（`InputController.moveSpeed` 是内部
+   * 属性，`handle` 不暴露）。官方唯一公开的运行时速度通道是引擎
+   * `app.timeScale`（官方 `app.on('update', dt)` 的 deltaTime 全部源自
+   * `dt *= timeScale`，相机控制器输入同源缩放）。这里写引擎公开字段
+   * `app.timeScale`，不触碰官方内部对象；undefined/非法值回 1（原速）。
+   * 范围 0.25–3，超出 clamp。
+   */
+  setMoveSpeedMultiplier(multiplier: number): void {
+    const clamped =
+      Number.isFinite(multiplier) && multiplier > 0
+        ? Math.min(Math.max(multiplier, 0.25), 3)
+        : 1;
+    if (this.app && typeof this.app.timeScale === 'number') {
+      this.app.timeScale = clamped;
+    }
+  }
+
+  getMoveSpeedMultiplier(): number {
+    const value = this.app?.timeScale;
+    return typeof value === 'number' && Number.isFinite(value) ? value : 1;
   }
 
   /** 选中第 index 个 annotation 并过渡到其相机（0-based）。需要 state.loaded。 */

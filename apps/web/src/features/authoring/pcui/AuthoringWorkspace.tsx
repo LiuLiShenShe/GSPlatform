@@ -11,13 +11,13 @@
  * `@playcanvas/pcui`（MIT）构建工作区，数据全部来自 GSPlatform 既有 API。
  * 相机/标注/观察点的业务规则仍在页面层（SceneAuthoringPage）与 scene-runtime。
  */
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Tabs } from 'antd';
 import {
   BooleanInput,
   ColorPicker,
   Divider,
   Label,
-  Panel,
   SelectInput,
   SliderInput,
   TextInput,
@@ -48,6 +48,9 @@ export type WorkspaceSelection =
   | { kind: 'viewpoint'; id: string };
 
 export type ManagementKind = 'editor' | 'versions' | 'collision';
+
+/** GS-UI-01 Req3/4：右侧属性面板的可折叠分区（场景设置 / 标注管理 / 视角管理）。 */
+export type RightPanelTab = 'scene' | 'annotation' | 'viewpoint';
 
 const TONEMAPPING_OPTIONS = [
   { t: 'None', v: 'none' },
@@ -160,6 +163,23 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
     [selection, viewpoints],
   );
 
+  // GS-UI-01 Req3：右侧面板标签页。选择变化（kind 改变）时自动跟随；
+  // 用户手动切换标签页只影响面板展示，不伪造 selection。
+  const [tab, setTab] = useState<RightPanelTab>(selection.kind);
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setTab(selection.kind);
+  }, [selection.kind]);
+
+  const sceneSections: Array<[SceneSection, string]> = [
+    ['camera', '初始相机'],
+    ['world', '世界方向'],
+    ['background', '背景'],
+    ['postfx', '后期效果'],
+    ['cover', '封面'],
+    ['audio', '背景音乐'],
+  ];
+
   return (
     <div className="gs-workspace" data-testid="scene-authoring-page">
       <header className="gs-workspace__topbar">
@@ -179,91 +199,13 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
         <PcuiButton text="Gaussian 编辑" onClick={() => props.onOpenManagement('editor')} />
         <PcuiButton text="版本历史" onClick={() => props.onOpenManagement('versions')} />
         <PcuiButton text="碰撞" onClick={() => props.onOpenManagement('collision')} />
+        <PcuiButton
+          text={collapsed ? '展开属性面板' : '收起属性面板'}
+          onClick={() => setCollapsed((value) => !value)}
+        />
       </header>
 
       <div className="gs-workspace__body">
-        {/* 左：场景 / 标注 / 视角 */}
-        <div className="gs-workspace__left">
-          <Panel headerText="场景" collapsible>
-            {(
-              [
-                ['camera', '初始相机'],
-                ['world', '世界方向'],
-                ['background', '背景'],
-                ['postfx', '后期效果'],
-                ['cover', '封面'],
-                ['audio', '背景音乐'],
-              ] as [SceneSection, string][]
-            ).map(([section, label]) => (
-              <PcuiButton
-                key={section}
-                class={
-                  selection.kind === 'scene' && selection.section === section
-                    ? 'gs-workspace__item--active'
-                    : 'gs-workspace__item'
-                }
-                text={label}
-                onClick={() => onSelect({ kind: 'scene', section })}
-              />
-            ))}
-          </Panel>
-
-          <Panel headerText="标注" collapsible>
-            <PcuiButton
-              class="gs-workspace__item"
-              text={props.picking ? '正在拾取…（取消）' : '＋ 添加标注'}
-              onClick={props.picking ? props.onCancelPicking : props.onStartPicking}
-            />
-            {annotations
-              .slice()
-              .sort((a, b) => a.orderIndex - b.orderIndex)
-              .map((a) => (
-                <div key={a.id} className="gs-workspace__row">
-                  <PcuiButton
-                    class={
-                      selection.kind === 'annotation' && selection.id === a.id
-                        ? 'gs-workspace__item--active'
-                        : 'gs-workspace__item'
-                    }
-                    text={`${a.title || '(未命名)'}${a.enabled ? '' : ' · 隐藏'}`}
-                    onClick={() => onSelect({ kind: 'annotation', id: a.id })}
-                  />
-                  <PcuiButton
-                    text={a.enabled ? '◉' : '○'}
-                    onClick={() => void props.onSaveAnnotation(a.id, { enabled: !a.enabled })}
-                  />
-                </div>
-              ))}
-          </Panel>
-
-          <Panel headerText="视角" collapsible>
-            <AddViewpointRow
-              disabled={!props.viewerReady}
-              onAdd={props.onAddViewpointFromCurrent}
-            />
-            {viewpoints
-              .slice()
-              .sort((a, b) => a.orderIndex - b.orderIndex)
-              .map((vp) => (
-                <div key={vp.id} className="gs-workspace__row">
-                  <PcuiButton
-                    class={
-                      selection.kind === 'viewpoint' && selection.id === vp.id
-                        ? 'gs-workspace__item--active'
-                        : 'gs-workspace__item'
-                    }
-                    text={`${vp.name || '(未命名)'}${vp.enabled ? '' : ' · 隐藏'}`}
-                    onClick={() => onSelect({ kind: 'viewpoint', id: vp.id })}
-                  />
-                  <PcuiButton
-                    text={vp.enabled ? '◉' : '○'}
-                    onClick={() => void props.onToggleViewpoint(vp.id, !vp.enabled)}
-                  />
-                </div>
-              ))}
-          </Panel>
-        </div>
-
         {/* 中：官方 viewer + 相机编辑 / 标注拾取状态 */}
         <div
           className={`gs-workspace__viewer${props.picking ? ' gs-workspace__viewer--picking' : ''}${
@@ -292,37 +234,158 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
           )}
         </div>
 
-        {/* 右：属性 */}
-        <div className="gs-workspace__right">
-          {selection.kind === 'annotation' && selectedAnnotation && (
-            <AnnotationProperties
-              annotation={selectedAnnotation}
-              saving={props.annotationsSaving}
-              onSave={props.onSaveAnnotation}
-              onDelete={props.onDeleteAnnotation}
-              onMove={props.onMoveAnnotation}
-              onNavigate={props.onNavigateAnnotation}
-              onCaptureCamera={props.onCaptureAnnotationCamera}
+        {/* 右：属性面板（分区标签页 + 折叠，Req3 §5.1） */}
+        {!collapsed && (
+          <aside
+            className="gs-workspace__right"
+            data-testid="authoring-panel"
+            aria-label="场景属性面板"
+          >
+            <Tabs
+              className="gs-workspace__tabs"
+              activeKey={tab}
+              onChange={(next) => {
+                setTab(next as RightPanelTab);
+                // 切到「场景设置」时必须有一份场景分区选择，否则面板无内容。
+                if (next === 'scene' && selection.kind !== 'scene') {
+                  onSelect({ kind: 'scene', section: 'camera' });
+                }
+              }}
+              items={[
+                {
+                  key: 'scene',
+                  label: '场景设置',
+                  // 保留各分区 DOM/草稿状态，切换标签不丢未提交输入。
+                  forceRender: true,
+                  children: (
+                    <>
+                      <div className="gs-workspace__chips" role="group" aria-label="场景设置分区">
+                        {sceneSections.map(([section, label]) => (
+                          <button
+                            key={section}
+                            type="button"
+                            className={
+                              selection.kind === 'scene' && selection.section === section
+                                ? 'gs-workspace__chip gs-workspace__chip--active'
+                                : 'gs-workspace__chip'
+                            }
+                            aria-pressed={selection.kind === 'scene' && selection.section === section}
+                            onClick={() => onSelect({ kind: 'scene', section })}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                      {selection.kind === 'scene' && (
+                        <SceneProperties {...props} section={selection.section} />
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  key: 'annotation',
+                  label: '标注管理',
+                  // 保留各分区 DOM/草稿状态，切换标签不丢未提交输入。
+                  forceRender: true,
+                  children: (
+                    <div className="gs-workspace__panel-list">
+                      <PcuiButton
+                        class="gs-workspace__item"
+                        text={props.picking ? '正在拾取…（取消）' : '＋ 添加标注'}
+                        onClick={props.picking ? props.onCancelPicking : props.onStartPicking}
+                      />
+                      {annotations.length === 0 && (
+                        <Label class="gs-props__hint" text="还没有标注；点「＋ 添加标注」后在画面中点击放置。" />
+                      )}
+                      {annotations
+                        .slice()
+                        .sort((a, b) => a.orderIndex - b.orderIndex)
+                        .map((a) => (
+                          <div key={a.id} className="gs-workspace__row">
+                            <PcuiButton
+                              class={
+                                selection.kind === 'annotation' && selection.id === a.id
+                                  ? 'gs-workspace__item--active'
+                                  : 'gs-workspace__item'
+                              }
+                              text={`${a.title || '(未命名)'}${a.enabled ? '' : ' · 隐藏'}`}
+                              onClick={() => onSelect({ kind: 'annotation', id: a.id })}
+                            />
+                            <PcuiButton
+                              text={a.enabled ? '◉' : '○'}
+                              onClick={() => void props.onSaveAnnotation(a.id, { enabled: !a.enabled })}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'viewpoint',
+                  label: '视角管理',
+                  // 保留各分区 DOM/草稿状态，切换标签不丢未提交输入。
+                  forceRender: true,
+                  children: (
+                    <div className="gs-workspace__panel-list">
+                      <AddViewpointRow
+                        disabled={!props.viewerReady}
+                        onAdd={props.onAddViewpointFromCurrent}
+                      />
+                      {viewpoints.length === 0 && (
+                        <Label class="gs-props__hint" text="还没有观察点；移动相机后点「保存当前视角」。" />
+                      )}
+                      {viewpoints
+                        .slice()
+                        .sort((a, b) => a.orderIndex - b.orderIndex)
+                        .map((vp) => (
+                          <div key={vp.id} className="gs-workspace__row">
+                            <PcuiButton
+                              class={
+                                selection.kind === 'viewpoint' && selection.id === vp.id
+                                  ? 'gs-workspace__item--active'
+                                  : 'gs-workspace__item'
+                              }
+                              text={`${vp.name || '(未命名)'}${vp.enabled ? '' : ' · 隐藏'}`}
+                              onClick={() => onSelect({ kind: 'viewpoint', id: vp.id })}
+                            />
+                            <PcuiButton
+                              text={vp.enabled ? '◉' : '○'}
+                              onClick={() => void props.onToggleViewpoint(vp.id, !vp.enabled)}
+                            />
+                          </div>
+                        ))}
+                    </div>
+                  ),
+                },
+              ]}
             />
-          )}
-          {selection.kind === 'viewpoint' && selectedViewpoint && (
-            <ViewpointProperties
-              viewpoint={selectedViewpoint}
-              saving={props.authoringSaving}
-              onRename={props.onRenameViewpoint}
-              onToggleEnabled={props.onToggleViewpoint}
-              onDelete={props.onDeleteViewpoint}
-              onMove={props.onMoveViewpoint}
-              onNavigate={props.onNavigateViewpoint}
-              onGetCurrentPose={props.getCurrentPose}
-              onUpdatePose={props.onUpdateViewpointPose}
-              onSetActive={props.onSetActiveViewpoint}
-            />
-          )}
-          {selection.kind === 'scene' && (
-            <SceneProperties {...props} section={selection.section} />
-          )}
-        </div>
+            {tab === 'annotation' && selectedAnnotation && (
+              <AnnotationProperties
+                annotation={selectedAnnotation}
+                saving={props.annotationsSaving}
+                onSave={props.onSaveAnnotation}
+                onDelete={props.onDeleteAnnotation}
+                onMove={props.onMoveAnnotation}
+                onNavigate={props.onNavigateAnnotation}
+                onCaptureCamera={props.onCaptureAnnotationCamera}
+              />
+            )}
+            {tab === 'viewpoint' && selectedViewpoint && (
+              <ViewpointProperties
+                viewpoint={selectedViewpoint}
+                saving={props.authoringSaving}
+                onRename={props.onRenameViewpoint}
+                onToggleEnabled={props.onToggleViewpoint}
+                onDelete={props.onDeleteViewpoint}
+                onMove={props.onMoveViewpoint}
+                onNavigate={props.onNavigateViewpoint}
+                onGetCurrentPose={props.getCurrentPose}
+                onUpdatePose={props.onUpdateViewpointPose}
+                onSetActive={props.onSetActiveViewpoint}
+              />
+            )}
+          </aside>
+        )}
       </div>
     </div>
   );

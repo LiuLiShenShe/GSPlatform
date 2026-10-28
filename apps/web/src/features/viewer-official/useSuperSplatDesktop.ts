@@ -57,6 +57,10 @@ export interface OfficialDesktopViewerState {
   performanceMode: boolean;
   showAnnotations: boolean;
   isFullscreen: boolean;
+  /** GS-UI-01：底部工具栏「调节速度」的当前乘数（官方 timeScale）。 */
+  moveSpeedMultiplier: number;
+  /** 场景是否带官方相机动画（决定播放/暂停入口是否出现）。 */
+  hasAnimation: boolean;
   hasCollision: boolean;
   /** 官方 walkAllowed —— 碰撞已加载且场景足够大（官方 state.walkAllowed）。 */
   walkAllowed: boolean;
@@ -109,6 +113,18 @@ export interface OfficialDesktopViewerState {
   setCameraMode: (mode: RuntimeCameraMode) => void;
   /** 切换 performanceMode（官方 state 写入）。 */
   togglePerformanceMode: () => void;
+  /** GS-UI-01：设置高清（关闭性能模式）/ 流畅（开启性能模式）。 */
+  setPerformanceMode: (enabled: boolean) => void;
+  /** GS-UI-01：移动速度乘数（0.25–3；官方 timeScale 通道）。 */
+  setMoveSpeedMultiplier: (multiplier: number) => void;
+  /** 打开官方设置面板（宿主入口承接官方能力）。 */
+  openOfficialSettings: () => void;
+  /** 打开/关闭官方操作说明（快捷键帮助）。 */
+  toggleOfficialHelp: () => void;
+  /** 官方播放 / 暂停（带动画的场景）。 */
+  toggleAnimationPlayback: () => void;
+  /** 进入原生 VR（canStartVR 时才应由 UI 提供入口）。 */
+  enterVR: () => void;
   /** 切换 annotation 可见性（官方 state 写入）。 */
   toggleAnnotationsVisibility: () => void;
   /** 进入/退出 walk 模式（官方 toggleWalk；walkAllowed 为 false 时无效）。 */
@@ -156,6 +172,8 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
   const [performanceMode, setPerformanceModeState] = useState(false);
   const [showAnnotations, setShowAnnotationsState] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [moveSpeedMultiplier, setMoveSpeedMultiplierState] = useState(1);
+  const [hasAnimation, setHasAnimation] = useState(false);
   const [hasCollision, setHasCollision] = useState(false);
   const [walkAllowed, setWalkAllowed] = useState(false);
   const [collisionStale, setCollisionStale] = useState(false);
@@ -260,6 +278,10 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
           return;
         }
         runtimeRef.current = runtime;
+        // GS-UI-01：宿主底部工具栏完整承接官方控制条的四组功能后，官方控制条
+        // 收起 —— 不允许新旧两套工具栏。官方设置/信息/全屏等入口仍由宿主
+        // 工具栏转发到官方面板（见 openOfficialSettings / toggleOfficialHelp）。
+        runtime.setOfficialControlsToolbarHidden(true);
         // DEV-only 调试把柄（生产构建 import.meta.env.DEV=false，不输出）。
         // e2e 用 window.__gsruntime 直接探查官方 app/实体树。
         if (import.meta.env.DEV) {
@@ -284,6 +306,8 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
           setPerformanceModeState(runtime.state.performanceMode);
           setShowAnnotationsState(runtime.state.showAnnotations);
           setIsFullscreen(runtime.state.isFullscreen);
+          setMoveSpeedMultiplierState(runtime.getMoveSpeedMultiplier());
+          setHasAnimation(runtime.hasAnimation);
           setHasCollision(runtime.state.hasCollision);
           setWalkAllowed(runtime.state.walkAllowed);
           setCanStartVR(runtime.state.canStartVR);
@@ -443,6 +467,35 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
     runtime.setPerformanceMode(!runtime.getPerformanceMode());
   }, []);
 
+  /** GS-UI-01：高清 = performanceMode 关闭；流畅 = 开启（官方同一状态）。 */
+  const setPerformanceMode = useCallback((enabled: boolean) => {
+    runtimeRef.current?.setPerformanceMode(enabled);
+    setPerformanceModeState(enabled);
+  }, []);
+
+  const setMoveSpeedMultiplier = useCallback((multiplier: number) => {
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    runtime.setMoveSpeedMultiplier(multiplier);
+    setMoveSpeedMultiplierState(runtime.getMoveSpeedMultiplier());
+  }, []);
+
+  const openOfficialSettings = useCallback(() => {
+    runtimeRef.current?.openOfficialSettingsPanel();
+  }, []);
+
+  const toggleOfficialHelp = useCallback(() => {
+    runtimeRef.current?.toggleOfficialHelpPanel();
+  }, []);
+
+  const toggleAnimationPlayback = useCallback(() => {
+    runtimeRef.current?.toggleOfficialAnimation();
+  }, []);
+
+  const enterVR = useCallback(() => {
+    void runtimeRef.current?.startVR().catch((err) => console.error('[viewer] startVR failed', err));
+  }, []);
+
   const toggleAnnotationsVisibility = useCallback(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -473,6 +526,8 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
     performanceMode,
     showAnnotations,
     isFullscreen,
+    moveSpeedMultiplier,
+    hasAnimation,
     hasCollision,
     walkAllowed,
     collisionStale,
@@ -497,6 +552,12 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
     exitFullscreen,
     setCameraMode,
     togglePerformanceMode,
+    setPerformanceMode,
+    setMoveSpeedMultiplier,
+    openOfficialSettings,
+    toggleOfficialHelp,
+    toggleAnimationPlayback,
+    enterVR,
     toggleAnnotationsVisibility,
     toggleWalk,
     selectedGsplatformAnnotation,

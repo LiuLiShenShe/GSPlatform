@@ -92,7 +92,6 @@ export default function PlatformLayout() {
 
   const menu = (
     <Menu
-      theme="dark"
       mode="inline"
       selectedKeys={[selectedKey]}
       items={NAV}
@@ -135,7 +134,7 @@ export default function PlatformLayout() {
         placement="left"
         size={layout.siderWidth}
         title="GSPlatform"
-        styles={{ body: { padding: 0, background: '#0f1b34' } }}
+        styles={{ body: { padding: 0, background: '#FFFFFF' } }}
         aria-label="导航菜单"
       >
         {menu}

@@ -230,6 +230,41 @@ class SceneRepository:
 
         return items, next_cursor
 
+    # ---- upload provenance (GS-UI-01) ----
+
+    def upload_metadata(
+        self, scene_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, dict[str, Any]]:
+        """Earliest upload session per scene: ``{scene_id: {uploadedAt, originalFormat}}``.
+
+        The *first* upload is the original bytes the author submitted; later
+        sessions on the same scene are edit exports / republishes and must not
+        replace the provenance. One query for the whole page (no N+1) so the
+        public grid can render real metadata without guessing.
+        """
+        if not scene_ids:
+            return {}
+        from app.db.models.upload_session import UploadSession
+
+        rows = self._session.execute(
+            select(
+                UploadSession.scene_id,
+                UploadSession.created_at,
+                UploadSession.upload_format,
+            )
+            .where(UploadSession.scene_id.in_(scene_ids))
+            .order_by(UploadSession.scene_id, UploadSession.created_at.asc())
+        ).all()
+        out: dict[uuid.UUID, dict[str, Any]] = {}
+        for scene_id, created_at, upload_format in rows:
+            if scene_id is None or scene_id in out:
+                continue
+            out[scene_id] = {
+                "uploadedAt": created_at,
+                "originalFormat": (upload_format or "").strip().lower() or None,
+            }
+        return out
+
     # ---- write helpers (used only by seed / service) ----
 
     def get_by_slug(self, slug: str) -> Scene | None:

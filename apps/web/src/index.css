@@ -6,17 +6,17 @@
   --gs-primary: #3e5bdb;
   --gs-primary-hover: #5c76e4;
   --gs-accent: #0e9e95;
-  --gs-bg: #f3f4f8;
+  --gs-bg: #f6f7fa;
   --gs-surface: #ffffff;
-  --gs-surface-muted: #edeff5;
-  --gs-border: #dde1ec;
-  --gs-border-strong: #c5ccda;
+  --gs-surface-muted: #f1f3f7;
+  --gs-border: #e3e7ef;
+  --gs-border-strong: #cbd2df;
   --gs-text-primary: #1b2438;
   --gs-text-secondary: #5a6478;
   --gs-text-tertiary: #8a93a8;
   --gs-danger: #d54856;
-  --gs-sidebar-bg: #0f1b34;
-  --gs-sidebar-text: #a9b6cf;
+  --gs-sidebar-bg: #ffffff;
+  --gs-sidebar-text: #5a6478;
   --gs-poster-overlay: rgba(10, 16, 32, 0.45);
   --gs-radius-sm: 6px;
   --gs-radius-md: 10px;
@@ -128,6 +128,7 @@ a {
   display: flex;
   flex-direction: column;
   background: var(--gs-sidebar-bg);
+  border-right: 1px solid var(--gs-border);
   overflow: hidden;
 }
 
@@ -139,7 +140,7 @@ a {
 
 .gs-sider__divider {
   margin: 8px 16px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid var(--gs-border);
 }
 
 .gs-platform-main {
@@ -288,8 +289,41 @@ a {
 
 .gs-scene-card__status {
   position: absolute;
+  top: 38px;
+  left: 8px;
+  z-index: 2;
+}
+
+/* GS-UI-01：缩略图上的真实上传元数据（上传时间右上、原始格式右下）。
+   半透明深色底 + 细边框 + 模糊，保证在任意亮色/暗色缩略图上都可读；
+   pointer-events:none 不改变卡片既有点击/收藏行为。 */
+.gs-scene-card__upload-time,
+.gs-scene-card__format {
+  position: absolute;
+  z-index: 2;
+  padding: 2px 7px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(12, 18, 32, 0.66);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.gs-scene-card__upload-time {
   top: 8px;
   right: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-scene-card__format {
+  right: 8px;
+  bottom: 8px;
 }
 
 .gs-scene-card__body {
@@ -440,8 +474,8 @@ a {
   z-index: 200;
   display: flex;
   flex-direction: column;
-  background: #0b111f;
-  color: #dbe2f0;
+  background: var(--gs-bg);
+  color: var(--gs-text-primary);
 }
 
 .gs-viewer__topbar {
@@ -450,14 +484,14 @@ a {
   gap: 12px;
   padding: 0 16px;
   height: 52px;
-  background: rgba(15, 27, 52, 0.92);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--gs-surface);
+  border-bottom: 1px solid var(--gs-border);
 }
 
 .gs-viewer__title {
   font-size: 15px;
   font-weight: 600;
-  color: #e6ebf5;
+  color: var(--gs-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -518,14 +552,14 @@ a {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  background: rgba(11, 17, 31, 0.92);
-  color: #a8b4cd;
+  background: rgba(246, 247, 250, 0.94);
+  color: var(--gs-text-secondary);
   padding: 24px;
   text-align: center;
 }
 
 .gs-viewer__error-detail {
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
   font-size: 13px;
   word-break: break-all;
 }
@@ -580,7 +614,7 @@ a {
   padding: 32px;
   width: min(520px, calc(100% - 48px));
   border-radius: var(--gs-radius-lg);
-  background: rgba(11, 17, 31, 0.82);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(6px);
   box-shadow: var(--gs-shadow-popover);
   text-align: center;
@@ -589,7 +623,7 @@ a {
 .gs-viewer__progressive-title {
   font-size: 18px;
   font-weight: 700;
-  color: #e6ebf5;
+  color: var(--gs-text-primary);
 }
 
 .gs-viewer__progressive-lod {
@@ -604,12 +638,12 @@ a {
 
 .gs-viewer__progressive-indeterminate {
   font-size: 13px;
-  color: #a8b4cd;
+  color: var(--gs-text-secondary);
 }
 
 .gs-viewer__progressive-bytes {
   font-size: 12px;
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
 }
 
 .gs-viewer__progressive-actions {
@@ -633,7 +667,7 @@ a {
 
 .gs-viewer__loading-bytes {
   font-size: 12px;
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
 }
 
 .gs-viewer__stats {
@@ -644,9 +678,9 @@ a {
   width: 260px;
   padding: 12px;
   border-radius: var(--gs-radius-md);
-  background: rgba(15, 27, 52, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #dbe2f0;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--gs-border);
+  color: var(--gs-text-primary);
 }
 
 .gs-viewer__stats-header {
@@ -659,20 +693,20 @@ a {
 .gs-viewer__stats-close {
   background: none;
   border: none;
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
   cursor: pointer;
   font-size: 14px;
   padding: 2px;
 }
 
 .gs-viewer__stats-close:hover {
-  color: #e6ebf5;
+  color: var(--gs-text-primary);
 }
 
 .gs-viewer__stats-note {
   margin-top: 8px;
   font-size: 12px;
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
 }
 
 .gs-viewer__right-panel {
@@ -691,14 +725,14 @@ a {
   max-height: calc(100% - 120px);
   overflow-y: auto;
   border-radius: var(--gs-radius-md);
-  background: rgba(15, 27, 52, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--gs-border);
 }
 
 /* GS-DESKTOP-02：平台面板折叠态 —— 只留一个小入口，不遮挡官方原生控件。 */
 .gs-viewer__right-panel--collapsed {
   padding: 2px;
-  background: rgba(15, 27, 52, 0.7);
+  background: rgba(255, 255, 255, 0.8);
 }
 
 /* 平台 Saved Views 扩展入口（PCUI）。与官方控件明确区分（标题写「平台视角」）。 */
@@ -711,7 +745,7 @@ a {
 
 .gs-saved-views__title {
   font-size: 11px;
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
 }
 
 .gs-saved-views__trigger > .pcui-element,
@@ -730,7 +764,121 @@ a {
 
 .gs-saved-views__trigger {
   font-size: 11px;
-  color: #a8b4cd;
+  color: var(--gs-text-secondary);
+}
+
+/* ------------------------------------------------------------------ */
+/* GS-UI-01：底部中央浮动控制栏（四组 + 官方能力入口）                  */
+/* ------------------------------------------------------------------ */
+
+.gs-viewer-toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* 绝对定位 + left:50% 时，auto 宽度只会拿到「剩余可用宽度」的一半而提前换行。
+     max-content 让它按内容取宽，再由 max-width 兜住窄窗口。 */
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 6px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+  color: var(--gs-text-primary);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.gs-viewer-toolbar__button.ant-btn,
+.gs-viewer-toolbar__icon.ant-btn {
+  height: 32px;
+  padding: 0 8px;
+  color: var(--gs-text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+
+.gs-viewer-toolbar__icon.ant-btn {
+  width: 32px;
+  padding: 0;
+  justify-content: center;
+}
+
+.gs-viewer-toolbar__button.ant-btn:hover,
+.gs-viewer-toolbar__icon.ant-btn:hover {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.gs-viewer-toolbar__divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 2px;
+  background: rgba(15, 23, 42, 0.12);
+}
+
+.gs-viewer-toolbar__group {
+  display: flex;
+  align-items: center;
+}
+
+.gs-viewer-toolbar__segmented .ant-segmented-item-label {
+  font-size: 12px;
+  padding: 0 8px;
+  line-height: 24px;
+}
+
+.gs-viewer-toolbar__speed-panel {
+  width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gs-viewer-toolbar__speed-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gs-text-primary);
+}
+
+.gs-viewer-toolbar__speed-hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--gs-text-tertiary);
+}
+
+.gs-viewer-toolbar__badge {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .gs-viewer-toolbar__label {
+    display: none;
+  }
+
+  .gs-viewer-toolbar__segmented .ant-segmented-item-label {
+    padding: 0 5px;
+  }
+}
+
+@media (max-width: 640px) {
+  .gs-viewer-toolbar {
+    gap: 2px;
+    padding: 4px 6px;
+    bottom: 8px;
+  }
+
+  .gs-viewer-toolbar__button.ant-btn {
+    padding: 0 5px;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -742,8 +890,9 @@ a {
   flex-direction: column;
   height: calc(100vh - var(--gs-topbar-height, 58px) - 52px);
   min-height: 480px;
-  background: #1c2027;
-  color: #d7dce5;
+  background: var(--gs-bg);
+  color: var(--gs-text-primary);
+  border: 1px solid var(--gs-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -753,19 +902,19 @@ a {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: #15181e;
+  border-bottom: 1px solid var(--gs-border);
+  background: var(--gs-surface);
   flex-wrap: wrap;
 }
 
 .gs-workspace__name {
   font-weight: 600;
-  color: #f0f3f8;
+  color: var(--gs-text-primary);
 }
 
 .gs-workspace__status {
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--gs-text-tertiary);
 }
 
 .gs-workspace__spacer {
@@ -778,16 +927,66 @@ a {
   min-height: 0;
 }
 
-.gs-workspace__left {
-  width: 250px;
-  flex: 0 0 250px;
+/* GS-UI-01 Req3：右侧属性面板占 320–360px，可折叠；折叠时整块不渲染，
+   中间 Viewer 自动占满剩余空间（不靠 transform 遮挡假装释放）。 */
+.gs-workspace__right {
+  width: 340px;
+  flex: 0 0 340px;
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
-  padding: 6px;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
-  background: #181b21;
+  padding: 8px 10px 12px;
+  border-left: 1px solid var(--gs-border);
+  background: var(--gs-surface);
 }
 
-.gs-workspace__left .pcui-panel {
+.gs-workspace__tabs {
+  flex: 0 0 auto;
+}
+
+.gs-workspace__tabs .ant-tabs-nav {
+  margin: 0 0 8px;
+}
+
+.gs-workspace__tabs .ant-tabs-tab {
+  padding: 6px 0;
+  font-size: 13px;
+}
+
+.gs-workspace__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.gs-workspace__chip {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--gs-text-secondary);
+  background: var(--gs-surface-muted);
+  border: 1px solid var(--gs-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background var(--gs-motion-fast), color var(--gs-motion-fast),
+    border-color var(--gs-motion-fast);
+}
+
+.gs-workspace__chip:hover {
+  color: var(--gs-primary);
+  border-color: var(--gs-border-strong);
+}
+
+.gs-workspace__chip--active {
+  color: var(--gs-primary);
+  background: rgba(62, 91, 219, 0.1);
+  border-color: rgba(62, 91, 219, 0.45);
+}
+
+.gs-workspace__panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   margin-bottom: 6px;
 }
 
@@ -797,7 +996,7 @@ a {
 
 .gs-workspace__item--active {
   width: 100%;
-  outline: 1px solid #6aa9ff;
+  outline: 1px solid var(--gs-primary);
 }
 
 .gs-workspace__row {
@@ -814,6 +1013,269 @@ a {
 
 .gs-workspace__add {
   margin-bottom: 4px;
+}
+
+@media (max-width: 1366px) {
+  .gs-workspace__right {
+    width: 320px;
+    flex-basis: 320px;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * GS-UI-01 §7：平台作用域内的官方 PCUI 白色主题覆盖
+ *
+ * 官方 @playcanvas/pcui 6.1.4 自带一套**硬编码深色**主题（#20292b / #2c393c /
+ * #b1b8ba，无 CSS 变量可换）。这里只在平台宿主作用域内覆盖实际用到的控件，
+ * 不修改 node_modules、不复制第三方素材；HTML 结构、交互与事件全部保持官方实现。
+ * 选择器同时包含宿主 class 与 :not(...)，用于压过官方单/双 class 规则的优先级。
+ * ------------------------------------------------------------------ */
+:is(.gs-workspace, .gs-viewer) .pcui-label,
+:is(.gs-workspace, .gs-viewer) .pcui-button,
+:is(.gs-workspace, .gs-viewer) .pcui-input-element,
+:is(.gs-workspace, .gs-viewer) .pcui-select-input,
+:is(.gs-workspace, .gs-viewer) .pcui-select-input-value,
+:is(.gs-workspace, .gs-viewer) .pcui-numeric-input,
+:is(.gs-workspace, .gs-viewer) .pcui-slider,
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input {
+  color: var(--gs-text-secondary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-input-element {
+  background-color: var(--gs-surface);
+  border-color: var(--gs-border);
+  color: var(--gs-text-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-input-element > input,
+:is(.gs-workspace, .gs-viewer) .pcui-text-area-input > textarea {
+  color: var(--gs-text-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-input-element:not(.pcui-disabled, .pcui-readonly):hover {
+  background-color: var(--gs-surface);
+  border-color: var(--gs-border-strong);
+  color: var(--gs-text-primary);
+  box-shadow: none;
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-input-element:not(.pcui-disabled, .pcui-readonly).pcui-focus {
+  background-color: var(--gs-surface);
+  border-color: var(--gs-primary);
+  box-shadow: 0 0 0 2px rgba(62, 91, 219, 0.16);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-input-element.pcui-readonly {
+  background-color: var(--gs-surface-muted);
+  border-color: var(--gs-border);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-input-element.pcui-disabled {
+  color: var(--gs-text-tertiary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-label[placeholder]::after {
+  color: var(--gs-text-tertiary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-label.pcui-selectable:hover {
+  color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-button {
+  background-color: var(--gs-surface);
+  border-color: var(--gs-border);
+  border-radius: 6px;
+  color: var(--gs-text-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-button:not(.pcui-disabled, .pcui-readonly):hover,
+:is(.gs-workspace, .gs-viewer) .pcui-button:not(.pcui-disabled, .pcui-readonly):focus {
+  background-color: var(--gs-surface-muted);
+  border-color: var(--gs-border-strong);
+  color: var(--gs-primary);
+  box-shadow: none;
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-button:not(.pcui-disabled, .pcui-readonly):active {
+  background-color: #e8ecf6;
+  box-shadow: none;
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-button.pcui-disabled,
+:is(.gs-workspace, .gs-viewer) .pcui-button.pcui-readonly {
+  opacity: 0.55;
+}
+
+/* 开关（BooleanInput toggle） */
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle {
+  background-color: var(--gs-border-strong);
+  border-color: var(--gs-border);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle::after {
+  background-color: var(--gs-surface);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle.pcui-boolean-input-ticked {
+  background-color: var(--gs-primary);
+  border-color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle.pcui-boolean-input-ticked::after {
+  background-color: var(--gs-surface);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly):hover,
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly):focus {
+  background-color: var(--gs-border-strong);
+  border-color: var(--gs-border-strong);
+  box-shadow: none;
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly):hover::after,
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly):focus::after {
+  background-color: var(--gs-surface);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly).pcui-boolean-input-ticked:hover,
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly).pcui-boolean-input-ticked:focus {
+  background-color: var(--gs-primary);
+  border-color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly).pcui-boolean-input-ticked:hover::after,
+:is(.gs-workspace, .gs-viewer) .pcui-boolean-input-toggle:not(.pcui-disabled, .pcui-readonly).pcui-boolean-input-ticked:focus::after {
+  background-color: var(--gs-surface);
+}
+
+/* 滑杆（SliderInput） */
+:is(.gs-workspace, .gs-viewer) .pcui-slider-bar {
+  background-color: var(--gs-surface-muted);
+  border-color: var(--gs-border);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-slider-handle {
+  background-color: var(--gs-primary);
+  border-color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-slider-active .pcui-slider-bar {
+  background-color: var(--gs-primary);
+  border-color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-slider-active .pcui-slider-handle {
+  background-color: var(--gs-surface);
+  border-color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-slider:not(.pcui-disabled, .pcui-readonly) .pcui-slider-handle:hover,
+:is(.gs-workspace, .gs-viewer) .pcui-slider:not(.pcui-disabled, .pcui-readonly) .pcui-slider-handle:focus {
+  background-color: var(--gs-surface);
+  border-color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-slider.pcui-readonly .pcui-numeric-input {
+  color: var(--gs-text-tertiary);
+}
+
+/* 下拉（SelectInput） */
+:is(.gs-workspace, .gs-viewer) .pcui-select-input-container-value {
+  background-color: var(--gs-surface);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-select-input-value {
+  color: var(--gs-text-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-container.pcui-select-input-list {
+  background-color: var(--gs-surface);
+  border: 1px solid var(--gs-border);
+  box-shadow: 0 10px 28px rgba(16, 24, 64, 0.16);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-container.pcui-select-input-list .pcui-label {
+  color: var(--gs-text-secondary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-container.pcui-select-input-list .pcui-label.pcui-selected {
+  color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-select-input.pcui-open .pcui-select-input-value {
+  color: var(--gs-primary);
+  background-color: var(--gs-surface-muted);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-select-input.pcui-open .pcui-select-input-icon::after {
+  color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-label.pcui-select-input-icon {
+  color: var(--gs-text-tertiary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-select-input:not(.pcui-disabled, .pcui-readonly) .pcui-select-input-list > *:hover,
+:is(.gs-workspace, .gs-viewer) .pcui-select-input:not(.pcui-disabled, .pcui-readonly) .pcui-select-input-list > .pcui-select-input-label-highlighted {
+  background-color: var(--gs-surface-muted);
+  color: var(--gs-text-primary);
+}
+
+/* 面板（Panel header 使用官方 PCUI 语义，只换配色） */
+:is(.gs-workspace, .gs-viewer) .pcui-panel {
+  background-color: transparent;
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-panel-header {
+  background-color: transparent;
+  color: var(--gs-text-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-panel.pcui-collapsible > .pcui-panel-header::before {
+  color: var(--gs-text-tertiary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-panel.pcui-collapsible > .pcui-panel-header:hover {
+  color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-panel.pcui-collapsible > .pcui-panel-header:hover::before {
+  color: var(--gs-primary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-panel.pcui-disabled > .pcui-panel-header {
+  background-color: var(--gs-surface-muted);
+  color: var(--gs-text-tertiary);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-divider {
+  background-color: var(--gs-border);
+}
+
+/* 浮层（ColorPicker / Select 下拉） */
+:is(.gs-workspace, .gs-viewer) .pcui-overlay-content {
+  background-color: var(--gs-surface);
+  border: 1px solid var(--gs-border);
+  box-shadow: 0 12px 32px rgba(16, 24, 64, 0.18);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-overlay-inner {
+  background-color: rgba(16, 24, 64, 0.24);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-color-input {
+  border: 1px solid var(--gs-border);
+  border-radius: 4px;
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-color-input::after {
+  border-bottom-color: var(--gs-border);
+}
+
+:is(.gs-workspace, .gs-viewer) .pcui-color-input:not(.pcui-disabled, .pcui-readonly):hover::after,
+:is(.gs-workspace, .gs-viewer) .pcui-color-input:not(.pcui-disabled, .pcui-readonly):focus::after {
+  border-bottom-color: var(--gs-primary);
 }
 
 .gs-workspace__viewer {
@@ -839,17 +1301,8 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #a8b4cd;
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.gs-workspace__right {
-  width: 340px;
-  flex: 0 0 340px;
-  overflow-y: auto;
-  padding: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  background: #181b21;
+  color: var(--gs-text-secondary);
+  background: rgba(255, 255, 255, 0.55);
 }
 
 /* 官方 Studio 相机编辑模式的视觉语义：黄色描边 + 顶部状态徽标。 */
@@ -872,9 +1325,9 @@ a {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.78);
-  border: 1px solid rgba(245, 197, 24, 0.6);
-  color: #f5c518;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(201, 123, 30, 0.55);
+  color: #8a5a00;
   font-size: 12px;
 }
 
@@ -889,9 +1342,9 @@ a {
   gap: 8px;
   padding: 6px 12px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.78);
-  border: 1px solid rgba(106, 169, 255, 0.6);
-  color: #cfe1ff;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(62, 91, 219, 0.5);
+  color: var(--gs-primary);
   font-size: 12px;
 }
 
@@ -904,7 +1357,7 @@ a {
 
 .gs-props__title {
   font-weight: 600;
-  color: #f0f3f8;
+  color: var(--gs-text-primary);
   margin-bottom: 4px;
 }
 
@@ -924,7 +1377,7 @@ a {
 .gs-props .gs-props__hint {
   display: block;
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--gs-text-tertiary);
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
@@ -940,24 +1393,24 @@ a {
 .gs-props__primary {
   width: 100%;
   font-weight: 600;
-  border: 1px solid rgba(96, 165, 250, 0.85) !important;
-  color: #eaf2ff !important;
+  border: 1px solid rgba(62, 91, 219, 0.85) !important;
+  color: var(--gs-primary) !important;
 }
 
 .gs-props__alert {
   padding: 6px 8px;
   border-radius: 4px;
-  background: rgba(180, 83, 9, 0.18);
-  border: 1px solid rgba(245, 158, 11, 0.45);
-  color: #fcd34d;
+  background: #fdf3e3;
+  border: 1px solid #f0d3a3;
+  color: #8a5a00;
   font-size: 11px;
   white-space: normal;
 }
 
 .gs-props__alert--info {
-  background: rgba(37, 99, 235, 0.14);
-  border-color: rgba(96, 165, 250, 0.45);
-  color: #bfdbfe;
+  background: #edf1fd;
+  border-color: #c9d4f7;
+  color: #2f47b4;
 }
 
 .gs-props__cover {
@@ -968,7 +1421,7 @@ a {
 
 .gs-props__effect {
   padding: 4px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--gs-border);
 }
 
 .gs-props__effect-head {
@@ -978,7 +1431,7 @@ a {
 }
 
 .gs-props__danger {
-  color: #ff8a8a;
+  color: var(--gs-danger);
 }
 
 .gs-pcui-field {
@@ -990,7 +1443,7 @@ a {
 
 .gs-pcui-field__label {
   font-size: 12px;
-  color: #a8b4cd;
+  color: var(--gs-text-secondary);
 }
 
 .gs-pcui-field__control {
@@ -1004,7 +1457,7 @@ a {
 .gs-pcui-field__hint {
   grid-column: 2;
   font-size: 11px;
-  color: #8b93a1;
+  color: var(--gs-text-tertiary);
   white-space: normal;
 }
 
@@ -1046,7 +1499,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(5, 10, 22, 0.55);
+  background: rgba(16, 24, 64, 0.38);
   padding: 24px;
 }
 
@@ -1057,9 +1510,9 @@ a {
   flex-direction: column;
   overflow: hidden;
   border-radius: 12px;
-  background: #0d1830;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  background: var(--gs-surface);
+  border: 1px solid var(--gs-border);
+  box-shadow: 0 12px 40px rgba(16, 24, 64, 0.18);
 }
 
 .gs-annotation-media-overlay__header {
@@ -1067,15 +1520,15 @@ a {
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--gs-border);
 }
 
 .gs-annotation-media-overlay__badge {
   flex-shrink: 0;
   font-size: 12px;
-  color: #9fb6e8;
-  background: rgba(74, 144, 217, 0.18);
-  border: 1px solid rgba(74, 144, 217, 0.4);
+  color: var(--gs-primary);
+  background: rgba(62, 91, 219, 0.1);
+  border: 1px solid rgba(62, 91, 219, 0.3);
   border-radius: 999px;
   padding: 2px 10px;
 }
@@ -1083,7 +1536,7 @@ a {
 .gs-annotation-media-overlay__title {
   flex: 1;
   font-weight: 600;
-  color: #e8eefb;
+  color: var(--gs-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1094,15 +1547,15 @@ a {
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--gs-border);
   background: transparent;
-  color: #c8d3eb;
+  color: var(--gs-text-secondary);
   cursor: pointer;
   line-height: 1;
 }
 
 .gs-annotation-media-overlay__close:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--gs-surface-muted);
 }
 
 .gs-annotation-media-overlay__body {
@@ -1124,14 +1577,14 @@ a {
 
 .gs-annotation-media-overlay__desc {
   margin: 0;
-  color: #a8b4cd;
+  color: var(--gs-text-secondary);
   font-size: 13px;
   white-space: pre-wrap;
 }
 
 .gs-annotation-media-overlay__missing {
   padding: 32px;
-  color: #8a97b5;
+  color: var(--gs-text-tertiary);
   text-align: center;
 }
 

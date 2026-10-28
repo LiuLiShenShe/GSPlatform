@@ -459,7 +459,7 @@ test('GS-DESKTOP-04 §5.4/5：Frame 之后 Reset 仍回新视角；刷新后同�
   await pumpFrames(page, RESET_SETTLE_MS);
   const loadedPose = (await readPose(page))!;
   expect(distance(loadedPose.position, b.position)).toBeLessThan(0.05);
-  await page.locator('.sse-settings').first().click();
+  await page.locator('[data-testid="ov2-settings"]').click();
   await page.waitForSelector('.sse-reset', { state: 'visible', timeout: 10_000 });
   await page.locator('.sse-reset').first().click();
   await pumpFrames(page, RESET_SETTLE_MS);

@@ -198,13 +198,15 @@ test.describe('GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（De
     await page.waitForTimeout(1500);
 
     const NAME = 'GS-NEXT-03 视点A';
-    // GS-DESKTOP-02：创作页已迁移到官方 PCUI 工作区 —— 视角新增行在左栏，
+    // GS-DESKTOP-02：创作页已迁移到官方 PCUI 工作区。
+    // GS-UI-01 Req3：场景/标注/视角收进右侧属性面板，视角新增行在「视角管理」分区。
     // 输入框 placeholder 与按钮文案保持原样（'/保存当前视角' 全页唯一）。
     // PCUI TextInput 的 placeholder 在外层 div，真正的输入框是内部 <input>。
+    await page.getByRole('tab', { name: '视角管理' }).click();
     await page.locator('.gs-workspace__add input').fill(NAME);
     await page.getByRole('button', { name: '保存当前视角' }).click();
     await page.waitForFunction(
-      (n) => [...document.querySelectorAll('.gs-workspace__left *')]
+      (n) => [...document.querySelectorAll('.gs-workspace__right *')]
         .some((el) => el.textContent?.trim() === n),
       NAME,
       { timeout: CAMERA_SETTLE_MS },
@@ -228,6 +230,8 @@ test.describe('GS-NEXT-03 Case 1/3 —— 创建、保存、刷新后恢复（De
     // 用 goto 回到同一路由做同等强度的刷新验证，不降低断言。
     await page.goto(`/model/edit/${SCENE}`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-testid="scene-authoring-page"]');
+    // GS-UI-01：视角列表在「视角管理」分区，切到该分区核对服务器值。
+    await page.getByRole('tab', { name: '视角管理' }).click();
     await expect(page.getByText(NAME, { exact: true })).toBeVisible({ timeout: 60000 });
 
     // ── Desktop：点击 Saved View → 相机恢复到该位置 ──

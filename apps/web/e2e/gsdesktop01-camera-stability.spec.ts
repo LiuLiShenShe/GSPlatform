@@ -528,7 +528,8 @@ test.describe('GS-DESKTOP-01：加载完成后相机不自动拉远', () => {
     expect(before.loaded).toBe(true);
 
     // Frame（用户主动取景整个场景）→ 相机必须明显离开初始相机。
-    await page.locator('.sse-settings').first().click();
+    // GS-UI-01：官方控制条由宿主承接，经宿主「设置」入口打开官方设置面板。
+    await page.locator('[data-testid="ov2-settings"]').click();
     await page.waitForTimeout(300);
     await page.locator('.sse-frame').first().click({ force: true });
     const framed = await waitForCamera(page, (cam) => distance(cam.position, expected.position) > 1.0, 60_000);
@@ -540,7 +541,7 @@ test.describe('GS-DESKTOP-01：加载完成后相机不自动拉远', () => {
 
     // Reset（回到初始相机）→ 精确回到 authored pose。
     if (!(await page.locator('.sse-reset').first().isVisible())) {
-      await page.locator('.sse-settings').first().click();
+      await page.locator('[data-testid="ov2-settings"]').click();
       await page.waitForTimeout(300);
     }
     await page.locator('.sse-reset').first().click({ force: true });

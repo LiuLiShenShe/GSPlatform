@@ -15,6 +15,13 @@ export interface SceneSummary {
   likes: number;
   status: 'READY' | 'PROCESSING' | 'FAILED' | 'PUBLISHED';
   poster: string;
+  /**
+   * GS-UI-01: real upload provenance from the API's UploadSession.
+   * Null/absent means no recorded upload (seeded/dev scenes) — the card must
+   * hide these chips rather than guess a timestamp or a converted format.
+   */
+  uploadedAt?: string | null;
+  originalFormat?: string | null;
 }
 
 const CATEGORIES: SceneSummary['category'][] = [
