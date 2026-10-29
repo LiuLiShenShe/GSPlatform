@@ -960,15 +960,34 @@ describe('相机 pose 封装（SSV-05）', () => {
     expect(new Set(indexes).size).toBe(1);
   });
 
-  it('pickApproximateWorldPosition(0,0) 中心 = 相机正前方焦点深度点', async () => {
+  it('pickApproximateWorldPosition(0,0) 取视线与包围盒的最近入射点（不再是中心深度平面）', async () => {
     const fake = makeCameraHandle();
     mockedCreateViewer.mockResolvedValueOnce(fake as unknown as ViewerHandle);
     const runtime = await SuperSplatRuntime.create(defaultOptions());
     const hit = runtime.pickApproximateWorldPosition(0, 0);
     expect(hit).not.toBeNull();
+    // 相机 (1,2,3)、forward (0,0,-1)、包围盒 center(0,1,0) hx=hy=hz=1：
+    // 视线 (0,0,-1) 第一次穿过包围盒在 z=1（盒的 +z 面），x/y 命中盒面范围内。
     expect(hit!.position[0]).toBeCloseTo(1, 5);
     expect(hit!.position[1]).toBeCloseTo(2, 5);
-    expect(hit!.position[2]).toBeCloseTo(3 - SQRT11, 5);
+    expect(hit!.position[2]).toBeCloseTo(1, 5);
+  });
+
+  it('pickApproximateWorldPosition 视线指向盒外空白处 → 回退中心深度（不伪造命中）', async () => {
+    const fake = makeCameraHandle();
+    // 视线朝 +x：从 (1,2,3) 出发，盒 center(0,1,0) hx=hy=hz=1；
+    // y=2 恰在盒面（盒 y∈[0,2]）、z=3 在盒外（盒 z∈[-1,1]），故视线与盒无交点。
+    const cameraEntity = (fake as unknown as { cameraEntity: { forward: { x: number; y: number; z: number } } }).cameraEntity;
+    cameraEntity.forward = { x: 1, y: 0, z: 0 };
+    mockedCreateViewer.mockResolvedValueOnce(fake as unknown as ViewerHandle);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    const hit = runtime.pickApproximateWorldPosition(0, 0);
+    // 无交点 → 回退「相机到包围盒中心距离」(√11) 沿视线方向。
+    // 相机(1,2,3)、中心(0,1,0)：距离 = √(1²+1²+3²) = √11。
+    expect(hit).not.toBeNull();
+    expect(hit!.position[0]).toBeCloseTo(1 + SQRT11, 5);
+    expect(hit!.position[1]).toBeCloseTo(2, 5);
+    expect(hit!.position[2]).toBeCloseTo(3, 5);
   });
 
   it('pickApproximateWorldPosition 相机缺失时返回 null', async () => {

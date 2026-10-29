@@ -17,10 +17,13 @@
 import { Button, Dropdown, Popover, Segmented, Slider, Tooltip } from 'antd';
 import {
   DashboardOutlined,
+  EnvironmentOutlined,
   FullscreenExitOutlined,
   FullscreenOutlined,
+  LeftOutlined,
   MoreOutlined,
   QuestionCircleOutlined,
+  RightOutlined,
   SettingOutlined,
   ThunderboltOutlined,
   UndoOutlined,
@@ -55,6 +58,13 @@ export interface ViewerControlBarProps {
   onToggleAnimation: () => void;
   onToggleFullscreen: () => void;
   onEnterVR: () => void;
+  /**
+   * GS-UI-01 修复：标记点快速切换（对应官方 annotationNav 的 Prev/Next +
+   * 标题）。为空时不渲染该组。选中项驱动官方 `selectAnnotation`（相机过渡）。
+   */
+  annotations?: Array<{ id: string; title: string }>;
+  selectedAnnotationId?: string | null;
+  onSelectAnnotation?: (annotationId: string) => void;
   /** viewer 尚未就绪时禁用全部操作（不假装可用）。 */
   disabled?: boolean;
 }
@@ -75,6 +85,9 @@ export function ViewerControlBar(props: ViewerControlBarProps) {
     walkAllowed,
     hasAnimation,
     canStartVR,
+    annotations = [],
+    selectedAnnotationId = null,
+    onSelectAnnotation,
     disabled = false,
   } = props;
 
@@ -90,6 +103,26 @@ export function ViewerControlBar(props: ViewerControlBarProps) {
           cameraMode,
           moveSpeedMultiplier,
         )} m/s`;
+
+  // 标记点快速切换：与官方 annotationNav 的 Prev/Next 同一语义（按数组环切）。
+  const annotationIndex =
+    selectedAnnotationId === null
+      ? -1
+      : annotations.findIndex((a) => a.id === selectedAnnotationId);
+  const annotationLabel =
+    annotationIndex >= 0
+      ? `${annotationIndex + 1}/${annotations.length} · ${annotations[annotationIndex].title || '(未命名)'}`
+      : `标记点 (${annotations.length})`;
+  const stepAnnotation = (step: 1 | -1): void => {
+    if (annotations.length === 0) return;
+    const next =
+      annotationIndex < 0
+        ? step === 1
+          ? 0
+          : annotations.length - 1
+        : (annotationIndex + step + annotations.length) % annotations.length;
+    onSelectAnnotation?.(annotations[next].id);
+  };
 
   const moreItems = [
     { key: 'frame', label: '适应场景' },
@@ -243,6 +276,59 @@ export function ViewerControlBar(props: ViewerControlBarProps) {
           data-testid="ov2-quality"
         />
       </div>
+
+      <span className="gs-viewer-toolbar__divider" aria-hidden />
+
+      {/* GS-UI-01 修复：标记点快速切换 —— 对应官方 annotationNav 的 Prev/Next + 标题。
+          官方 1.35 在 annotations.length < 2 时会把 annotationNav 隐藏，单标记点
+          场景因此看不到切换入口；宿主这一组保证有标记点时即可切换（环切）。 */}
+      {annotations.length > 0 && (
+        <div className="gs-viewer-toolbar__group" aria-label="标记点快速切换">
+          <Tooltip title="上一个标记点">
+            <Button
+              className="gs-viewer-toolbar__icon"
+              type="text"
+              icon={<LeftOutlined aria-hidden />}
+              onClick={() => stepAnnotation(-1)}
+              disabled={disabled}
+              aria-label="上一个标记点"
+              data-testid="ov2-annotation-prev"
+            />
+          </Tooltip>
+          <Dropdown
+            menu={{
+              items: annotations.map((a) => ({ key: a.id, label: a.title || '(未命名)' })),
+              onClick: ({ key }) => onSelectAnnotation?.(key),
+              selectedKeys: selectedAnnotationId ? [selectedAnnotationId] : [],
+            }}
+            placement="top"
+            getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
+            trigger={['click']}
+          >
+            <Button
+              className="gs-viewer-toolbar__button"
+              type="text"
+              icon={<EnvironmentOutlined aria-hidden />}
+              disabled={disabled}
+              aria-label="标记点列表"
+              data-testid="ov2-annotation-current"
+            >
+              <span className="gs-viewer-toolbar__label">{annotationLabel}</span>
+            </Button>
+          </Dropdown>
+          <Tooltip title="下一个标记点">
+            <Button
+              className="gs-viewer-toolbar__icon"
+              type="text"
+              icon={<RightOutlined aria-hidden />}
+              onClick={() => stepAnnotation(1)}
+              disabled={disabled}
+              aria-label="下一个标记点"
+              data-testid="ov2-annotation-next"
+            />
+          </Tooltip>
+        </div>
+      )}
 
       <span className="gs-viewer-toolbar__divider" aria-hidden />
 

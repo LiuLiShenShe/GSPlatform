@@ -145,6 +145,13 @@ function OfficialDesktopViewer({ sceneId }: { sceneId: string }) {
             else state.requestFullscreen();
           }}
           onEnterVR={state.enterVR}
+          annotations={state.descriptor?.annotations
+            .filter((a) => a.enabled !== false)
+            .slice()
+            .sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0))
+            .map((a) => ({ id: a.id, title: a.title || a.textContent || '(未命名)' }))}
+          selectedAnnotationId={state.selectedGsplatformAnnotation?.annotationId ?? null}
+          onSelectAnnotation={state.selectAnnotation}
         />
         {/* 视觉隐藏的真实运行态读数（e2e 取证：renderer / 已渲染 Gaussian 数 / 首帧） */}
         <span

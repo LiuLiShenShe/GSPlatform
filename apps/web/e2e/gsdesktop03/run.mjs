@@ -626,6 +626,9 @@ async function phase6() {
   const cx = box.x + box.width / 2 + 60;
   const cy = box.y + box.height / 2 - 40;
   await page.mouse.click(cx, cy);
+  // GS-UI-01 修复（需求 2）：点击先出现 XYZ 轴标记预览，再点「设为标记点」落库。
+  await page.waitForTimeout(800);
+  await page.getByRole('button', { name: '设为标记点' }).click().catch(() => {});
   await page.waitForTimeout(3500);
 
   // 记录 antd 反馈（成功/失败）

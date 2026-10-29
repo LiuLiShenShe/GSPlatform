@@ -1338,10 +1338,14 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   /**
    * 近似拾取 NDC 坐标（-1..1，x 向右、y 向上）对应的 3D 世界位置。
    *
-   * FIX-05 §29-§30：**不保证命中 splat 表面**。实现只是沿解投影视线取「场景
-   * 包围盒中心深度」的点 —— 作为标注锚点的近似（bbox 深度近似，非 GPU 表面
-   * 拾取；官方 1.35.0 公开 API 无精确拾取）。未来精确接口见
-   * {@link ScenePickingAdapter.pickSurfaceWorldPosition}。相机缺失/未就绪返回 null。
+   * FIX-05 §29-§30：官方 1.35.0 公开 API 无 GPU splat 表面拾取。这里**不再**取
+   * 「包围盒中心深度」的固定平面（那样标注会浮在离表面很远的同一深度上，看起来
+   * 不在点击位置）——改为把点击视线与**场景包围盒**做最近正交点求解：
+   * 命中时取包围盒表面的入射点（即点击方向真正穿入高斯体积的位置），
+   * 视线与包围盒无交点（点在空白处）时回退到包围盒中心深度。
+   *
+   * 仍然是「近似锚点」，不是逐 splat 的精确表面命中；但锚点会落在点击方向上的
+   * 高斯体表附近，而不是一个与点击位置无关的平面。相机缺失/未就绪返回 null。
    */
   pickApproximateWorldPosition(x: number, y: number): { position: [number, number, number] } | null {
     const camera = this.cameraEntity();
@@ -1357,14 +1361,81 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     const dz = forward.z + right.z * (x * tanX) + up.z * (y * tanY);
     const len = Math.hypot(dx, dy, dz);
     if (!len || !Number.isFinite(len)) return null;
-    const scale = this.cameraFocusDistance(position) / len;
+    // 单位视线方向
+    const dir: [number, number, number] = [dx / len, dy / len, dz / len];
+
+    // ① 优先：视线与场景包围盒的最近入射点（点击方向真正进入高斯体表的位置）。
+    const box = this.gsplatAabb();
+    if (box?.center && box.halfExtents) {
+      const hit = rayAabbEntry(
+        [position.x, position.y, position.z],
+        dir,
+        box.center,
+        box.halfExtents,
+      );
+      if (hit) return { position: hit };
+    }
+
+    // ② 回退：视线未与包围盒相交（点在空白处）→ 包围盒中心深度。
+    const scale = this.cameraFocusDistance(position);
     return {
       position: [
-        position.x + dx * scale,
-        position.y + dy * scale,
-        position.z + dz * scale,
+        position.x + dir[0] * scale,
+        position.y + dir[1] * scale,
+        position.z + dir[2] * scale,
       ],
     };
+  }
+
+  /**
+   * 把 **RUNTIME 空间**点投影到 viewer 容器的 CSS 像素坐标（用于标注放置的
+   * 世界轴 gizmo 叠加层）。与 {@link pickApproximateWorldPosition} 互逆：
+   * 用同一相机 position / forward / right / up / fov / aspect 做解投影。
+   *
+   * 返回 `inFront=false` 表示点在相机背后（此时 x/y 无意义，调用方应隐藏）。
+   * 相机缺失/未就绪返回 null。坐标单位 = 容器 CSS 像素（canvas 铺满容器）。
+   */
+  projectRuntimePointToScreen(
+    point: [number, number, number],
+  ): { x: number; y: number; inFront: boolean } | null {
+    const camera = this.cameraEntity();
+    if (!camera?.camera) return null;
+    const pos = camera.getPosition();
+    const f = camera.forward;
+    const r = camera.right;
+    const u = camera.up;
+    const relX = point[0] - pos.x;
+    const relY = point[1] - pos.y;
+    const relZ = point[2] - pos.z;
+    const depth = relX * f.x + relY * f.y + relZ * f.z;
+    if (!(depth > 1e-6)) return { x: 0, y: 0, inFront: false };
+    const tanY = Math.tan((clampFov(camera.camera.fov) * Math.PI) / 360);
+    const tanX = tanY * this.canvasAspect();
+    const ndcX = (relX * r.x + relY * r.y + relZ * r.z) / (depth * tanX);
+    const ndcY = (relX * u.x + relY * u.y + relZ * u.z) / (depth * tanY);
+    const css = this.canvasCssSize();
+    if (!css) return { x: 0, y: 0, inFront: false };
+    return {
+      x: ((ndcX + 1) / 2) * css.width,
+      y: ((1 - ndcY) / 2) * css.height,
+      inFront: true,
+    };
+  }
+
+  /** 画布 CSS 尺寸（容器像素；canvas 铺满 viewer 容器）。 */
+  private canvasCssSize(): { width: number; height: number } | null {
+    try {
+      const canvas = this.requireLive().app?.graphicsDevice?.canvas as
+        | { clientWidth?: number; clientHeight?: number }
+        | undefined;
+      if (!canvas) return null;
+      const width = canvas.clientWidth ?? 0;
+      const height = canvas.clientHeight ?? 0;
+      if (!(width > 0 && height > 0)) return null;
+      return { width, height };
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -1649,6 +1720,49 @@ function destinationLabel(dest: XrDestination, index: number, total: number): st
 function clampFov(fov: number): number {
   const value = Number.isFinite(fov) ? fov : DEFAULT_CAMERA_FOV;
   return Math.min(Math.max(value, CAMERA_FOV_RANGE.min), CAMERA_FOV_RANGE.max);
+}
+
+/**
+ * 视线（origin + t·dir，dir 已归一化）与轴对齐包围盒的最近入射点。
+ *
+ * 用 slab 法：对每轴算 [tmin, tmax]，取三轴 tmin 的最大值 = 入射参数、
+ * tmax 的最小值 = 出射参数。t1 ≤ t0 或 t0 < 0 且 t1 < 0（整段射线在盒前）→ 无交点。
+ * 相机在盒内时 t0 < 0，取起点本身（t=0）作为入射点 —— 视线从盒内出发。
+ * box 坐标任意空间；与调用方（RUNTIME 空间）一致即可。
+ */
+function rayAabbEntry(
+  origin: [number, number, number],
+  dir: [number, number, number],
+  center: { x: number; y: number; z: number },
+  halfExtents: { x: number; y: number; z: number },
+): [number, number, number] | null {
+  const min = [center.x - halfExtents.x, center.y - halfExtents.y, center.z - halfExtents.z];
+  const max = [center.x + halfExtents.x, center.y + halfExtents.y, center.z + halfExtents.z];
+  let t0 = -Infinity;
+  let t1 = Infinity;
+  for (let i = 0; i < 3; i += 1) {
+    const o = origin[i];
+    const d = dir[i];
+    if (Math.abs(d) < 1e-9) {
+      // 与该轴垂直：若原点不在该轴 slab 内，整条射线错过包围盒。
+      if (o < min[i] || o > max[i]) return null;
+    } else {
+      const inv = 1 / d;
+      let near = (min[i] - o) * inv;
+      let far = (max[i] - o) * inv;
+      if (near > far) {
+        const tmp = near;
+        near = far;
+        far = tmp;
+      }
+      if (near > t0) t0 = near;
+      if (far < t1) t1 = far;
+      if (t0 > t1) return null;
+    }
+  }
+  // t0 = 入射；< 0 表示相机在盒内或起点已过入射面 → 取起点。
+  const t = t0 > 0 ? t0 : 0;
+  return [origin[0] + dir[0] * t, origin[1] + dir[1] * t, origin[2] + dir[2] * t];
 }
 
 // ------------------------------------------------------------------ #

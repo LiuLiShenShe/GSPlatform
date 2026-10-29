@@ -104,6 +104,12 @@ export interface OfficialDesktopViewerState {
    * 相机经 SceneTransformAdapter 换算到 runtime 空间，由官方过渡。找不到返回 false。
    */
   selectViewpoint: (viewpointId: string) => boolean;
+  /**
+   * 按数据库 ID 选中一条标注（官方 hotspot 选中 + 相机过渡）。GS-UI-01 修复：
+   * 宿主底部工具栏「标记点」快速切换用它，与官方 annotationNav 的 Prev/Next
+   * 走**同一个** `selectAnnotation` 语义。找不到 / 非 GSPlatform 标注返回 false。
+   */
+  selectAnnotation: (annotationId: string) => boolean;
   /** 场景已保存视角（enabled 优先、orderIndex 排序）—— 供 Saved Views 列表渲染。 */
   viewpoints: RuntimeViewpoint[];
   requestFullscreen: () => void;
@@ -443,6 +449,17 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
     }
   }, []);
 
+  const selectAnnotation = useCallback((annotationId: string): boolean => {
+    const runtime = runtimeRef.current;
+    if (!runtime || !runtime.loaded) return false;
+    try {
+      return runtime.selectGsplatformAnnotation(annotationId);
+    } catch (err) {
+      console.error('[viewer] selectAnnotation failed', err);
+      return false;
+    }
+  }, []);
+
   const requestFullscreen = useCallback(() => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -545,6 +562,7 @@ export function useSuperSplatDesktop(sceneId: string, diagnostics = false): Offi
     resetCamera,
     setCameraPose,
     selectViewpoint,
+    selectAnnotation,
     viewpoints: (descriptor?.viewpoints ?? [])
       .slice()
       .sort((a, b) => a.orderIndex - b.orderIndex),

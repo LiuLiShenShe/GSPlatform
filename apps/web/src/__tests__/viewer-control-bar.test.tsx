@@ -25,6 +25,7 @@ function setup(overrides: Partial<ViewerControlBarProps> = {}) {
     onToggleAnimation: vi.fn(),
     onToggleFullscreen: vi.fn(),
     onEnterVR: vi.fn(),
+    onSelectAnnotation: vi.fn(),
     ...overrides,
   };
   render(
@@ -96,5 +97,55 @@ describe('GS-UI-01 底部控制栏：四组真实控制', () => {
     expect(screen.getByTestId('ov2-reset')).toBeDisabled();
     expect(screen.getByTestId('ov2-speed')).toBeDisabled();
     expect(screen.getByTestId('ov2-settings')).toBeDisabled();
+  });
+});
+
+describe('GS-UI-01 修复：标记点快速切换（官方 annotationNav 的 Prev/Next 语义）', () => {
+  const annotations = [
+    { id: 'a1', title: '正门' },
+    { id: 'a2', title: '客厅' },
+    { id: 'a3', title: '阳台' },
+  ];
+
+  it('无标记点时不渲染该组', () => {
+    setup();
+    expect(screen.queryByTestId('ov2-annotation-current')).toBeNull();
+  });
+
+  it('即使只有 1 个标记点也显示入口（官方 <2 会隐藏 annotationNav）', () => {
+    setup({ annotations: [annotations[0]], selectedAnnotationId: null });
+    expect(screen.getByTestId('ov2-annotation-current')).toBeInTheDocument();
+    expect(screen.getByTestId('ov2-annotation-current')).toHaveTextContent('标记点 (1)');
+  });
+
+  it('未选中时「下一个」选中第一个，「上一个」选中最后一个', async () => {
+    const props = setup({ annotations, selectedAnnotationId: null });
+    await userEvent.click(screen.getByTestId('ov2-annotation-next'));
+    expect(props.onSelectAnnotation).toHaveBeenLastCalledWith('a1');
+    await userEvent.click(screen.getByTestId('ov2-annotation-prev'));
+    expect(props.onSelectAnnotation).toHaveBeenLastCalledWith('a3');
+  });
+
+  it('选中项显示序号/总数与标题；前后环切调用官方 selectAnnotation（数据库 ID，不是下标）', async () => {
+    const props = setup({ annotations, selectedAnnotationId: 'a2' });
+    expect(screen.getByTestId('ov2-annotation-current')).toHaveTextContent('2/3 · 客厅');
+    await userEvent.click(screen.getByTestId('ov2-annotation-next'));
+    expect(props.onSelectAnnotation).toHaveBeenLastCalledWith('a3');
+    await userEvent.click(screen.getByTestId('ov2-annotation-prev'));
+    expect(props.onSelectAnnotation).toHaveBeenLastCalledWith('a1');
+  });
+
+  it('点标题下的列表项直接选择该标记点', async () => {
+    const props = setup({ annotations, selectedAnnotationId: 'a1' });
+    await userEvent.click(screen.getByTestId('ov2-annotation-current'));
+    await userEvent.click(await screen.findByText('阳台'));
+    expect(props.onSelectAnnotation).toHaveBeenCalledWith('a3');
+  });
+
+  it('viewer 未就绪时标记点入口禁用', () => {
+    setup({ annotations, disabled: true });
+    expect(screen.getByTestId('ov2-annotation-prev')).toBeDisabled();
+    expect(screen.getByTestId('ov2-annotation-current')).toBeDisabled();
+    expect(screen.getByTestId('ov2-annotation-next')).toBeDisabled();
   });
 });

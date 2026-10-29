@@ -1331,6 +1331,30 @@ a {
   font-size: 12px;
 }
 
+
+/* GS-UI-01 修复（需求 2）：标注放置的 XYZ 轴标记预览 */
+.gs-pick-marker {
+  position: absolute;
+  z-index: 6;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  width: 1px;
+  height: 1px;
+}
+.gs-pick-marker__axes {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+}
+.gs-pick-marker__actions {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  gap: 6px;
+  pointer-events: auto;
+}
 .gs-pick-badge {
   position: absolute;
   top: 12px;

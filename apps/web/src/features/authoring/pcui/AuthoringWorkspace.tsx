@@ -75,8 +75,18 @@ export interface AuthoringWorkspaceProps {
   viewerReady: boolean;
   loading: boolean;
   containerRef: React.RefObject<HTMLDivElement | null>;
-  /** 标注放置模式：点击 viewer 画布时回调（页面负责 NDC → 近似锚点）。 */
+  /** 标注放置模式：点击 viewer 画布时回调（页面登记 pendingPick，不直接落库）。 */
   onViewerClick: (event: React.MouseEvent<HTMLDivElement>) => void;
+  /** GS-UI-01 修复（需求 2）：点击后的坐标轴标记预览（RUNTIME 空间锚点 + 屏幕坐标）。 */
+  pendingPick: { runtime: { x: number; y: number; z: number }; screen: { x: number; y: number } } | null;
+  /** 确认放置：把预览锚点落库为标记点。 */
+  onConfirmPick: () => void;
+  /** 取消放置：保留拾取模式，可改点别处。 */
+  onCancelPick: () => void;
+  /** RUNTIME 点 → 容器 CSS 像素投影（轴标记 gizmo 用；页面注入，不在此复制相机数学）。 */
+  projectPoint: (
+    point: [number, number, number],
+  ) => { x: number; y: number; inFront: boolean } | null;
   selection: WorkspaceSelection;
   onSelect: (selection: WorkspaceSelection) => void;
 
@@ -149,7 +159,7 @@ export interface AuthoringWorkspaceProps {
 }
 
 export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
-  const { sceneId, selection, onSelect, annotations, viewpoints } = props;
+  const { sceneId, selection, onSelect, annotations, viewpoints, pendingPick, onConfirmPick, onCancelPick, projectPoint } = props;
   const selectedAnnotation = useMemo(
     () => (selection.kind === 'annotation'
       ? annotations.find((a) => a.id === selection.id) ?? null
@@ -231,6 +241,14 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
               点击 Gaussian 表面放置标注（近似锚点）
               <PcuiButton text="取消" onClick={props.onCancelPicking} />
             </div>
+          )}
+          {pendingPick && (
+            <AnnotationPickMarker
+              anchor={pendingPick.runtime}
+              projectPoint={projectPoint}
+              onConfirm={onConfirmPick}
+              onCancel={onCancelPick}
+            />
           )}
         </div>
 
@@ -391,6 +409,103 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
   );
 }
 
+
+// ------------------------------------------------------------------ //
+// 标注放置预览：SuperSplat 风格 XYZ 轴标记（GS-UI-01 修复 / 需求 2）
+// ------------------------------------------------------------------ //
+
+/** 轴 gizmo 的轴长（RUNTIME 空间单位）。 */
+const PICK_AXIS_LENGTH = 0.25;
+
+/**
+ * 点击位置的坐标轴标记预览（世界轴，不是屏幕固定图标）。
+ *
+ * 从锚点沿**世界 X/Y/Z** 各延伸 PICK_AXIS_LENGTH，把原点与三个轴端点经官方
+ * 相机投影到屏幕，画三条 2D 线段（红 X / 绿 Y / 蓝 Z）—— 与 SuperSplat
+ * 「点击位置出现 XYZ 轴点」一致：相机移动时标记也跟着 3D 落点走。
+ * 确认/取消按钮固定在标记旁。
+ *
+ * 投影回调由页面注入（`projectPoint`），不在这里复制相机数学。
+ */
+function AnnotationPickMarker({
+  anchor,
+  projectPoint,
+  onConfirm,
+  onCancel,
+}: {
+  anchor: { x: number; y: number; z: number };
+  /** RUNTIME 点 → 容器 CSS 像素；null = 相机不可用。 */
+  projectPoint: (
+    point: [number, number, number],
+  ) => { x: number; y: number; inFront: boolean } | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const [view, setView] = useState<{
+    origin: { x: number; y: number; inFront: boolean } | null;
+    axes: Array<{ x2: number; y2: number; color: string; label: string }>;
+  }>({ origin: null, axes: [] });
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const origin = projectPoint([anchor.x, anchor.y, anchor.z]);
+      if (origin?.inFront) {
+        const tips: Array<{ dx: number; dy: number; dz: number; color: string; label: string }> = [
+          { dx: PICK_AXIS_LENGTH, dy: 0, dz: 0, color: '#ff4d4f', label: 'X' },
+          { dx: 0, dy: PICK_AXIS_LENGTH, dz: 0, color: '#52c41a', label: 'Y' },
+          { dx: 0, dy: 0, dz: PICK_AXIS_LENGTH, color: '#1677ff', label: 'Z' },
+        ];
+        const axes = tips
+          .map((t) => {
+            const p = projectPoint([anchor.x + t.dx, anchor.y + t.dy, anchor.z + t.dz]);
+            if (!p || !p.inFront) return null;
+            return {
+              x2: p.x - origin.x,
+              y2: p.y - origin.y,
+              color: t.color,
+              label: t.label,
+            };
+          })
+          .filter((a): a is { x2: number; y2: number; color: string; label: string } => a !== null);
+        setView({ origin, axes });
+      } else {
+        setView({ origin: origin?.inFront ? origin : null, axes: [] });
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [anchor.x, anchor.y, anchor.z, projectPoint]);
+
+  const origin = view.origin;
+  return (
+    <div
+      className="gs-pick-marker"
+      data-testid="annotation-pick-marker"
+      style={{ left: origin ? origin.x : 0, top: origin ? origin.y : 0 }}
+    >
+      <svg className="gs-pick-marker__axes" width="1" height="1" aria-hidden>
+        {view.axes.map((a) => (
+          <g key={a.label}>
+            <line x1={0} y1={0} x2={a.x2} y2={a.y2} stroke={a.color} strokeWidth={3} strokeLinecap="round" />
+            <circle cx={a.x2} cy={a.y2} r={3} fill={a.color} />
+            <text x={a.x2 + 4} y={a.y2 - 4} fill={a.color} fontSize={11}>{a.label}</text>
+          </g>
+        ))}
+        <circle r={5} fill="#fff" stroke="#333" strokeWidth={1.5} />
+      </svg>
+      <div className="gs-pick-marker__actions">
+        <PcuiButton text="设为标记点" onClick={onConfirm} />
+        <PcuiButton text="重选" onClick={onCancel} />
+      </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ //
+// 视角新增行
+// ------------------------------------------------------------------ //
 // ------------------------------------------------------------------ //
 // 视角新增行
 // ------------------------------------------------------------------ //

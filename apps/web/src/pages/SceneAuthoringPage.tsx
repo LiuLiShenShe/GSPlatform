@@ -81,15 +81,29 @@ export default function SceneAuthoringPage() {
   const [loading, setLoading] = useState(true);
   const [viewerReady, setViewerReady] = useState(false);
 
-  // SSV-06 §七：标注创建/更新/删除后递增，预览 runtime 用最新 descriptor 重建，
+  // SSV-06 §七：标注**新增/删除**后递增，预览 runtime 用最新 descriptor 重建，
   // 官方 hotspot 才出现（预览必须使用官方 hotspot）。
+  //
+  // GS-UI-01 修复：**编辑已有标注**（标题 / 正文 / 相机 / 启用开关）不再递增 ——
+  // 官方 1.35 的 hotspot 只在 createViewer 时按 settings.annotations 构建一次，
+  // 重建是唯一更新途径，但每次编辑都重建会让 3D 视图整段重载（用户反馈的
+  // 「点一个按钮刷新一次」）。编辑类改动的权威结果在 /scene 查看页验证；
+  // 预览侧保留原 hotspot，不再为一次改名重载整个高斯场景。
   const [annotationRevision, setAnnotationRevision] = useState(0);
-  const [annotationOrderRevision, setAnnotationOrderRevision] = useState(0);
 
   // Annotations (Phase 11)
   const [annotations, setAnnotations] = useState<SceneAnnotation[]>([]);
   const [annotationsSaving, setAnnotationsSaving] = useState(false);
   const [picking, setPicking] = useState(false);
+  /**
+   * GS-UI-01 修复（需求 2）：拾取改为「点击 → 坐标轴标记预览 → 确认/取消」。
+   * pendingPick 是**RUNTIME 空间**锚点 + 屏幕位置（跟随视口），确认时才落库；
+   * 落库仍走既有 apiCreateAnnotation（数据流不变，只加了确认步）。
+   */
+  const [pendingPick, setPendingPick] = useState<{
+    runtime: { x: number; y: number; z: number };
+    screen: { x: number; y: number };
+  } | null>(null);
 
   // GS-NEXT-02：当前预览 runtime 使用的描述符（用于「已保存≠运行时采用」提示）。
   const [activeDescriptor, setActiveDescriptor] = useState<SceneRuntimeDescriptorV1 | null>(null);
@@ -116,6 +130,15 @@ export default function SceneAuthoringPage() {
   const cameraSyncState = useRef(createInitialCameraSync());
   /** 重建后要恢复的「用户当时所在视角」（与保存目标不同时才有值）。 */
   const cameraRestorePoseRef = useRef<CameraPose | null>(null);
+  /**
+   * GS-UI-01 修复：受控重建（背景 / 后期 / 标注增删）前记录用户当前视角，
+   * 重建完成后恢复 —— 这些重建是为了让官方 settings 生效，不该让 3D 视图
+   * 「跳回初始视角」。只在**同一场景**内恢复；换场景 / 版本切换不恢复
+   * （版本切换由 `suppressRebuildRestoreRef` 显式抑制）。
+   */
+  const rebuildRestorePoseRef = useRef<{ sceneId: string; pose: CameraPose } | null>(null);
+  /** 版本切换重建：内容已换，恢复旧视角无意义，抑制恢复。 */
+  const suppressRebuildRestoreRef = useRef(false);
   /** 上一次真正写入成功的「版本 + pose」签名（GS-DESKTOP-04 §三/§四：一次用户
    *  动作最多一次保存 / 一次重建；同签名重复触发直接 no-op）。 */
   const lastSavedPayloadRef = useRef<string | null>(null);
@@ -202,15 +225,28 @@ export default function SceneAuthoringPage() {
               // 重建后**恢复用户当时的视角**：保存动作不得让画面跳远。
               // 恢复走官方唯一受支持的任意 pose 路径（selectAnnotation 过渡），
               // 不写官方内部状态。
+              //
+              // GS-UI-01 修复：背景 / 后期 / 标注增删同样会触发受控重建，这些
+              // 重建只是为了刷新官方 settings，也必须恢复原视角（否则用户会看到
+              // 「点一下按钮视图就跳回初始相机」）。版本切换已显式抑制恢复。
               const restore = cameraRestorePoseRef.current;
-              if (restore) {
-                cameraRestorePoseRef.current = null;
+              cameraRestorePoseRef.current = null;
+              const fallback =
+                !restore &&
+                !suppressRebuildRestoreRef.current &&
+                rebuildRestorePoseRef.current?.sceneId === effectiveSceneId
+                  ? rebuildRestorePoseRef.current.pose
+                  : null;
+              rebuildRestorePoseRef.current = null;
+              const poseToRestore = restore ?? fallback;
+              if (poseToRestore) {
                 try {
-                  active.setCameraPose(restore);
+                  active.setCameraPose(poseToRestore);
                 } catch {
                   /* 恢复失败不影响 Reset 目标已正确这一事实 */
                 }
               }
+              suppressRebuildRestoreRef.current = false;
               setCameraSync('synced');
               setCameraSyncError(null);
             }
@@ -238,6 +274,16 @@ export default function SceneAuthoringPage() {
 
     return () => {
       cancelled = true;
+      // GS-UI-01 修复：受控重建前记录用户当前视角（此时旧 runtime 仍存活）。
+      // 换场景 / 版本切换不恢复（版本切换已置 suppress；换场景由 sceneId 守卫）。
+      if (runtime?.loaded && !suppressRebuildRestoreRef.current) {
+        try {
+          const pose = runtime.getCameraPose();
+          if (pose) rebuildRestorePoseRef.current = { sceneId: effectiveSceneId, pose };
+        } catch {
+          /* 读取失败：不恢复 */
+        }
+      }
       runtime?.destroy();
       runtimeRef.current = null;
       // DEV-only 调试把柄必须一并清掉：headless SwiftShader 下保留一个已销毁
@@ -247,7 +293,7 @@ export default function SceneAuthoringPage() {
         (window as unknown as { __gsauthoringruntime?: unknown }).__gsauthoringruntime = null;
       }
     };
-  }, [effectiveSceneId, authoring.settingsRevision, annotationRevision, annotationOrderRevision, versionRevision, cameraResyncKey]);
+  }, [effectiveSceneId, authoring.settingsRevision, annotationRevision, versionRevision, cameraResyncKey]);
 
   // Load annotations on mount (Phase 11)
   useEffect(() => {
@@ -669,7 +715,13 @@ export default function SceneAuthoringPage() {
   // 标注（§3.2）：真实 3D 拾取 → 数据库 → 官方 hotspot → 官方导览器
   // ------------------------------------------------------------------ //
 
-  /** 标注放置模式下的 viewer 点击：NDC → 近似锚点 → 捕获作者相机 → 落库。 */
+  /**
+   * 标注放置模式下的 viewer 点击：NDC → 近似锚点 → **坐标轴标记预览**（确认步）。
+   *
+   * GS-UI-01 修复（需求 2）：点击不再直接落库 —— 先在点击位置渲染 SuperSplat
+   * 风格的 XYZ 轴标记，作者看到锚点确切落点后再「设为标记点」。真正的落库在
+   * {@link handleConfirmPick}；这里只解投影并登记 pendingPick（RUNTIME 空间）。
+   */
   const handleViewerClick = useCallback(async (e: React.MouseEvent<HTMLDivElement>) => {
     if (!picking) return;
     const runtime = runtimeRef.current;
@@ -686,14 +738,23 @@ export default function SceneAuthoringPage() {
       Modal.error({ content: '拾取位置失败，请确保场景已加载' });
       return;
     }
-    // FIX-05 §29：拾取为「近似锚点」（bbox 深度近似，不保证命中 splat 表面）——
-    // UI 中明示，避免把近似值当成精确表面坐标。
-    // FIX-02 §5/§13：拾取点是引擎（RUNTIME）空间 —— 存回 SCENE 空间。
-    const sceneAnchor = runtime.worldTransform.runtimeToScenePoint({
-      x: hit.position[0],
-      y: hit.position[1],
-      z: hit.position[2],
+    // 屏幕位置（相对 viewer 容器）驱动轴标记 overlay 的摆放。
+    setPendingPick({
+      runtime: { x: hit.position[0], y: hit.position[1], z: hit.position[2] },
+      screen: { x: e.clientX - rect.left, y: e.clientY - rect.top },
     });
+  }, [picking, viewerReady]);
+
+  /**
+   * 确认放置：把 pendingPick 的 RUNTIME 锚点换算回 SCENE 空间 → 捕获作者相机 →
+   * 落库（与旧一步式流程**同一** apiCreateAnnotation 数据路径；FIX-05 §29 的
+   * 「近似锚点」语义与 FIX-02 §13 的相机捕获全部保留）。
+   */
+  const handleConfirmPick = useCallback(async () => {
+    const pending = pendingPick;
+    const runtime = runtimeRef.current;
+    if (!pending || !runtime || !viewerReady) return;
+    const sceneAnchor = runtime.worldTransform.runtimeToScenePoint(pending.runtime);
     // §13：同时保存作者当前 Viewer 相机（标注自己的相机 pose，SCENE 空间）。
     const enginePose = runtime.getCameraPose();
     let camera: { position: { x: number; y: number; z: number }; target: { x: number; y: number; z: number }; fov: number } | null = null;
@@ -715,19 +776,35 @@ export default function SceneAuthoringPage() {
       });
       setAnnotations((prev) => [...prev, ann]);
       setAnnotationRevision((n) => n + 1);
+      setPendingPick(null);
       setPicking(false);
-      Modal.success({ content: '标注已创建（锚点为近似位置，可在属性区继续编辑）' });
+      Modal.success({ content: '标记点已创建（锚点为近似位置，可在属性区继续编辑）' });
     } catch {
       Modal.error({ content: '创建标注失败，请重试' });
     }
-  }, [picking, effectiveSceneId, viewerReady]);
+  }, [pendingPick, effectiveSceneId, viewerReady]);
+
+  /** 取消本次放置（保留拾取模式，可继续点击别的位置）。 */
+  const handleCancelPick = useCallback(() => {
+    setPendingPick(null);
+  }, []);
+
+  /** RUNTIME 点 → 屏幕投影（轴标记 gizmo 每帧调用；保持稳定引用避免订阅抖动）。 */
+  const handleProjectPoint = useCallback(
+    (point: [number, number, number]) => {
+      const runtime = runtimeRef.current;
+      if (!runtime) return null;
+      return runtime.projectRuntimePointToScreen(point);
+    },
+    [],
+  );
 
   const handleSaveAnnotation = useCallback(async (id: string, patch: Partial<SceneAnnotation>) => {
     setAnnotationsSaving(true);
     try {
       const updated = await apiUpdateAnnotation(effectiveSceneId, id, patch);
       setAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
-      setAnnotationRevision((n) => n + 1);
+      // GS-UI-01 修复：编辑已有标注**不重建预览**（见 annotationRevision 注释）。
     } catch {
       Modal.error({ content: '保存标注失败，请重试' });
     } finally {
@@ -755,7 +832,8 @@ export default function SceneAuthoringPage() {
     try {
       const reordered = await reorderAnnotations(effectiveSceneId, next);
       setAnnotations(reordered);
-      setAnnotationOrderRevision((n) => n + 1);
+      // GS-UI-01 修复：重排只改顺序、不改 hotspot 数量，**不重建预览**。
+      // 下一次新增/删除时的重建会用最新顺序重建官方 hotspot。
     } catch {
       Modal.error({ content: '排序失败，请重试' });
     }
@@ -944,14 +1022,24 @@ export default function SceneAuthoringPage() {
       annotations={annotations}
       annotationsSaving={annotationsSaving}
       picking={picking}
-      onStartPicking={() => setPicking(true)}
-      onCancelPicking={() => setPicking(false)}
+      onStartPicking={() => {
+        setPendingPick(null);
+        setPicking(true);
+      }}
+      onCancelPicking={() => {
+        setPendingPick(null);
+        setPicking(false);
+      }}
       onSaveAnnotation={handleSaveAnnotation}
       onDeleteAnnotation={handleDeleteAnnotation}
       onMoveAnnotation={handleMoveAnnotation}
       onNavigateAnnotation={handleNavigateAnnotation}
       onCaptureAnnotationCamera={handleCaptureAnnotationCamera}
       onViewerClick={handleViewerClick}
+      pendingPick={pendingPick}
+      onConfirmPick={handleConfirmPick}
+      onCancelPick={handleCancelPick}
+      projectPoint={handleProjectPoint}
       presentation={authoring.presentation}
       authoringSaving={authoring.saving}
       initialViewUse={initialViewUse}

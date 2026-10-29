@@ -498,9 +498,12 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
       await expect(page.locator('[data-testid="annotation-pick-badge"]')).toBeVisible();
 
       // 点击真实 Gaussian 画布（视口中心附近，确保命中 canvas 本体）。
+      // GS-UI-01 修复（需求 2）：点击先出现 XYZ 轴标记预览，再点「设为标记点」落库。
       const canvas = page.locator('[data-testid="authoring-mount"] canvas');
       const box = (await canvas.boundingBox())!;
       await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.52);
+      await expect(page.locator('[data-testid="annotation-pick-marker"]')).toBeVisible({ timeout: 15_000 });
+      await page.getByRole('button', { name: '设为标记点' }).click();
       await page.waitForTimeout(3000);
 
       const after = await page.request.get(`${API}/${SCENE}/annotations`);
