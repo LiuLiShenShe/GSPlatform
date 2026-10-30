@@ -516,10 +516,14 @@ test.describe('GS-DESKTOP-02 D/E —— 官方 PCUI 创作工作区', () => {
       // 标注自己的相机 pose 必须被捕获（§3.2 要求）。
       expect(created.cameraPosition, '标注应带自己的相机 pose').not.toBeNull();
 
-      // 预览 runtime 重建后官方 hotspot 应包含新标注。
+      // GS-UI-01 修复：创作页不再为新增标注重建 Viewer（用户反馈「添加标记后刷新」）。
+      // 新标记点由宿主标记点层即时渲染 —— 断言画布上出现该标注的标记。
       await page.waitForFunction(
-        (n: number) => document.querySelectorAll('.sse-annotation-hotspots .sse-annotation-hotspot').length >= n,
-        afterList.filter((a: { enabled: boolean }) => a.enabled).length,
+        (id: string) =>
+          !!document.querySelector(
+            `[data-testid="authoring-annotation-marker"][data-annotation-id="${id}"]`,
+          ),
+        created.id,
         { timeout: 90_000 },
       );
     } finally {

@@ -42,6 +42,7 @@ import {
   OFFICIAL_PLAY_BUTTON_CLASS,
   OFFICIAL_SETTINGS_BUTTON_CLASS,
   prepareOfficialUiDefaults,
+  setOfficialAnnotationHotspotsHidden,
   setOfficialControlsToolbarHidden,
 } from './superSplatUiCompatibility';
 import {
@@ -656,6 +657,34 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
    */
   setOfficialControlsToolbarHidden(hidden: boolean): void {
     setOfficialControlsToolbarHidden(this.container, hidden);
+  }
+
+  /**
+   * 官方标注热点层显隐（GS-UI-01 修复：创作页改用宿主标记点，避免与官方
+   * hotspot 重复，也避免新增标注必须重建 Viewer 才能更新官方热点层）。
+   *
+   * 用行内 style `display:none`，不改官方 DOM 结构 —— 官方契约探测
+   * （`validateUiCompatibility` 的 hotspotCount）与 e2e 的 DOM 计数仍成立，
+   * 只是编辑器里不显示这一层。**仅创作页使用**；/scene 浏览页仍用官方热点。
+   */
+  setOfficialHotspotsHidden(hidden: boolean): void {
+    setOfficialAnnotationHotspotsHidden(this.container, hidden);
+  }
+
+  /**
+   * 官方键盘/指针输入开关（GS-UI-01 修复：在属性面板输入框里打字时不能触发
+   * Viewer 快捷键 —— W/A/S/D、1/2/3、V/G/H/F/R/Space 等）。
+   *
+   * 官方 1.35 的快捷键全部由 `state.inputEnabled` 统一路由（ModeShortcuts
+   * 直接读它；KeyboardMouseDevice 的键盘 meta patch 也用 `() => state.inputEnabled`）。
+   * 写这个官方公开可写 state 即让键盘事件对 Viewer 无效；恢复后一切照旧。
+   */
+  setInputEnabled(enabled: boolean): void {
+    try {
+      this.requiredState().inputEnabled = enabled;
+    } catch {
+      // 已销毁：无操作。
+    }
   }
 
   /**

@@ -1372,6 +1372,74 @@ a {
   font-size: 12px;
 }
 
+/* GS-UI-01 修复（需求 2）：拾取模式的透明指针捕获层。
+   盖在官方 canvas 之上（不同元素，事件不会到达 canvas），因此点击只解析
+   锚点，不会同时触发官方 Orbit/Pan/Zoom。 */
+.gs-pick-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: transparent;
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+/* GS-UI-01 修复（需求 4）：创作页宿主标记点层（所有标注的屏幕投影）。 */
+.gs-annotation-markers {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+.gs-annotation-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  padding: 2px 8px 2px 3px;
+  border: 1px solid rgba(62, 91, 219, 0.65);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1f2a37;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+  /* GS-UI-01 修复：标记点层**纯视觉**（pointer-events:none）—— 选择/编辑走右侧
+     标注列表，标记点绝不拦截 wheel/pointer，避免挡住官方相机 Orbit/Zoom。
+     若改为可点击，标记点会挡在画布中心并吞掉滚轮/拖拽（实测破坏 D 用例）。 */
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+}
+.gs-annotation-marker--active {
+  border-color: var(--gs-primary);
+  background: var(--gs-primary);
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(62, 91, 219, 0.25);
+}
+.gs-annotation-marker__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: rgba(62, 91, 219, 0.14);
+  color: var(--gs-primary);
+  font-size: 10px;
+  font-weight: 600;
+}
+.gs-annotation-marker--active .gs-annotation-marker__index {
+  background: rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+.gs-annotation-marker__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .gs-props {
   display: flex;
   flex-direction: column;

@@ -81,15 +81,18 @@ export default function SceneAuthoringPage() {
   const [loading, setLoading] = useState(true);
   const [viewerReady, setViewerReady] = useState(false);
 
-  // SSV-06 §七：标注**新增/删除**后递增，预览 runtime 用最新 descriptor 重建，
-  // 官方 hotspot 才出现（预览必须使用官方 hotspot）。
+  // SSV-06 §七：标注**新增/删除**过去会递增 annotationRevision 让预览 runtime
+  // 用最新 descriptor 重建（官方 hotspot 才出现）。
   //
-  // GS-UI-01 修复：**编辑已有标注**（标题 / 正文 / 相机 / 启用开关）不再递增 ——
-  // 官方 1.35 的 hotspot 只在 createViewer 时按 settings.annotations 构建一次，
-  // 重建是唯一更新途径，但每次编辑都重建会让 3D 视图整段重载（用户反馈的
-  // 「点一个按钮刷新一次」）。编辑类改动的权威结果在 /scene 查看页验证；
-  // 预览侧保留原 hotspot，不再为一次改名重载整个高斯场景。
-  const [annotationRevision, setAnnotationRevision] = useState(0);
+  // GS-UI-01 修复（后续轮次）：**标注的增删不再触发任何重建** ——
+  //   1. 官方 1.35 的 hotspot 只在 createViewer 时按 settings.annotations 构建一次，
+  //      重建是唯一更新途径，但每次增删都重建会让 3D 视图整段重载（用户反馈的
+  //      「添加标记后仍然刷新 viewer」）；
+  //   2. 创作页改为**宿主标记点层**（AuthoringWorkspace 的 AnnotationMarkersOverlay）
+  //      直接投影所有标注的 SCENE 锚点，新增/删除即时可见，不需要重建；
+  //   3. 官方热点层在创作页经行内 style 隐藏（只影响显示，DOM 与契约不变），
+  //      /scene 浏览页仍使用官方 hotspot。
+  // 因此这里不再有 annotationRevision 状态；标注数据本身仍由 annotations state 驱动。
 
   // Annotations (Phase 11)
   const [annotations, setAnnotations] = useState<SceneAnnotation[]>([]);
@@ -293,7 +296,17 @@ export default function SceneAuthoringPage() {
         (window as unknown as { __gsauthoringruntime?: unknown }).__gsauthoringruntime = null;
       }
     };
-  }, [effectiveSceneId, authoring.settingsRevision, annotationRevision, versionRevision, cameraResyncKey]);
+  }, [effectiveSceneId, authoring.settingsRevision, versionRevision, cameraResyncKey]);
+
+  /**
+   * GS-UI-01 修复：创建预览的官方 hotspot 层在创作页隐藏（改用宿主标记点层）。
+   * 只写行内 style，DOM / 契约探测不变；/scene 浏览页不走这里。
+   */
+  useEffect(() => {
+    if (viewerReady && containerRef.current) {
+      runtimeRef.current?.setOfficialHotspotsHidden(true);
+    }
+  }, [viewerReady]);
 
   // Load annotations on mount (Phase 11)
   useEffect(() => {
@@ -775,7 +788,6 @@ export default function SceneAuthoringPage() {
           : {}),
       });
       setAnnotations((prev) => [...prev, ann]);
-      setAnnotationRevision((n) => n + 1);
       setPendingPick(null);
       setPicking(false);
       Modal.success({ content: '标记点已创建（锚点为近似位置，可在属性区继续编辑）' });
@@ -799,12 +811,44 @@ export default function SceneAuthoringPage() {
     [],
   );
 
+  /**
+   * 标注（SCENE 空间锚点）→ 屏幕投影（创作页宿主标记点层每帧调用）。
+   *
+   * 世界变换与相机数学都留在 runtime 层：锚点先经 `worldTransform.sceneToRuntimePoint`
+   * 换算到 RUNTIME 空间，再用 `projectRuntimePointToScreen` 投影 —— 与拾取/轴
+   * gizmo 用的是**同一套**换算，标记点不会与真实 3D 落点漂移。
+   */
+  const handleProjectAnnotation = useCallback(
+    (annotation: SceneAnnotation) => {
+      const runtime = runtimeRef.current;
+      if (!runtime) return null;
+      const rt = runtime.worldTransform.sceneToRuntimePoint({
+        x: annotation.anchorX,
+        y: annotation.anchorY,
+        z: annotation.anchorZ,
+      });
+      return runtime.projectRuntimePointToScreen([rt.x, rt.y, rt.z]);
+    },
+    [],
+  );
+
+  /**
+   * GS-UI-01 修复：属性面板里的文本输入框获得焦点时，关掉官方 Viewer 的键盘
+   * 输入（`state.inputEnabled`），否则在「标注标题」里打字会触发 W/A/S/D 移动、
+   * 1/2/3 切相机模式等快捷键。失焦（且没有落到另一个输入框）时恢复。
+   *
+   * 只切官方公开可写 state，不拦截/伪造键盘事件。
+   */
+  const handleEditorInputActiveChange = useCallback((active: boolean) => {
+    runtimeRef.current?.setInputEnabled(!active);
+  }, []);
+
   const handleSaveAnnotation = useCallback(async (id: string, patch: Partial<SceneAnnotation>) => {
     setAnnotationsSaving(true);
     try {
       const updated = await apiUpdateAnnotation(effectiveSceneId, id, patch);
       setAnnotations((prev) => prev.map((a) => (a.id === id ? updated : a)));
-      // GS-UI-01 修复：编辑已有标注**不重建预览**（见 annotationRevision 注释）。
+      // GS-UI-01 修复：编辑已有标注**不重建预览**（见标注增删不重建的说明）。
     } catch {
       Modal.error({ content: '保存标注失败，请重试' });
     } finally {
@@ -816,7 +860,6 @@ export default function SceneAuthoringPage() {
     try {
       await apiDeleteAnnotation(effectiveSceneId, id);
       setAnnotations((prev) => prev.filter((a) => a.id !== id));
-      setAnnotationRevision((n) => n + 1);
     } catch {
       Modal.error({ content: '删除标注失败，请重试' });
     }
@@ -839,10 +882,31 @@ export default function SceneAuthoringPage() {
     }
   }, [annotations, effectiveSceneId]);
 
-  /** 定位：经官方 hotspot 选中该标注（官方相机过渡）。 */
+  /**
+   * 定位到标注：优先经官方 hotspot 选中（官方相机过渡）。
+   *
+   * 新增标注在官方 settings.annotations 里并不存在（hotspot 层在 createViewer
+   * 时构建一次，创作页此后不重建），因此 `selectGsplatformAnnotation` 会返回
+   * false。此时回退到标注自己保存的相机 pose（SCENE 空间）→ 换算到 RUNTIME →
+   * 官方 setCameraPose 过渡，保证「定位」对新标记点同样可用。
+   */
   const handleNavigateAnnotation = useCallback((id: string) => {
-    runtimeRef.current?.selectGsplatformAnnotation(id);
-  }, []);
+    const runtime = runtimeRef.current;
+    if (!runtime) return;
+    if (runtime.selectGsplatformAnnotation(id)) return;
+    const ann = annotations.find((a) => a.id === id);
+    if (!ann?.cameraPosition || !ann.cameraTarget) return;
+    const rt = runtime.worldTransform.sceneToRuntimeCamera({
+      position: ann.cameraPosition,
+      target: ann.cameraTarget,
+      fov: ann.cameraFov ?? ann.fov ?? 75,
+    });
+    runtime.setCameraPose({
+      position: [rt.position.x, rt.position.y, rt.position.z],
+      target: [rt.target.x, rt.target.y, rt.target.z],
+      fov: rt.fov,
+    });
+  }, [annotations]);
 
   /** 用当前 Viewer 相机覆盖标注自己的相机 pose。 */
   const handleCaptureAnnotationCamera = useCallback(async (id: string) => {
@@ -1040,6 +1104,8 @@ export default function SceneAuthoringPage() {
       onConfirmPick={handleConfirmPick}
       onCancelPick={handleCancelPick}
       projectPoint={handleProjectPoint}
+      projectAnnotationPoint={handleProjectAnnotation}
+      onEditorInputActiveChange={handleEditorInputActiveChange}
       presentation={authoring.presentation}
       authoringSaving={authoring.saving}
       initialViewUse={initialViewUse}

@@ -87,6 +87,18 @@ export interface AuthoringWorkspaceProps {
   projectPoint: (
     point: [number, number, number],
   ) => { x: number; y: number; inFront: boolean } | null;
+  /**
+   * GS-UI-01 修复（需求 4）：标注（SCENE 锚点）→ 容器 CSS 像素投影。
+   * 创作页宿主标记点层每帧用它摆放标记；新增标注无需重建 Viewer 即可显示。
+   */
+  projectAnnotationPoint: (
+    annotation: SceneAnnotation,
+  ) => { x: number; y: number; inFront: boolean } | null;
+  /**
+   * GS-UI-01 修复（需求 3）：属性面板文本输入框聚焦/失焦 —— 页面据此关闭
+   * 官方 Viewer 键盘输入，避免打字触发 W/A/S/D、1/2/3 等快捷键。
+   */
+  onEditorInputActiveChange: (active: boolean) => void;
   selection: WorkspaceSelection;
   onSelect: (selection: WorkspaceSelection) => void;
 
@@ -159,7 +171,19 @@ export interface AuthoringWorkspaceProps {
 }
 
 export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
-  const { sceneId, selection, onSelect, annotations, viewpoints, pendingPick, onConfirmPick, onCancelPick, projectPoint } = props;
+  const {
+    sceneId,
+    selection,
+    onSelect,
+    annotations,
+    viewpoints,
+    pendingPick,
+    onConfirmPick,
+    onCancelPick,
+    projectPoint,
+    projectAnnotationPoint,
+    onEditorInputActiveChange,
+  } = props;
   const selectedAnnotation = useMemo(
     () => (selection.kind === 'annotation'
       ? annotations.find((a) => a.id === selection.id) ?? null
@@ -181,6 +205,36 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
     setTab(selection.kind);
   }, [selection.kind]);
 
+  // GS-UI-01 修复（需求 3）：属性面板里任何文本框聚焦 → 关闭官方 Viewer 键盘
+  // 输入（页面写 state.inputEnabled）。focusout 落到另一个输入框时不恢复，
+  // 避免在标题/正文之间切换时短暂放开快捷键。
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = workspaceRef.current;
+    if (!root) return;
+    const isTextField = (el: EventTarget | null): boolean => {
+      const node = el as HTMLElement | null;
+      if (!node) return false;
+      const tag = node.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || node.isContentEditable === true;
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      if (isTextField(event.target)) onEditorInputActiveChange(true);
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (!isTextField(event.target)) return;
+      // 焦点移动到另一个文本输入框 → 继续保持关闭。
+      if (isTextField(event.relatedTarget)) return;
+      onEditorInputActiveChange(false);
+    };
+    root.addEventListener('focusin', onFocusIn);
+    root.addEventListener('focusout', onFocusOut);
+    return () => {
+      root.removeEventListener('focusin', onFocusIn);
+      root.removeEventListener('focusout', onFocusOut);
+    };
+  }, [onEditorInputActiveChange]);
+
   const sceneSections: Array<[SceneSection, string]> = [
     ['camera', '初始相机'],
     ['world', '世界方向'],
@@ -191,7 +245,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
   ];
 
   return (
-    <div className="gs-workspace" data-testid="scene-authoring-page">
+    <div className="gs-workspace" data-testid="scene-authoring-page" ref={workspaceRef}>
       <header className="gs-workspace__topbar">
         <PcuiButton text="← 返回" onClick={props.onBack} />
         <Label class="gs-workspace__name" text={sceneId} />
@@ -222,10 +276,28 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
             props.cameraEdit ? ' gs-workspace__viewer--camera-edit' : ''
           }`}
           data-testid="authoring-viewer"
-          onClick={props.onViewerClick}
         >
           {props.loading && <div className="gs-workspace__loading">加载场景…</div>}
           <div ref={props.containerRef} className="gs-workspace__mount" data-testid="authoring-mount" />
+          {/* GS-UI-01 修复（需求 2）：拾取模式下的透明指针捕获层 —— 盖住官方
+              canvas，点击只解析锚点，不会同时触发官方 Orbit/Pan/Zoom 输入。
+              点击冒泡到本层处理（不再依赖外层 onClick，避免双触发）。 */}
+          {props.picking && (
+            <div
+              className="gs-pick-overlay"
+              data-testid="annotation-pick-overlay"
+              onClick={props.onViewerClick}
+            />
+          )}
+          {/* GS-UI-01 修复（需求 4）：宿主标记点层 —— 直接投影所有标注锚点，
+              新增/删除即时可见，无需重建 Viewer（官方 hotspot 层已在创作页隐藏）。 */}
+          {!props.picking && annotations.length > 0 && (
+            <AnnotationMarkersOverlay
+              annotations={annotations}
+              selectedId={selection.kind === 'annotation' ? selection.id : null}
+              projectPoint={projectAnnotationPoint}
+            />
+          )}
           {props.cameraEdit && (
             <>
               <div className="gs-camera-edit-frame" aria-hidden />
@@ -499,6 +571,83 @@ function AnnotationPickMarker({
         <PcuiButton text="设为标记点" onClick={onConfirm} />
         <PcuiButton text="重选" onClick={onCancel} />
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ //
+// 宿主标记点层（GS-UI-01 修复 / 需求 4）
+// ------------------------------------------------------------------ //
+
+/**
+ * 创作页的持久标记点层：把**所有**标注的 SCENE 锚点经官方相机投影到屏幕，
+ * 渲染成**纯视觉**标记（pointer-events:none —— 选择/编辑走右侧标注列表，
+ * 绝不拦截相机输入）。新增 / 删除 / 改名都即时反映（数据来自 annotations
+ * state），不需要重建 Viewer —— 这正是解决「添加标记后刷新 viewer」与
+ * 「标记点创建后看不到」两个问题的方式。
+ *
+ * 官方 hotspot 层在创作页被隐藏（行内 display:none），因此不会重复显示；
+ * /scene 浏览页仍使用官方 hotspot，不受影响。
+ *
+ * 投影回调由页面注入（含世界变换换算），这里不复制相机数学。
+ */
+function AnnotationMarkersOverlay({
+  annotations,
+  selectedId,
+  projectPoint,
+}: {
+  annotations: SceneAnnotation[];
+  selectedId: string | null;
+  /** 标注 → 容器 CSS 像素；null = 相机不可用。 */
+  projectPoint: (
+    annotation: SceneAnnotation,
+  ) => { x: number; y: number; inFront: boolean } | null;
+}) {
+  const [marks, setMarks] = useState<Array<{ id: string; title: string; x: number; y: number }>>([]);
+
+  useEffect(() => {
+    let raf = 0;
+    let last = 0;
+    const ordered = annotations.slice().sort((a, b) => a.orderIndex - b.orderIndex);
+    const tick = (now: number) => {
+      // ~20fps：标记层不需要每帧更新，降低 setState 频率。
+      if (now - last > 50) {
+        last = now;
+        const next: Array<{ id: string; title: string; x: number; y: number }> = [];
+        for (const a of ordered) {
+          const p = projectPoint(a);
+          if (p && p.inFront) {
+            next.push({ id: a.id, title: a.title || '(未命名)', x: p.x, y: p.y });
+          }
+        }
+        setMarks(next);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [annotations, projectPoint]);
+
+  return (
+    <div className="gs-annotation-markers" data-testid="authoring-annotation-markers">
+      {marks.map((m, i) => (
+        <div
+          key={m.id}
+          className={
+            m.id === selectedId
+              ? 'gs-annotation-marker gs-annotation-marker--active'
+              : 'gs-annotation-marker'
+          }
+          style={{ left: m.x, top: m.y }}
+          data-testid="authoring-annotation-marker"
+          data-annotation-id={m.id}
+          title={m.title}
+          aria-hidden
+        >
+          <span className="gs-annotation-marker__index">{i + 1}</span>
+          <span className="gs-annotation-marker__label">{m.title}</span>
+        </div>
+      ))}
     </div>
   );
 }

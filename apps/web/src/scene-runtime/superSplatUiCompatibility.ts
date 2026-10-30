@@ -132,6 +132,24 @@ export function clickOfficialControl(
   return true;
 }
 
+/**
+ * 官方标注热点层显隐（GS-UI-01 修复）。
+ *
+ * 与 {@link setOfficialControlsToolbarHidden} 同一手法：只写官方容器自身的
+ * 行内 style，不删除 / 不重建 DOM —— 契约探测的 hotspotCount 与 e2e 的
+ * `querySelectorAll` 计数仍然成立，只是编辑器里不显示官方热点。
+ *
+ * 创作页用宿主标记点（新增标注无需重建 Viewer 即可显示）；/scene 浏览页不调用。
+ */
+export function setOfficialAnnotationHotspotsHidden(
+  container: HTMLElement | null,
+  hidden: boolean,
+): void {
+  if (!container) return;
+  const el = container.querySelector<HTMLElement>(`.${OFFICIAL_HOTSPOTS_CONTAINER_CLASS}`);
+  if (el) el.style.display = hidden ? 'none' : '';
+}
+
 /** 作用域样式 id（幂等注入）。 */
 export const UI_SCOPE_STYLE_ID = 'gs-supersplat-ui-scope';
 
