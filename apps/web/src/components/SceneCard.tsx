@@ -1,5 +1,5 @@
 import { App, Button, Tag, Tooltip } from 'antd';
-import { EyeOutlined, LikeOutlined, StarFilled, StarOutlined } from '@ant-design/icons';
+import { EyeOutlined, LikeOutlined, StarFilled, StarOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import type { SceneSummary } from '../fixtures/scenes';
 import { formatOriginalFormat, formatUploadTime } from '../utils/provenance';
@@ -122,15 +122,36 @@ export function SceneCard({
           <span>
             <LikeOutlined aria-hidden /> {scene.likes.toLocaleString()}
           </span>
-          <Tooltip title={isFavorited ? '取消收藏' : '收藏'}>
-            <Button
-              size="small"
-              type="text"
-              icon={isFavorited ? <StarFilled aria-hidden /> : <StarOutlined aria-hidden />}
-              aria-label={isFavorited ? `取消收藏 ${scene.title}` : `收藏 ${scene.title}`}
-              onClick={onFavorite}
-            />
-          </Tooltip>
+          <span className="gs-scene-card__actions">
+            <Tooltip title={isFavorited ? '取消收藏' : '收藏'}>
+              <Button
+                size="small"
+                type="text"
+                icon={isFavorited ? <StarFilled aria-hidden /> : <StarOutlined aria-hidden />}
+                aria-label={isFavorited ? `取消收藏 ${scene.title}` : `收藏 ${scene.title}`}
+                onClick={onFavorite}
+              />
+            </Tooltip>
+            {/* GS-UI-01 后续：每个场景的「VR 版」入口 —— 与网页版卡片并列，
+                点击进 /xr/:sceneId（VR 模式页，页内「进入 VR」按钮触发沉浸会话）。
+                卡片主体仍进网页版 /scene/:id；此按钮 stopPropagation 不触发卡片跳转。
+                注意：VR 模式需要头显浏览器 + HTTPS/安全上下文（WebXR 硬条件）。 */}
+            <Tooltip title="以 VR 模式打开（需支持 WebXR 的头显浏览器，localhost 或 HTTPS）">
+              <Button
+                size="small"
+                type="text"
+                icon={<VideoCameraOutlined aria-hidden />}
+                aria-label={`以 VR 模式打开 ${scene.title}`}
+                data-testid={`scene-vr-${scene.id}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  navigate(`/xr/${scene.id}`);
+                }}
+              >
+                VR版
+              </Button>
+            </Tooltip>
+          </span>
         </div>
       </div>
     </article>

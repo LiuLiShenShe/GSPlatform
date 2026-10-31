@@ -360,6 +360,21 @@ a {
   margin-top: 4px;
   font-size: 12px;
   color: var(--gs-text-secondary);
+  /* 窄卡片时把「收藏 + VR版」整体换到下一行右对齐，统计不被挤断。 */
+  flex-wrap: wrap;
+}
+
+.gs-scene-card__stats > span {
+  white-space: nowrap;
+}
+
+/* GS-UI-01 后续：卡片右侧的「收藏 + VR版」操作组 —— 右对齐，避免挤到统计。 */
+.gs-scene-card__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ */
