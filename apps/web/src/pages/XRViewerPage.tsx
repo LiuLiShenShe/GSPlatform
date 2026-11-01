@@ -30,6 +30,7 @@ import { useBackgroundAudio } from '../hooks/useBackgroundAudio';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { diagnosticsEnabled } from '../scene-runtime/RuntimePerformanceDiagnostics';
 import { XRPerformancePanel } from '../features/viewer-official/XRPerformancePanel';
+import { XR_RENDER_SCALE_OPTIONS } from '../scene-runtime/vrRenderScalePolicy';
 
 export default function XRViewerPage() {
   const { sceneId } = useParams<{ sceneId: string }>();
@@ -188,6 +189,36 @@ export default function XRViewerPage() {
             </div>
           )}
           {/*
+            GS-PERF-VR：VR 渲染分辨率 —— 真实头显性能旋钮。
+            官方「流畅模式」只降 splat 预算（performanceMode → splatBudget），
+            对高填充率的近距离视角几乎无效；头显里真正的瓶颈是每眼分辨率 ×
+            双眼填充。这里改的是 XRWebGLLayer 的 framebufferScaleFactor
+            （官方 viewer 自己就用 maxPixelRatio / devicePixelRatio 算它），
+            只影响头显内画面，网页版渲染不受影响。会话创建时固化 → 进入前选。
+          */}
+          <div className="gs-xr__render-scale" data-testid="xr-render-scale">
+            <p className="gs-xr__viewpoints-title">VR 渲染分辨率</p>
+            <div className="gs-xr__viewpoints-list">
+              {XR_RENDER_SCALE_OPTIONS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className="gs-xr__viewpoint"
+                  aria-pressed={state.vrRenderScale === option.value}
+                  data-testid={`xr-render-scale-${
+                    option.value === null ? 'native' : Math.round(option.value * 100)
+                  }`}
+                  onClick={() => state.setVrRenderScale(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <p className="gs-xr__hint" data-testid="xr-render-scale-hint">
+              越低越流畅；只影响头显内画面，网页版不受影响。进入 VR 后生效。
+            </p>
+          </div>
+          {/*
             GS-NEXT-05：进入 VR 后 DOM 层在头显里不可见 —— 目的地切换改由官方
             XrMenu（手柄 Y 键开关）承担。这里的说明只在**进入前**给 PC 用户看，
             且只在菜单真的装上时显示（没装上就别承诺）。
@@ -236,6 +267,8 @@ export default function XRViewerPage() {
           gsplats: state.gsplats,
           performanceMode: state.performanceMode,
           progress: Math.round(state.progress),
+          // GS-PERF-VR：本次会话用的 VR 渲染分辨率（null = 官方 100% 默认）。
+          vrRenderScale: state.vrRenderScale,
           hasCollision: state.hasCollision,
           walkAllowed: state.walkAllowed,
           effectiveWalkAllowed: state.walkAllowed && !state.collisionStale,

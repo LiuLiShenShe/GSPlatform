@@ -179,6 +179,7 @@ beforeEach(() => {
   destroyCalls = 0;
   xrModeCallbacks.clear();
   nextHandleOptions = {};
+  localStorage.removeItem('gsplatform.vrRenderScale');
   mockNavigatorXR({ exists: true, immersiveVr: true });
 });
 
@@ -391,6 +392,28 @@ describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数�
     expect(document.querySelector('.xr-page')).toBeNull();
     // 进入 VR 前隐藏 Exit VR（仅在会话中显示）
     expect(screen.queryByTestId('exit-vr-btn')).toBeNull();
+    u.unmount();
+  });
+
+  it('GS-PERF-VR: 进入 VR 前可选渲染分辨率，选择持久化；进入仍走官方 startXR', async () => {
+    const u = renderApp({ route: '/xr/r-8c4e2264e86a' });
+    await waitFor(() => {
+      expect(screen.getByTestId('diag-state-loaded').textContent).toBe('true');
+    });
+    // 默认 = 原生（null，官方 100% 行为，不施加任何 maxPixelRatio 改动）
+    expect(screen.getByTestId('xr-render-scale-native')).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByTestId('xr-render-scale-70'));
+    expect(screen.getByTestId('xr-render-scale-70')).toHaveAttribute('aria-pressed', 'true');
+    expect(localStorage.getItem('gsplatform.vrRenderScale')).toBe('0.7');
+    // 回选原生 → 清偏好
+    await userEvent.click(screen.getByTestId('xr-render-scale-native'));
+    expect(localStorage.getItem('gsplatform.vrRenderScale')).toBeNull();
+    // 降档后进入 VR：仍由官方 startXR('vr') 建立会话（不新增第二套 XR 路径）
+    await userEvent.click(screen.getByTestId('xr-render-scale-55'));
+    await userEvent.click(screen.getByTestId('enter-vr-btn'));
+    await waitFor(() => {
+      expect(officialHandle.startXR).toHaveBeenCalledWith('vr');
+    });
     u.unmount();
   });
 
