@@ -80,6 +80,16 @@ export const XR_FLOOR_TELEPORT_ALLOWED = false;
 /** 菜单行下标（0 = 当前目的地只读标签）。 */
 export const XR_MENU_CURRENT_INDEX = 0;
 
+/**
+ * 没有任何可达目的地时，首行显示的说明文字。
+ *
+ * 菜单**永远安装**（只要有官方 XR Rig）：手柄 Y 键必须始终能打开一个可见菜单，
+ * 否则用户按 Y 完全没有反馈，无法区分"菜单没装"和"按错了键"。没有可去的位置时
+ * 菜单里只剩这一行说明 + `退出 VR`，既解释了为什么没有"上一个/下一个"，又保证
+ * 有一个能立刻用上的按钮。
+ */
+export const XR_MENU_EMPTY_LABEL = '暂无导览点';
+
 /** 系统字体栈 —— 不打包字体文件，中英文都走浏览器/系统字体。 */
 export const XR_MENU_FONT_STACK =
   'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
@@ -200,8 +210,13 @@ export function createXrMenuFont(app: XrUiHostApp): XrMenuFont {
  * 没有「初始观察位置」时不提供"返回初始位置"（点了无处可回 = 假按钮）。
  * 只有一个目的地时退化为「当前 + 退出 VR」。
  */
-export function buildXrMenuItems(destinations: readonly XrDestination[]): XrMenuItem[] {
-  const items: XrMenuItem[] = [{ label: '' }];
+export function buildXrMenuItems(
+  destinations: readonly XrDestination[],
+  emptyLabel = ''
+): XrMenuItem[] {
+  // 0 个目的地时首行显示说明（否则空串 → 一个空行，用户看到"菜单打开了但只有
+  // 退出 VR"，同样一头雾水）。有目的地时首行是只读的"序号/总数 · 名称"标签。
+  const items: XrMenuItem[] = [{ label: destinations.length === 0 ? emptyLabel : '' }];
   if (destinations.length >= 2) {
     items.push({ label: '上一个', eventName: XR_MENU_EVENTS.prev });
     items.push({ label: '下一个', eventName: XR_MENU_EVENTS.next });

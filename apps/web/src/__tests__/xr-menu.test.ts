@@ -14,6 +14,7 @@ import {
   ensureXrUiSystems,
   menuGlyphSource,
   XR_FLOOR_TELEPORT_ALLOWED,
+  XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
   type ComfortVeilSurface,
 } from '../scene-runtime/xrMenu';
@@ -115,6 +116,12 @@ describe('buildXrMenuItems', () => {
       { key: 'initial:xr-initial', kind: 'initial', id: INITIAL_DESTINATION_ID, label: '初始位置' },
     ]);
     expect(items.map((i) => i.eventName ?? null)).toEqual([null, XR_MENU_EVENTS.home, XR_MENU_EVENTS.exit]);
+  });
+
+  it('0 个目的地时仍给出可解释的首行 + 退出 VR（Y 键必须有可见反馈）', () => {
+    const items = buildXrMenuItems([], XR_MENU_EMPTY_LABEL);
+    expect(items.map((i) => i.eventName ?? null)).toEqual([null, XR_MENU_EVENTS.exit]);
+    expect(items[0].label).toBe(XR_MENU_EMPTY_LABEL);
   });
 
   it('菜单文字全部进字形源（官方 CanvasFont 不会自动补字形）', () => {

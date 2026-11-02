@@ -63,6 +63,7 @@ import {
   uiLayerId,
   XR_FLOOR_TELEPORT_ALLOWED,
   XR_MENU_ACTIVE_EVENT,
+  XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
   type ComfortFade,
   type XrMenuFont,
@@ -176,7 +177,7 @@ export type CameraModeCallback = (mode: RuntimeCameraMode) => void;
 
 /** 会话内导览菜单诊断读数（GS-NEXT-05；真机 / e2e 取证口）。 */
 export interface XrMenuInfo {
-  /** unavailable | empty | installed | install-failed | no-navigation */
+  /** unavailable | installed | install-failed | no-navigation */
   state: string;
   /** 官方 XrMenu 实例是否装上（菜单可见还要手柄按 Y）。 */
   menuInstalled: boolean;
@@ -301,7 +302,7 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   /** 本层补装的官方 UI 组件系统名（诊断用；官方 App 默认没装）。 */
   private xrUiSystemsAdded: string[] = [];
   /** 菜单安装/使用状态（诊断取证口；不可用时不影响进入 VR 与桌面导航）。 */
-  private xrMenuState: 'unavailable' | 'empty' | 'installed' | 'install-failed' | 'no-navigation' = 'unavailable';
+  private xrMenuState: 'unavailable' | 'installed' | 'install-failed' | 'no-navigation' = 'unavailable';
 
   private constructor(handle: ViewerHandle, viewerOptions: CreateViewerOptions) {
     this.handle = handle;
@@ -1015,16 +1016,18 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     }
     this.xrNavigation = readNavigationScript(rig);
     this.applyFloorTeleportPolicy();
-    if (this.xrDestinations().length === 0) {
-      // 没有可作为目的地的位置（无 authored 初始相机 + 无观察点 + 无导览点）：
-      // 不给一个全是死按钮的菜单。
-      this.xrMenuState = 'empty';
-      return;
-    }
+    /*
+     * 不管有没有可达目的地都安装菜单。
+     *
+     * 早期版本在 0 目的地时直接 return（state='empty'），本意是不给"全是死按钮"
+     * 的菜单；真实后果是**手柄 Y 键完全没有反馈** —— 用户无法区分"菜单没装"和
+     * "按键不对"，而绝大多数场景确实没有导览点/观察点。现在 0 目的地时菜单首行
+     * 显示 {@link XR_MENU_EMPTY_LABEL}，并保留「退出 VR」，Y 键永远有可见反馈。
+     */
     try {
       this.xrUiSystemsAdded = ensureXrUiSystems(app);
       this.xrMenuFont = createXrMenuFont(app);
-      const items = buildXrMenuItems(this.xrDestinations());
+      const items = buildXrMenuItems(this.xrDestinations(), XR_MENU_EMPTY_LABEL);
       this.xrMenu = installXrMenu({ app, rig, font: this.xrMenuFont, items });
       const camera = app.root.findByName('camera') as Entity | null;
       const surface = camera ? createComfortVeil(camera, uiLayerId(app)) : null;

@@ -63,6 +63,7 @@ import {
   createXrMenuFont,
   createComfortFade,
   XR_MENU_ACTIVE_EVENT,
+  XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
 } from '../scene-runtime/xrMenu';
 import type { RuntimeAnnotation, RuntimeViewpoint } from '../scene-runtime/types';
@@ -249,10 +250,17 @@ describe('官方 XrMenu 安装（GS-NEXT-05 §2）', () => {
     expect(call.items.some((i) => i.eventName === XR_MENU_EVENTS.home)).toBe(false);
   });
 
-  it('无任何目的地时不装菜单（不给全是死按钮的菜单），进入 VR 仍然可用', async () => {
+  it('无任何目的地时仍然安装菜单（首行说明 + 退出 VR），手柄 Y 键一定有反馈', async () => {
     const { runtime } = await createXR({ xrInitialCamera: null, viewpoints: [], guidePoints: [] });
-    expect(mockedInstall).not.toHaveBeenCalled();
-    expect(runtime.xrMenuInfo().state).toBe('empty');
+    // 早期版本这里直接 return → Y 键按下去毫无反应（用户无法区分"没装"和"按键不对"）。
+    expect(mockedInstall).toHaveBeenCalledTimes(1);
+    const call = mockedInstall.mock.calls[0][0];
+    expect(call.items.map((i) => i.eventName ?? null)).toEqual([
+      null,
+      XR_MENU_EVENTS.exit,
+    ]);
+    expect(call.items[0].label).toBe(XR_MENU_EMPTY_LABEL);
+    expect(runtime.xrMenuInfo().state).toBe('installed');
     expect(runtime.xrMenuInfo().destinationCount).toBe(0);
     expect(runtime.loaded).toBe(true);
   });

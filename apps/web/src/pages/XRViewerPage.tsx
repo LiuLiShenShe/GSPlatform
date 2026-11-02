@@ -194,7 +194,9 @@ export default function XRViewerPage() {
           */}
           {state.xrMenu.menuInstalled && (
             <p className="gs-xr__hint" data-testid="xr-menu-hint">
-              进入后按手柄 Y 键打开导览菜单：上一个 / 下一个 / 返回初始位置 / 退出 VR
+              {state.xrMenu.destinationCount > 0
+                ? '进入后按手柄 Y 键打开导览菜单：上一个 / 下一个 / 返回初始位置 / 退出 VR'
+                : '该场景暂无导览点/观察点：进入后按手柄 Y 键仍会打开菜单（仅「退出 VR」）。如需切换标记点，请先在编辑器添加带相机位置的标注或观察点'}
             </p>
           )}
           <button
