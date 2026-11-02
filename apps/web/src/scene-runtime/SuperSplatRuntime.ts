@@ -65,6 +65,10 @@ import {
   XR_MENU_ACTIVE_EVENT,
   XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
+  XR_MENU_TOGGLE_BUTTONS,
+  pickPreferredXrSource,
+  shouldHostHandleXrToggle,
+  type XrToggleInputSource,
   type ComfortFade,
   type XrMenuFont,
   type XrMenuHandle,
@@ -301,6 +305,8 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   private readonly xrDestinationListeners = new Set<(key: string | null) => void>();
   /** 本层补装的官方 UI 组件系统名（诊断用；官方 App 默认没装）。 */
   private xrUiSystemsAdded: string[] = [];
+  /** 宿主兜底开关的"上一帧按下"状态（按输入源对象身份隔离；避免跨源串边沿）。 */
+  private readonly xrTogglePressed = new WeakMap<object, boolean>();
   /** 菜单安装/使用状态（诊断取证口；不可用时不影响进入 VR 与桌面导航）。 */
   private xrMenuState: 'unavailable' | 'installed' | 'install-failed' | 'no-navigation' = 'unavailable';
 
@@ -990,6 +996,16 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     });
     // XR 会话可用后再兜一次安装（相机 Rig 在某些时序下创建得比 createViewer 早/晚）。
     this.subscribeEngine(xr as unknown as EventHandler, 'available', () => this.installOfficialXrMenu());
+    /*
+     * 宿主兜底开关：官方 XrMenu 只轮询「首选手柄的 buttons[4]」，且要求
+     * handedness 可识别 + grip 存在。PICO 真机上这三点都不保证成立，导致按 Y
+     * 毫无反应。这里每帧补一层**只覆盖官方盲区**的轮询（见
+     * `shouldHostHandleXrToggle`），官方能处理时一律留给官方，避免双重翻转。
+     *
+     * 挂在 app 的引擎帧循环而不是 xr：官方一次性的出生对齐订阅（`xr.on('update')`）
+     * 在施加后会摘掉自己并断言 `xr` 无残留监听；这里不掺和那条生命周期。
+     */
+    this.subscribeEngine(this.app, 'update', () => this.pollXrMenuToggle());
     this.installOfficialXrMenu();
   }
 
@@ -1037,6 +1053,48 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     } catch (err) {
       this.xrMenuState = 'install-failed';
       console.warn('[xr] XrMenu 安装失败（不影响进入 VR 与桌面导航）', err);
+    }
+  }
+
+  /**
+   * 宿主侧菜单开关兜底 —— **只处理官方盲区**。
+   *
+   * 官方 XrMenu 需要「首选输入源 + grip + `buttons[4]`」三者齐备才会轮询开关
+   * （见 `xrMenu.ts` 的 `shouldHostHandleXrToggle`）。PICO 上 handedness 可能
+   * 全为 `'none'`、键位可能不是 4、或用户按的是另一只手 —— 这些情况下官方
+   * 什么也不做，表现就是"按 Y 没反应"。这里补的仍是**官方自己的**开关：
+   * 写 `_activeInputSource` 让菜单吸附到当前手柄，再调官方 `_setMenuVisible`。
+   *
+   * 官方能处理时（首选手柄的按钮 4）一律跳过 → 不会双重翻转。
+   */
+  private pollXrMenuToggle(): void {
+    const menu = this.xrMenu;
+    const xr = (
+      this.app as unknown as {
+        xr?: { active?: boolean; input?: { inputSources?: unknown[] } };
+      }
+    ).xr;
+    if (!menu || !xr?.active) return;
+    const sources = (xr.input?.inputSources ?? []) as XrToggleInputSource[];
+    const preferred = pickPreferredXrSource(sources);
+    const script = menu.script;
+    for (const source of sources) {
+      let hostHandles = false;
+      for (const index of XR_MENU_TOGGLE_BUTTONS) {
+        if (shouldHostHandleXrToggle(source, index, preferred)) {
+          hostHandles = true;
+          break;
+        }
+      }
+      const wasPressed = this.xrTogglePressed.get(source) ?? false;
+      this.xrTogglePressed.set(source, hostHandles);
+      if (!hostHandles || wasPressed) continue;
+      if (script._menuVisible === true) {
+        script._setMenuVisible(false);
+      } else {
+        script._activeInputSource = source;
+        script._setMenuVisible(true);
+      }
     }
   }
 

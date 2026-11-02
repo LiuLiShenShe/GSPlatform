@@ -90,6 +90,68 @@ export const XR_MENU_CURRENT_INDEX = 0;
  */
 export const XR_MENU_EMPTY_LABEL = '暂无导览点';
 
+// ------------------------------------------------------------------ //
+// 宿主侧按键兜底（PICO 真机取证后的加固）
+// ------------------------------------------------------------------ //
+
+/**
+ * 官方 XrMenu 的开关方式有两个硬前提（`xr-menu.mjs` 2.22.4 实测）：
+ *   1. `_findPreferredInput()` 必须选出一个 source（默认 `preferredHand='left'`；
+ *      若所有 source 的 `handedness` 都是 `'none'` → 返回 null → **整帧直接 return**，
+ *      既不轮询按键，也不做 `_followAnchor` 定位）；
+ *   2. 该 source 必须有 `grip`（否则不会调 `_updateControllerMode`），且
+ *      `gamepad.buttons[4]` 必须存在（否则走 else 分支只重置状态）。
+ *
+ * 真机上（PICO）这三件事都不保证成立：handedness 可能上报 `'none'`、按钮索引
+ * 可能不是 `xr-standard` 的 4、或用户按的是另一只手的键。所以宿主再补一层
+ * 只针对上述**盲区**的轮询 —— 官方能处理的情况一律让官方处理，避免双重翻转
+ * （两次 toggle 叠加 = 菜单开了又立刻关，表现就是"按了没反应"）。
+ */
+export const XR_MENU_TOGGLE_BUTTONS = [4, 3] as const;
+
+/** 宿主轮询用的最小输入源形状（官方 `XrInputSource` 的子集）。 */
+export interface XrToggleInputSource {
+  handedness: string;
+  grip: unknown;
+  gamepad: Gamepad | null;
+}
+
+/** `gamepad.buttons` 里某个键是否按下（`pressed` 或 `value>0.5`，兼容不同运行时）。 */
+export function isGamepadButtonPressed(button: GamepadButton | null | undefined): boolean {
+  if (!button) return false;
+  return button.pressed === true || (typeof button.value === 'number' && button.value > 0.5);
+}
+
+/** 复刻官方 `_findPreferredInput()` 的选择规则：先 preferredHand，再任一非 `none`。 */
+export function pickPreferredXrSource<T extends XrToggleInputSource>(
+  sources: readonly T[],
+  preferredHand = 'left'
+): T | null {
+  return (
+    sources.find((s) => s.handedness === preferredHand) ??
+    sources.find((s) => s.handedness !== 'none') ??
+    null
+  );
+}
+
+/**
+ * 这次按键是否该由宿主处理（false = 留给官方 XrMenu）。
+ *
+ * 官方只轮询「首选手柄的 `buttons[4]`（toggleButtonIndex）」，且必须有 `grip`；
+ * 除此之外的组合（另一只手 / 按钮索引 3 / handedness 全 `none` / 无 grip）都是
+ * 官方盲区，由宿主接管。
+ */
+export function shouldHostHandleXrToggle(
+  source: XrToggleInputSource,
+  buttonIndex: number,
+  preferredSource: XrToggleInputSource | null
+): boolean {
+  if (!isGamepadButtonPressed(source.gamepad?.buttons?.[buttonIndex])) return false;
+  if (buttonIndex !== 4) return true;
+  if (source !== preferredSource) return true;
+  return !source.grip;
+}
+
 /** 系统字体栈 —— 不打包字体文件，中英文都走浏览器/系统字体。 */
 export const XR_MENU_FONT_STACK =
   'system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';

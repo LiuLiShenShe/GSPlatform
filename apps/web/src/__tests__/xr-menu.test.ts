@@ -12,11 +12,15 @@ import {
   buildXrMenuItems,
   createComfortFade,
   ensureXrUiSystems,
+  isGamepadButtonPressed,
   menuGlyphSource,
+  pickPreferredXrSource,
+  shouldHostHandleXrToggle,
   XR_FLOOR_TELEPORT_ALLOWED,
   XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
   type ComfortVeilSurface,
+  type XrToggleInputSource,
 } from '../scene-runtime/xrMenu';
 import type { AppBase } from 'playcanvas';
 import { INITIAL_DESTINATION_ID } from '../scene-runtime/xrDestinations';
@@ -140,6 +144,48 @@ describe('buildXrMenuItems', () => {
 describe('XR_FLOOR_TELEPORT_ALLOWED', () => {
   it('恒为 false —— 未校准场景不得出现 Y=0 地面传送（GS-NEXT-05 §4）', () => {
     expect(XR_FLOOR_TELEPORT_ALLOWED).toBe(false);
+  });
+});
+
+describe('宿主侧菜单开关兜底（PICO 盲区）', () => {
+  const src = (
+    handedness: string,
+    grip: unknown,
+    buttons: Array<{ pressed?: boolean; value?: number }> = []
+  ): XrToggleInputSource => ({ handedness, grip, gamepad: { buttons } as unknown as Gamepad });
+
+  it('按钮按下判定：pressed 或 value>0.5 都算，缺失/null 不算', () => {
+    expect(isGamepadButtonPressed({ pressed: true } as GamepadButton)).toBe(true);
+    expect(isGamepadButtonPressed({ pressed: false, value: 0.8 } as GamepadButton)).toBe(true);
+    expect(isGamepadButtonPressed({ pressed: false, value: 0.3 } as GamepadButton)).toBe(false);
+    expect(isGamepadButtonPressed(null)).toBe(false);
+    expect(isGamepadButtonPressed(undefined)).toBe(false);
+  });
+
+  it('首选输入源：优先 left，其次任一非 none，全 none 返回 null', () => {
+    const left = src('left', {});
+    const right = src('right', {});
+    const none = src('none', {});
+    expect(pickPreferredXrSource([right, left])).toBe(left);
+    expect(pickPreferredXrSource([none, right])).toBe(right);
+    expect(pickPreferredXrSource([none, none])).toBeNull();
+    expect(pickPreferredXrSource([])).toBeNull();
+  });
+
+  it('官方能处理的组合交给官方；其余盲区由宿主接管', () => {
+    const left = src('left', {}, [{}, {}, {}, {}, { pressed: true }]);
+    const right = src('right', {}, [{}, {}, {}, {}, { pressed: true }]);
+    // 未按下 → 谁都不管
+    expect(shouldHostHandleXrToggle(src('left', {}), 4, left)).toBe(false);
+    // 官方组合：首选手柄 + grip + buttons[4] → 留给官方
+    expect(shouldHostHandleXrToggle(left, 4, left)).toBe(false);
+    // 非首选的手 → 宿主接管
+    expect(shouldHostHandleXrToggle(right, 4, left)).toBe(true);
+    // 首选手柄无 grip（官方不会跑 _updateControllerMode）→ 宿主接管
+    const noGripLeft = src('left', null, [{}, {}, {}, {}, { pressed: true }]);
+    expect(shouldHostHandleXrToggle(noGripLeft, 4, noGripLeft)).toBe(true);
+    // 首选手柄按 buttons[3]（官方只用 4）→ 宿主接管
+    expect(shouldHostHandleXrToggle(src('left', {}, [{}, {}, {}, { pressed: true }, {}]), 3, left)).toBe(true);
   });
 });
 

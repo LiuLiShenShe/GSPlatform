@@ -77,5 +77,16 @@ declare module 'playcanvas/scripts/esm/xr/xr-menu.mjs' {
 
     /** 当前是否有指针射线停在可交互按钮上（官方给导航脚本做仲裁用）。 */
     readonly isPointerOverMenu: boolean;
+
+    /**
+     * 以下三个成员在官方源码里是"私有约定"（下划线前缀，不是 `#` 真私有），
+     * **2.22.4 稳定存在**。宿主只在官方盲区（见 `xrMenu.ts` 的
+     * `shouldHostHandleXrToggle`）接管开关时读写它们：先写 `_activeInputSource`
+     * 让 `_setMenuVisible(true)` 吸附到正确的手柄锚点，再翻转可见性。
+     * 升级 playcanvas 时必须重新核对这三个名字。
+     */
+    readonly _menuVisible?: boolean;
+    _activeInputSource?: unknown;
+    _setMenuVisible(visible: boolean): void;
   }
 }

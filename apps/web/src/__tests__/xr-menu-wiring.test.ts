@@ -29,7 +29,7 @@ vi.mock('../scene-runtime/xrMenu', async (importOriginal) => {
       destroy: vi.fn(),
     })),
     installXrMenu: vi.fn(() => ({
-      script: {},
+      script: mockMenuScript,
       setCurrentLabel: vi.fn(() => true),
       isPointerOverMenu: vi.fn(() => false),
       destroy: vi.fn(),
@@ -75,6 +75,13 @@ const mockedFade = vi.mocked(createComfortFade);
 
 /** 最近一次 fade 的 midpoint（测试手动触发，模拟"全黑那一帧"）。 */
 let lastMidpoint: (() => void) | null = null;
+
+/** 官方 XrMenu 替身：记录宿主/官方调用的 `_setMenuVisible` 与可见态。 */
+let mockMenuScript: {
+  _menuVisible: boolean;
+  _activeInputSource: unknown;
+  _setMenuVisible: ReturnType<typeof vi.fn>;
+};
 
 /** 官方 XrNavigation 的最小替身（只暴露本层允许碰的那个开关）。 */
 interface NavStub {
@@ -129,7 +136,12 @@ function officialAnnotations(): unknown[] {
 
 interface Harness {
   app: EventHandler;
-  xr: EventHandler & { active: boolean; type: string; camera: Entity | null };
+  xr: EventHandler & {
+    active: boolean;
+    type: string;
+    camera: Entity | null;
+    input: { inputSources: unknown[] };
+  };
   rig: Entity;
   camera: Entity;
   nav: NavStub;
@@ -154,6 +166,7 @@ function makeHarness(): Harness {
     type: 'immersive-vr',
     spaceType: 'local-floor',
     camera,
+    input: { inputSources: [] as unknown[] },
   });
   const app = Object.assign(new EventHandler(), {
     graphicsDevice: { deviceType: 'webgl2' },
@@ -225,6 +238,13 @@ beforeEach(() => {
   mockedFont.mockClear();
   mockedFade.mockClear();
   lastMidpoint = null;
+  mockMenuScript = {
+    _menuVisible: false,
+    _activeInputSource: null,
+    _setMenuVisible: vi.fn((visible: boolean) => {
+      mockMenuScript._menuVisible = visible;
+    }),
+  };
 });
 
 describe('官方 XrMenu 安装（GS-NEXT-05 §2）', () => {
@@ -263,6 +283,84 @@ describe('官方 XrMenu 安装（GS-NEXT-05 §2）', () => {
     expect(runtime.xrMenuInfo().state).toBe('installed');
     expect(runtime.xrMenuInfo().destinationCount).toBe(0);
     expect(runtime.loaded).toBe(true);
+  });
+});
+
+describe('宿主侧菜单开关兜底（PICO 盲区）', () => {
+  /** 造一个 XrInputSource 形状：默认只给 buttons[0..4]，可指定 handedness/grip。 */
+  function makeSource(opts: {
+    handedness?: string;
+    grip?: unknown;
+    buttons?: Array<{ pressed?: boolean; value?: number }>;
+  } = {}): unknown {
+    const buttons = opts.buttons ?? [
+      { pressed: false },
+      { pressed: false },
+      { pressed: false },
+      { pressed: false },
+      { pressed: false },
+    ];
+    return {
+      handedness: opts.handedness ?? 'left',
+      grip: 'grip' in opts ? opts.grip : {},
+      gamepad: { buttons },
+    };
+  }
+
+  it('官方盲区：handedness 全为 none 时，按 buttons[4]（Y）也能开关菜单', async () => {
+    const { harness } = await createXR();
+    harness.xr.active = true;
+    const source = makeSource({ handedness: 'none', buttons: [{}, {}, {}, {}, { pressed: true }] }) as {
+      gamepad: { buttons: Array<{ pressed: boolean }> };
+    };
+    harness.xr.input.inputSources = [source];
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).toHaveBeenCalledWith(true);
+    expect(mockMenuScript._menuVisible).toBe(true);
+    // 按住不放（无上升沿）不再翻转
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).toHaveBeenCalledTimes(1);
+    // 松开 → 再按 → 关闭
+    source.gamepad.buttons[4].pressed = false;
+    harness.app.fire('update');
+    source.gamepad.buttons[4].pressed = true;
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).toHaveBeenLastCalledWith(false);
+    expect(mockMenuScript._menuVisible).toBe(false);
+  });
+
+  it('官方能处理的组合（左手 + grip + buttons[4]）宿主不抢，避免双重翻转', async () => {
+    const { harness } = await createXR();
+    harness.xr.active = true;
+    harness.xr.input.inputSources = [makeSource({ handedness: 'left', grip: {}, buttons: [{}, {}, {}, {}, { pressed: true }] })];
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).not.toHaveBeenCalled();
+  });
+
+  it('官方盲区：另一只手（非 preferredHand）按 buttons[4] 由宿主接管', async () => {
+    const { harness } = await createXR();
+    harness.xr.active = true;
+    const right = makeSource({ handedness: 'right', grip: {}, buttons: [{}, {}, {}, {}, { pressed: true }] });
+    harness.xr.input.inputSources = [makeSource({ handedness: 'left', grip: {} }), right];
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).toHaveBeenCalledWith(true);
+    expect(mockMenuScript._activeInputSource).toBe(right);
+  });
+
+  it('官方盲区：首选手柄按 buttons[3]（X/A）也由宿主接管', async () => {
+    const { harness } = await createXR();
+    harness.xr.active = true;
+    harness.xr.input.inputSources = [makeSource({ handedness: 'left', grip: {}, buttons: [{}, {}, {}, { pressed: true }, {}] })];
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).toHaveBeenCalledWith(true);
+  });
+
+  it('会话未激活时不轮询（菜单不被意外打开）', async () => {
+    const { harness } = await createXR();
+    harness.xr.active = false;
+    harness.xr.input.inputSources = [makeSource({ handedness: 'none', buttons: [{}, {}, {}, {}, { pressed: true }] })];
+    harness.app.fire('update');
+    expect(mockMenuScript._setMenuVisible).not.toHaveBeenCalled();
   });
 });
 
