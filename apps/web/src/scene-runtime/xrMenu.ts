@@ -29,8 +29,10 @@ import {
   Color,
   ElementComponentSystem,
   Entity,
+  Quat,
   ScreenComponentSystem,
   Vec2,
+  Vec3,
   Vec4,
   type AppBase,
   type ScriptType,
@@ -108,6 +110,14 @@ export const XR_MENU_EMPTY_LABEL = '暂无导览点';
  * （两次 toggle 叠加 = 菜单开了又立刻关，表现就是"按了没反应"）。
  */
 export const XR_MENU_TOGGLE_BUTTONS = [4, 3] as const;
+
+/**
+ * 菜单打开时用摇杆左右切换导览点的阈值（滞回）：
+ * 越过 `THRESHOLD` 触发一次，回落到 `RESET` 以内才重新武装 —— 防止摇杆停在
+ * 临界值附近抖动导致连跳。方向：左 = 上一个，右 = 下一个（与列表顺序一致）。
+ */
+export const XR_MENU_STICK_THRESHOLD = 0.7;
+export const XR_MENU_STICK_RESET = 0.3;
 
 /** 宿主轮询用的最小输入源形状（官方 `XrInputSource` 的子集）。 */
 export interface XrToggleInputSource {
@@ -315,6 +325,60 @@ export function menuGlyphSource(items: readonly XrMenuItem[]): string {
 // 4) 安装官方 XrMenu
 // ------------------------------------------------------------------ //
 
+/**
+ * 菜单在**视角里的固定锚点**（米）：相机前方 `distance` 处，向右偏 `offsetX`、
+ * 向下偏 `offsetY`。
+ *
+ * 官方默认把菜单锚在**手柄 grip** 上（`_getAnchor` → `_getControllerAnchor`），
+ * 真机上菜单几乎贴在手里，稍微转下头就看不见。这里改成锚在相机前右侧 ——
+ * 与官方 `alwaysVisible` 模式的 `_followCamera` 同一套数学（forward/right/up），
+ * 但我们保留"按键开关"，不启用 `alwaysVisible`（它会强制常显）。
+ */
+export const XR_MENU_VIEW_ANCHOR = {
+  distance: 0.6,
+  offsetX: 0.24,
+  offsetY: -0.04,
+} as const;
+
+/**
+ * 把官方菜单的锚点从「手柄」改成「相机前右侧」。
+ *
+ * 覆盖的是官方私有方法 `_getAnchor`（2.22.4 稳定存在）：`_setMenuVisible(true)`
+ * 的吸附与 `_followAnchor` 的每帧跟随**都**经过它，所以一处覆盖即可同时改掉
+ * 「刚打开时贴手」和「之后一直跟手」两件事。射线点按钮走的是容器实体的包围盒
+ * 检测，与锚点无关，不受影响。
+ */
+export function anchorXrMenuToView(
+  script: XrMenu,
+  camera: Entity,
+  anchor: { distance: number; offsetX: number; offsetY: number } = XR_MENU_VIEW_ANCHOR
+): void {
+  const position = new Vec3();
+  const rotation = new Quat();
+  const tmp = new Vec3();
+  const target = script as unknown as {
+    _getAnchor: (inputSource?: unknown) => { position: Vec3; rotation: Quat } | null;
+  };
+  target._getAnchor = () => {
+    // 相机 pose 未就绪时返回 null（官方会保持上一帧位置），避免写入 NaN 把菜单
+    // 永远钉在无穷远处 —— 官方 `_followCamera` 里对同一种情况也做了这个保护。
+    const camPos = camera.getPosition();
+    const camRot = camera.getRotation();
+    position.copy(camPos);
+    position.add(tmp.copy(camera.forward).mulScalar(anchor.distance));
+    position.add(tmp.copy(camera.right).mulScalar(anchor.offsetX));
+    position.add(tmp.copy(camera.up).mulScalar(anchor.offsetY));
+    if (!Number.isFinite(position.x) || !Number.isFinite(position.y) || !Number.isFinite(position.z)) {
+      return null;
+    }
+    rotation.copy(camRot);
+    return { position, rotation };
+  };
+  // 同步官方 `_followCamera` 的参数，保证"官方跟随"与"我们的锚点"算出同一个点。
+  script.followDistance = anchor.distance;
+  script.followOffset = new Vec2(anchor.offsetX, anchor.offsetY);
+}
+
 export interface XrMenuHandle {
   /** 官方 XrMenu 实例（供 setItemLabel / isPointerOverMenu）。 */
   readonly script: XrMenu;
@@ -337,8 +401,10 @@ export function installXrMenu(params: {
   rig: Entity;
   font: XrMenuFont;
   items: XrMenuItem[];
+  /** XR 相机实体：提供后菜单锚在「相机前右侧」而不是手柄上。 */
+  camera?: Entity | null;
 }): XrMenuHandle | null {
-  const { app, rig, font, items } = params;
+  const { app, rig, font, items, camera } = params;
   if (!app.systems.element || !app.systems.screen || !app.systems.button) return null;
   const scriptComponent = rig.script;
   if (!scriptComponent) return null;
@@ -365,6 +431,8 @@ export function installXrMenu(params: {
     },
   }) as XrMenu | null;
   if (!script) return null;
+  // 菜单默认锚在手柄 grip 上（真机几乎贴手、转头就看不见）→ 改成相机前右侧。
+  if (camera) anchorXrMenuToView(script, camera);
   return {
     script,
     setCurrentLabel(text: string): boolean {

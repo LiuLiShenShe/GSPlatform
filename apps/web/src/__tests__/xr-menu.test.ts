@@ -9,6 +9,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
+  anchorXrMenuToView,
   buildXrMenuItems,
   createComfortFade,
   ensureXrUiSystems,
@@ -19,10 +20,13 @@ import {
   XR_FLOOR_TELEPORT_ALLOWED,
   XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
+  XR_MENU_VIEW_ANCHOR,
   type ComfortVeilSurface,
   type XrToggleInputSource,
 } from '../scene-runtime/xrMenu';
-import type { AppBase } from 'playcanvas';
+import type { AppBase, Entity } from 'playcanvas';
+import type { XrMenu } from 'playcanvas/scripts/esm/xr/xr-menu.mjs';
+import { Quat, Vec3 } from 'playcanvas';
 import { INITIAL_DESTINATION_ID } from '../scene-runtime/xrDestinations';
 
 /** 假 app：只需 systems 的一小部分（真实系统类要真 graphicsDevice，构造不了）。 */
@@ -186,6 +190,47 @@ describe('宿主侧菜单开关兜底（PICO 盲区）', () => {
     expect(shouldHostHandleXrToggle(noGripLeft, 4, noGripLeft)).toBe(true);
     // 首选手柄按 buttons[3]（官方只用 4）→ 宿主接管
     expect(shouldHostHandleXrToggle(src('left', {}, [{}, {}, {}, { pressed: true }, {}]), 3, left)).toBe(true);
+  });
+});
+
+describe('anchorXrMenuToView（菜单显示在视角右前方，不贴手柄）', () => {
+  it('锚点 = 相机前 distance + 右 offsetX + 下 offsetY，并与官方 followCamera 参数一致', () => {
+    const camera = {
+      getPosition: () => new Vec3(1, 2, 3),
+      getRotation: () => new Quat(),
+      forward: new Vec3(0, 0, -1),
+      right: new Vec3(1, 0, 0),
+      up: new Vec3(0, 1, 0),
+    } as unknown as Entity;
+    const script = { followDistance: 0 } as unknown as XrMenu;
+    anchorXrMenuToView(script, camera);
+    const anchor = (
+      script as unknown as { _getAnchor: () => { position: Vec3; rotation: Quat } | null }
+    )._getAnchor();
+    expect(anchor).not.toBeNull();
+    expect(anchor!.position.x).toBeCloseTo(1 + XR_MENU_VIEW_ANCHOR.offsetX, 6);
+    expect(anchor!.position.y).toBeCloseTo(2 + XR_MENU_VIEW_ANCHOR.offsetY, 6);
+    expect(anchor!.position.z).toBeCloseTo(3 - XR_MENU_VIEW_ANCHOR.distance, 6);
+    expect((script as unknown as { followDistance: number }).followDistance).toBe(
+      XR_MENU_VIEW_ANCHOR.distance
+    );
+    expect(
+      (script as unknown as { followOffset: { x: number; y: number } }).followOffset.x
+    ).toBeCloseTo(XR_MENU_VIEW_ANCHOR.offsetX, 6);
+  });
+
+  it('相机 pose 非有限时返回 null（不把菜单钉到无穷远）', () => {
+    const camera = {
+      getPosition: () => new Vec3(NaN, 0, 0),
+      getRotation: () => new Quat(),
+      forward: new Vec3(0, 0, -1),
+      right: new Vec3(1, 0, 0),
+      up: new Vec3(0, 1, 0),
+    } as unknown as Entity;
+    const script = {} as unknown as XrMenu;
+    anchorXrMenuToView(script, camera);
+    const anchor = (script as unknown as { _getAnchor: () => unknown })._getAnchor();
+    expect(anchor).toBeNull();
   });
 });
 

@@ -364,6 +364,64 @@ describe('宿主侧菜单开关兜底（PICO 盲区）', () => {
   });
 });
 
+describe('菜单打开时：摇杆切换导览点 + 官方导航输入暂停（GS-NEXT-05 加固）', () => {
+  function stickSource(axisX: number): unknown {
+    return {
+      handedness: 'left',
+      grip: {},
+      gamepad: { buttons: [{}, {}, {}, {}, {}], axes: [0, 0, axisX, 0] },
+    };
+  }
+
+  it('菜单可见时暂停官方摇杆移动/垂直 snap，关闭后精确恢复', async () => {
+    const { harness } = await createXR();
+    // 初始：官方默认值
+    expect(harness.nav.enableMove).toBe(true);
+    expect(harness.nav.enableSnapVertical).toBe(true);
+    harness.app.fire(XR_MENU_ACTIVE_EVENT, true);
+    expect(harness.nav.enableMove).toBe(false);
+    expect(harness.nav.enableSnapVertical).toBe(false);
+    expect(harness.nav.enableTeleport).toBe(false); // 地板传送依旧恒关
+    harness.app.fire(XR_MENU_ACTIVE_EVENT, false);
+    expect(harness.nav.enableMove).toBe(true);
+    expect(harness.nav.enableSnapVertical).toBe(true);
+  });
+
+  it('摇杆右推 → 下一个，左推 → 上一个；按住不连跳，回中后重新武装', async () => {
+    const { runtime, harness } = await createXR();
+    harness.xr.active = true;
+    harness.app.fire(XR_MENU_ACTIVE_EVENT, true);
+    const source = stickSource(0.9) as { gamepad: { axes: number[] } };
+    harness.xr.input.inputSources = [source];
+    harness.app.fire('update');
+    expect(runtime.xrMenuInfo().currentDestination).toBe(destinationKey('viewpoint', 'vp-1'));
+    // 仍推着 → 不连跳
+    harness.app.fire('update');
+    expect(runtime.xrMenuInfo().currentDestination).toBe(destinationKey('viewpoint', 'vp-1'));
+    // 回中再推 → 下一个
+    source.gamepad.axes[2] = 0;
+    harness.app.fire('update');
+    source.gamepad.axes[2] = 0.9;
+    harness.app.fire('update');
+    expect(runtime.xrMenuInfo().currentDestination).toBe(destinationKey('guide-point', 'ann-1'));
+    // 左推 → 上一个（回绕）
+    source.gamepad.axes[2] = 0;
+    harness.app.fire('update');
+    source.gamepad.axes[2] = -0.9;
+    harness.app.fire('update');
+    expect(runtime.xrMenuInfo().currentDestination).toBe(destinationKey('viewpoint', 'vp-1'));
+  });
+
+  it('菜单关闭时摇杆不切换目的地', async () => {
+    const { runtime, harness } = await createXR();
+    harness.xr.active = true;
+    const source = stickSource(0.9) as { gamepad: { axes: number[] } };
+    harness.xr.input.inputSources = [source];
+    harness.app.fire('update');
+    expect(runtime.xrMenuInfo().currentDestination).toBe(destinationKey('initial', INITIAL_DESTINATION_ID));
+  });
+});
+
 describe('地板传送仲裁（GS-NEXT-05 §4）', () => {
   it('官方 XrNavigation 的 floor teleport 恒为关闭，其余开关一个都不碰', async () => {
     const { harness } = await createXR();

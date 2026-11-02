@@ -11,7 +11,7 @@
  * （尤其是：`menuItems` 的 number 行、`labelTextOpacity`、`isPointerOverMenu`）。
  */
 declare module 'playcanvas/scripts/esm/xr/xr-menu.mjs' {
-  import type { Asset, Color, Entity, Script, Vec2, Vec3 } from 'playcanvas';
+  import type { Asset, Color, Entity, Quat, Script, Vec2, Vec3 } from 'playcanvas';
 
   /** 菜单行定义（2.22.4：交互按钮 `{label,eventName}` / 只读标签 `{label}` / 数字行）。 */
   export interface XrMenuItem {
@@ -88,5 +88,9 @@ declare module 'playcanvas/scripts/esm/xr/xr-menu.mjs' {
     readonly _menuVisible?: boolean;
     _activeInputSource?: unknown;
     _setMenuVisible(visible: boolean): void;
+    /** 菜单锚点（官方私有）。覆盖它即可把菜单从手柄移到相机前右侧。 */
+    _getAnchor(inputSource?: unknown): { position: Vec3; rotation: Quat } | null;
+    /** 官方"跟随相机"定位（`alwaysVisible` 模式用）；宿主在无首选手柄时直接调。 */
+    _followCamera(dt: number): void;
   }
 }

@@ -65,6 +65,8 @@ import {
   XR_MENU_ACTIVE_EVENT,
   XR_MENU_EMPTY_LABEL,
   XR_MENU_EVENTS,
+  XR_MENU_STICK_RESET,
+  XR_MENU_STICK_THRESHOLD,
   XR_MENU_TOGGLE_BUTTONS,
   pickPreferredXrSource,
   shouldHostHandleXrToggle,
@@ -293,8 +295,14 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   private xrMenuFont: XrMenuFont | null = null;
   /** 舒适过渡（黑纱）状态机。 */
   private xrFade: ComfortFade | null = null;
-  /** 官方 XrNavigation 实例（floor teleport 仲裁对象）。 */
-  private xrNavigation: { enableTeleport: boolean } | null = null;
+  /** 官方 XrNavigation 实例（floor teleport 仲裁 + 菜单打开时暂停摇杆输入）。 */
+  private xrNavigation: {
+    enableTeleport: boolean;
+    enableMove: boolean;
+    enableSnapVertical: boolean;
+  } | null = null;
+  /** 官方导航的原始开关（菜单关闭时精确恢复；不猜测官方默认值）。 */
+  private xrNavBaseline = { enableMove: true, enableSnapVertical: true };
   /** 官方菜单当前是否可见（`xr:menu:active` 维护）。 */
   private xrMenuVisible = false;
   /**
@@ -307,6 +315,8 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   private xrUiSystemsAdded: string[] = [];
   /** 宿主兜底开关的"上一帧按下"状态（按输入源对象身份隔离；避免跨源串边沿）。 */
   private readonly xrTogglePressed = new WeakMap<object, boolean>();
+  /** 菜单打开时摇杆切换的滞回状态（每个输入源独立）。 */
+  private readonly xrStickState = new WeakMap<object, 'neutral' | 'left' | 'right'>();
   /** 菜单安装/使用状态（诊断取证口；不可用时不影响进入 VR 与桌面导航）。 */
   private xrMenuState: 'unavailable' | 'installed' | 'install-failed' | 'no-navigation' = 'unavailable';
 
@@ -1005,7 +1015,9 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
      * 挂在 app 的引擎帧循环而不是 xr：官方一次性的出生对齐订阅（`xr.on('update')`）
      * 在施加后会摘掉自己并断言 `xr` 无残留监听；这里不掺和那条生命周期。
      */
-    this.subscribeEngine(this.app, 'update', () => this.pollXrMenuToggle());
+    this.subscribeEngine(this.app, 'update', (dt: unknown) =>
+      this.pollXrMenuToggle(typeof dt === 'number' ? dt : 0)
+    );
     this.installOfficialXrMenu();
   }
 
@@ -1030,7 +1042,18 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
       this.xrMenuState = 'no-navigation';
       return;
     }
-    this.xrNavigation = readNavigationScript(rig);
+    const nav = readNavigationScript(rig);
+    if (nav) {
+      // 第一次观测到官方导航时记录原始开关，作为菜单关闭后的恢复基线
+      // （重复安装时不要再采样，否则会把"菜单打开的暂停态"当成基线）。
+      if (!this.xrNavigation) {
+        this.xrNavBaseline = {
+          enableMove: nav.enableMove !== false,
+          enableSnapVertical: nav.enableSnapVertical !== false,
+        };
+      }
+      this.xrNavigation = nav;
+    }
     this.applyFloorTeleportPolicy();
     /*
      * 不管有没有可达目的地都安装菜单。
@@ -1044,8 +1067,9 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
       this.xrUiSystemsAdded = ensureXrUiSystems(app);
       this.xrMenuFont = createXrMenuFont(app);
       const items = buildXrMenuItems(this.xrDestinations(), XR_MENU_EMPTY_LABEL);
-      this.xrMenu = installXrMenu({ app, rig, font: this.xrMenuFont, items });
+      // 相机先查好：传给菜单做"锚在相机前右侧"（不再贴手柄），也用于黑纱。
       const camera = app.root.findByName('camera') as Entity | null;
+      this.xrMenu = installXrMenu({ app, rig, font: this.xrMenuFont, items, camera });
       const surface = camera ? createComfortVeil(camera, uiLayerId(app)) : null;
       this.xrFade = surface ? createComfortFade(this.app, surface) : null;
       this.xrMenuState = this.xrMenu ? 'installed' : 'install-failed';
@@ -1067,7 +1091,7 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
    *
    * 官方能处理时（首选手柄的按钮 4）一律跳过 → 不会双重翻转。
    */
-  private pollXrMenuToggle(): void {
+  private pollXrMenuToggle(dt: number): void {
     const menu = this.xrMenu;
     const xr = (
       this.app as unknown as {
@@ -1096,6 +1120,31 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
         script._setMenuVisible(true);
       }
     }
+
+    /*
+     * 菜单可见时：摇杆左右直接切换导览点（不用瞄准菜单按钮）。
+     * 官方导航的摇杆输入已在 `applyFloorTeleportPolicy` 里暂停，不会同时移动/转向。
+     */
+    if (!this.xrMenuVisible) return;
+    for (const source of sources) {
+      const axis = source.gamepad?.axes?.[2];
+      if (typeof axis !== 'number' || !Number.isFinite(axis)) continue;
+      const state = this.xrStickState.get(source) ?? 'neutral';
+      if (axis >= XR_MENU_STICK_THRESHOLD && state !== 'right') {
+        this.xrStickState.set(source, 'right');
+        this.stepXrDestination(1);
+      } else if (axis <= -XR_MENU_STICK_THRESHOLD && state !== 'left') {
+        this.xrStickState.set(source, 'left');
+        this.stepXrDestination(-1);
+      } else if (Math.abs(axis) <= XR_MENU_STICK_RESET) {
+        this.xrStickState.set(source, 'neutral');
+      }
+    }
+    /*
+     * 没有首选输入源（handedness 全 `none`）时官方不会跑 `_followAnchor`，
+     * 菜单会停在世界空间、转头就飘出视野 → 宿主自己让它跟随相机。
+     */
+    if (!preferred) script._followCamera(dt);
   }
 
   /**
@@ -1254,21 +1303,28 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   }
 
   /**
-   * 官方 XrNavigation 的 floor teleport 仲裁（GS-NEXT-05 §4）。
+   * 官方 XrNavigation 仲裁（GS-NEXT-05 §4 + 菜单打开时的输入接管）。
    *
-   * 官方 `XrNavigation` 的 `handleSelectEnd` 只在 `enableTeleport` 为真时传送
-   * （`xr-navigation.mjs` 源码注释："Otherwise a select/pinch gesture (e.g. used
-   * to click a UI element) would still snap the rig to the floor point under the
-   * ray"）—— 这就是菜单点击与地面传送的冲突点。
+   * 1. **floor teleport 恒关**：官方 `XrNavigation` 的 `handleSelectEnd` 只在
+   *    `enableTeleport` 为真时传送（`xr-navigation.mjs` 源码注释："Otherwise a
+   *    select/pinch gesture (e.g. used to click a UI element) would still snap the
+   *    rig to the floor point under the ray"）—— 这就是菜单点击与地面传送的冲突点。
+   *    未校准场景绝不允许出现 Y=0 地面传送（三条理由见 `XR_FLOOR_TELEPORT_ALLOWED`）。
+   * 2. **菜单可见时暂停摇杆移动 / 转向 / 垂直 snap**：菜单打开后摇杆被宿主拿去
+   *    切换导览点（左/右 = 上/下一个），不能让官方导航再拿同一根摇杆去移动/转
+   *    向。关闭时精确恢复官方默认值（`readNavigationScript` 记录的基线）。
    *
-   * 这里**只关掉 floor teleport 这一个官方开关**，摇杆移动 / snap turn / 垂直
-   * snap 与 6DoF 全部原样保留（官方默认值不动）。
+   * 除上述两处外，6DoF 与官方其余能力原样保留。
    */
   private applyFloorTeleportPolicy(): void {
-    if (!this.xrNavigation) return;
+    const nav = this.xrNavigation;
+    if (!nav) return;
     const pointerOnMenu = this.xrMenu?.isPointerOverMenu() ?? false;
     const allowed = XR_FLOOR_TELEPORT_ALLOWED && !this.xrMenuVisible && !pointerOnMenu;
-    this.xrNavigation.enableTeleport = allowed;
+    nav.enableTeleport = allowed;
+    // 菜单可见 → 暂停官方摇杆输入（宿主用摇杆切换导览点）；隐藏 → 恢复基线。
+    nav.enableMove = this.xrMenuVisible ? false : this.xrNavBaseline.enableMove;
+    nav.enableSnapVertical = this.xrMenuVisible ? false : this.xrNavBaseline.enableSnapVertical;
   }
 
   /** 官方 XrManager 读取（窄类型，避免在方法签名里散播官方内部类型）。 */
@@ -1793,10 +1849,17 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
  * 官方 Viewer 在相机父实体上 `script.create(XrNavigation)`，脚本名固定为
  * `xrNavigation`（源码 `static scriptName = 'xrNavigation'`）。
  */
-function readNavigationScript(rig: Entity): { enableTeleport: boolean } | null {
-  const script = rig.script?.get?.('xrNavigation') as { enableTeleport?: unknown } | null;
+function readNavigationScript(
+  rig: Entity
+): { enableTeleport: boolean; enableMove: boolean; enableSnapVertical: boolean } | null {
+  const script = rig.script?.get?.('xrNavigation') as {
+    enableTeleport?: unknown;
+    enableMove?: unknown;
+    enableSnapVertical?: unknown;
+  } | null;
   if (!script || typeof script.enableTeleport !== 'boolean') return null;
-  return script as { enableTeleport: boolean };
+  // **返回官方脚本本体（不是副本）**：仲裁要写回真实实例，副本改了没用。
+  return script as { enableTeleport: boolean; enableMove: boolean; enableSnapVertical: boolean };
 }
 
 /** 菜单首行文本：`序号/总数 · 名称`（作者原文，不翻译）。 */
