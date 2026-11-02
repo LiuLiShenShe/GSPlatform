@@ -25,6 +25,14 @@ import {
 import { PcuiField } from './PcuiField';
 import { PcuiButton } from './PcuiButton';
 import { PcuiNumericInput } from './PcuiNumericInput';
+import {
+  findForwardCanvas,
+  forwardPickPointer,
+  forwardPickWheel,
+  isPickDrag,
+  samplePickPointer,
+  type PickPointerSample,
+} from '../pickPointerForwarding';
 import { AnnotationProperties } from './AnnotationProperties';
 import { ViewpointProperties } from './ViewpointProperties';
 import type { SceneAnnotation } from '../../../services/annotationApi';
@@ -244,6 +252,81 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
     ['audio', '背景音乐'],
   ];
 
+  // ------------------------------------------------------------------ //
+  // GS-UI-01 后续修正：拾取模式的手势判别（拖动=转视角 / 单击=落点）。
+  //
+  // overlay 仍盖住画布（保证「单击」不会落到官方 canvas 上触发官方
+  // click-focus —— 官方会把相机目标移到点击点，作者摆好的视角就没了），
+  // 但「拖动」会把指针位移**合成转发**给官方画布，让作者在拾取时也能
+  // 转视角、缩放，去检查落点是否在想要的表面上。
+  // ------------------------------------------------------------------ //
+  const pickGesture = useRef<{
+    start: PickPointerSample | null;
+    dragging: boolean;
+    forwarded: boolean;
+  }>({ start: null, dragging: false, forwarded: false });
+
+  const handlePickPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    // 真实指针捕获：拖出 viewer 也能收到 pointerup（避免官方相机停在拖拽态）。
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // 合成事件 / 不支持指针捕获的环境：忽略（转发收尾靠 pointercancel）。
+    }
+    pickGesture.current = { start: samplePickPointer(event), dragging: false, forwarded: false };
+  };
+
+  const handlePickPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = pickGesture.current;
+    if (!gesture.start) return;
+    const sample = samplePickPointer(event);
+    if (!gesture.dragging) {
+      if (!isPickDrag(gesture.start, sample)) return;
+      gesture.dragging = true;
+      const canvas = findForwardCanvas(props.containerRef.current);
+      if (!canvas) return;
+      // 从**起点**补发 pointerdown，后续位移才是相对起点的真实拖动。
+      forwardPickPointer(canvas, 'pointerdown', gesture.start);
+      gesture.forwarded = true;
+    }
+    const canvas = findForwardCanvas(props.containerRef.current);
+    if (canvas && gesture.forwarded) forwardPickPointer(canvas, 'pointermove', sample);
+  };
+
+  const endPickGesture = (event: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = pickGesture.current;
+    if (!gesture.start) return;
+    const canvas = findForwardCanvas(props.containerRef.current);
+    if (canvas && gesture.forwarded) {
+      // button:-1 → 官方输入源收尾，但不触发 click-focus。
+      forwardPickPointer(canvas, 'pointerup', samplePickPointer(event));
+    }
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      // 忽略。
+    }
+    gesture.start = null;
+    gesture.dragging = false;
+    // 保留 forwarded 给紧随其后的 click 消费：拖动结束的 click 不落点。
+  };
+
+  const handlePickClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    const gesture = pickGesture.current;
+    // 一次拖动结束后的 click 属于「转视角」，不落点。
+    if (gesture.forwarded) {
+      gesture.forwarded = false;
+      return;
+    }
+    props.onViewerClick(event);
+  };
+
+  const handlePickWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const canvas = findForwardCanvas(props.containerRef.current);
+    if (canvas) forwardPickWheel(canvas, event);
+  };
+
   return (
     <div className="gs-workspace" data-testid="scene-authoring-page" ref={workspaceRef}>
       <header className="gs-workspace__topbar">
@@ -279,14 +362,19 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
         >
           {props.loading && <div className="gs-workspace__loading">加载场景…</div>}
           <div ref={props.containerRef} className="gs-workspace__mount" data-testid="authoring-mount" />
-          {/* GS-UI-01 修复（需求 2）：拾取模式下的透明指针捕获层 —— 盖住官方
-              canvas，点击只解析锚点，不会同时触发官方 Orbit/Pan/Zoom 输入。
-              点击冒泡到本层处理（不再依赖外层 onClick，避免双触发）。 */}
+          {/* GS-UI-01 修复（需求 2）：拾取模式下的透明指针捕获层 —— 单击只解析
+              锚点（不会落到官方 canvas 触发 click-focus），拖动/滚轮则**合成转发**
+              给官方画布，拾取时仍能转视角、缩放（见 pickPointerForwarding）。 */}
           {props.picking && (
             <div
               className="gs-pick-overlay"
               data-testid="annotation-pick-overlay"
-              onClick={props.onViewerClick}
+              onClick={handlePickClick}
+              onPointerDown={handlePickPointerDown}
+              onPointerMove={handlePickPointerMove}
+              onPointerUp={endPickGesture}
+              onPointerCancel={endPickGesture}
+              onWheel={handlePickWheel}
             />
           )}
           {/* GS-UI-01 修复（需求 4）：宿主标记点层 —— 直接投影所有标注锚点，
@@ -310,7 +398,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
           )}
           {props.picking && (
             <div className="gs-pick-badge" data-testid="annotation-pick-badge">
-              点击 Gaussian 表面放置标注（近似锚点）
+              点击 Gaussian 表面放置标注（近似锚点）；拖动/滚轮可先调整视角
               <PcuiButton text="取消" onClick={props.onCancelPicking} />
             </div>
           )}
@@ -522,6 +610,7 @@ function AnnotationPickMarker({
     let raf = 0;
     const tick = () => {
       const origin = projectPoint([anchor.x, anchor.y, anchor.z]);
+      let next: { origin: { x: number; y: number; inFront: boolean } | null; axes: typeof view.axes };
       if (origin?.inFront) {
         const tips: Array<{ dx: number; dy: number; dz: number; color: string; label: string }> = [
           { dx: PICK_AXIS_LENGTH, dy: 0, dz: 0, color: '#ff4d4f', label: 'X' },
@@ -540,10 +629,20 @@ function AnnotationPickMarker({
             };
           })
           .filter((a): a is { x2: number; y2: number; color: string; label: string } => a !== null);
-        setView({ origin, axes });
+        next = { origin, axes };
       } else {
-        setView({ origin: origin?.inFront ? origin : null, axes: [] });
+        next = { origin: origin?.inFront ? origin : null, axes: [] };
       }
+      // 相机静止时投影值不变 —— 跳过 setState，避免每帧无谓的 React 重渲染。
+      setView((prev) =>
+        prev.origin?.x === next.origin?.x &&
+        prev.origin?.y === next.origin?.y &&
+        prev.origin?.inFront === next.origin?.inFront &&
+        prev.axes.length === next.axes.length &&
+        prev.axes.every((a, i) => a.x2 === next.axes[i]?.x2 && a.y2 === next.axes[i]?.y2 && a.color === next.axes[i]?.color && a.label === next.axes[i]?.label)
+          ? prev
+          : next,
+      );
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -620,7 +719,13 @@ function AnnotationMarkersOverlay({
             next.push({ id: a.id, title: a.title || '(未命名)', x: p.x, y: p.y });
           }
         }
-        setMarks(next);
+        // 相机静止时投影不变 —— 跳过 setState，避免 20fps 无谓重渲染。
+        setMarks((prev) =>
+          prev.length === next.length &&
+          prev.every((m, i) => m.id === next[i].id && m.title === next[i].title && m.x === next[i].x && m.y === next[i].y)
+            ? prev
+            : next,
+        );
       }
       raf = requestAnimationFrame(tick);
     };

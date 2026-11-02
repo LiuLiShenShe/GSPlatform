@@ -1388,14 +1388,16 @@ a {
 }
 
 /* GS-UI-01 修复（需求 2）：拾取模式的透明指针捕获层。
-   盖在官方 canvas 之上（不同元素，事件不会到达 canvas），因此点击只解析
-   锚点，不会同时触发官方 Orbit/Pan/Zoom。 */
+   盖在官方 canvas 之上（单击不会落到画布触发官方 click-focus，落点由宿主解析），
+   但拖动/滚轮会由宿主**合成转发**给官方画布 —— 拾取时仍可转视角、缩放。
+   touch-action:none 保证触控板/触屏拖动不被浏览器手势吞掉。 */
 .gs-pick-overlay {
   position: absolute;
   inset: 0;
   z-index: 5;
   background: transparent;
   pointer-events: auto;
+  touch-action: none;
   cursor: crosshair;
 }
 
