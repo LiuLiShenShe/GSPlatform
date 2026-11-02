@@ -38,11 +38,6 @@ import { decideWalkSafety } from '../../scene-runtime/walkSafetyPolicy';
 import { eligibleGuidePoints } from '../../scene-runtime/guidePoints';
 import { destinationKey, INITIAL_DESTINATION_ID } from '../../scene-runtime/xrDestinations';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
-import {
-  clampVrRenderScale,
-  readVrRenderScalePreference,
-  writeVrRenderScalePreference,
-} from '../../scene-runtime/vrRenderScalePolicy';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
 import type { RuntimeAnnotation, RuntimeViewpoint, SceneRuntimeDescriptorV1 } from '../../scene-runtime/types';
 
@@ -154,13 +149,6 @@ export interface OfficialXRViewerState {
   /** 结束当前 XR 会话。 */
   endXR: () => Promise<void>;
   /**
-   * VR 渲染分辨率比例（0.3–1；null = 官方默认 100%）。
-   * 真正生效点 = 头显会话创建前（见 `scene-runtime/vrRenderScalePolicy.ts`），
-   * 网页版画面不受影响；下次进入 VR 生效。
-   */
-  vrRenderScale: number | null;
-  setVrRenderScale: (scale: number | null) => void;
-  /**
    * 官方当前选中 annotation 的 GSPlatform extras 引用（SSV-06）。
    * 经 annotationId 解析 SceneAnnotation / 打开媒体 Overlay。
    */
@@ -201,10 +189,6 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
   const [renderer, setRenderer] = useState('—');
   const [gsplats, setGsplats] = useState(0);
   const [performanceMode, setPerformanceModeState] = useState(false);
-  // GS-PERF-VR：进入 VR 的渲染分辨率（启动时读偏好；null = 官方 100% 默认）。
-  const [vrRenderScale, setVrRenderScaleState] = useState<number | null>(() =>
-    readVrRenderScalePreference(),
-  );
   const [performanceRecorder, setPerformanceRecorder] = useState<RuntimePerformanceDiagnostics | null>(null);
   const [cameraPose, setCameraPoseState] = useState<CameraPose | null>(null);
   /*
@@ -354,8 +338,6 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
         setXrMenuInfo(emptyXrMenuInfo());
         setXrRuntimeState(null);
         runtimeRef.current = runtime;
-        // GS-PERF-VR：把持久化偏好同步进 runtime（startVR 会话创建前读取）。
-        runtime.setVrRenderScale(readVrRenderScalePreference());
         recorder?.attach(runtime);
         // GS-NEXT-05：会话内用手柄菜单切换目的地后，页面的选中态也要跟着走
         // （否则 DOM 显示的选中项与实际所在位置不一致 = 假状态）。
@@ -635,19 +617,6 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     setPerformanceModeState(runtime.getPerformanceMode());
   }, []);
 
-  /**
-   * GS-PERF-VR：设置 VR 渲染分辨率。
-   *
-   * 值与偏好都写进 runtime / localStorage；实际生效在**下次** `startVR()`
-   * （WebXR 的 framebuffer 尺寸在会话创建时固化，会话内改不了）。
-   */
-  const setVrRenderScale = useCallback((scale: number | null) => {
-    const clamped = clampVrRenderScale(scale);
-    writeVrRenderScalePreference(clamped);
-    setVrRenderScaleState(clamped);
-    runtimeRef.current?.setVrRenderScale(clamped);
-  }, []);
-
   const endXR = useCallback(async () => {
     const runtime = runtimeRef.current;
     if (!runtime) return;
@@ -702,8 +671,6 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     cameraPose,
     startVR,
     endXR,
-    vrRenderScale,
-    setVrRenderScale,
     selectedGsplatformAnnotation,
   };
 }

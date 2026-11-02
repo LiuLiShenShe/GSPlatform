@@ -29,7 +29,6 @@ import {
 import { SuperSplatRuntimeError } from './runtimeErrors';
 import type { SceneBounds } from './sceneScale';
 import { performanceModeTarget, readPerformanceModePreference } from './performanceModePolicy';
-import { clampVrRenderScale } from './vrRenderScalePolicy';
 import {
   SceneTransformAdapter,
   composeEntityEulerDeg,
@@ -303,13 +302,6 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
   private xrUiSystemsAdded: string[] = [];
   /** 菜单安装/使用状态（诊断取证口；不可用时不影响进入 VR 与桌面导航）。 */
   private xrMenuState: 'unavailable' | 'empty' | 'installed' | 'install-failed' | 'no-navigation' = 'unavailable';
-  /**
-   * VR 渲染分辨率比例（null = 不施加，跟随官方 100% 默认）。
-   * 只在 `startVR()` 会话创建前读取；会话内无法更改（layer 尺寸已固化）。
-   */
-  private vrRenderScale: number | null = null;
-  /** 施加 VR 分辨率前的 device.maxPixelRatio（退出会话时还原）。 */
-  private vrPixelRatioBefore: number | null = null;
 
   private constructor(handle: ViewerHandle, viewerOptions: CreateViewerOptions) {
     this.handle = handle;
@@ -392,8 +384,6 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     this.xrMenuFont = null;
     this.xrNavigation = null;
     this.destroyed = true;
-    // 会话仍在进行时销毁：先还原 maxPixelRatio（会话结束后这一层也要干净）。
-    this.restoreVrRenderScale();
     // 先摘掉本层订阅，再销毁 handle（handle.destroy 本身也清理官方内部 listener）。
     for (const unsubscribe of this.unsubscribers) {
       unsubscribe();
@@ -540,38 +530,15 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
     const handle = this.requireLive();
     if (this.vrStarting || handle.app.xr?.active) return handle.startXR('vr');
     this.vrStarting = true;
-    if (!handle.app.xr?.active) {
-      this.prepareXRSpawn();
-      // VR 渲染分辨率：必须在 startXR 会话创建前施加（WebXR layer 尺寸固化）。
-      this.applyVrRenderScale();
-    }
+    if (!handle.app.xr?.active) this.prepareXRSpawn();
     try {
       await handle.startXR('vr');
     } catch (error) {
       this.cancelXRSpawn?.();
-      // 会话未建立 → 立即还原，避免 maxPixelRatio 残留影响后续桌面渲染。
-      this.restoreVrRenderScale();
       throw error;
     } finally {
       this.vrStarting = false;
     }
-  }
-
-  /**
-   * 设置进入 VR 时的渲染分辨率比例（0.3–1；null = 官方默认，不施加）。
-   *
-   * 只影响头显内的每眼帧缓冲分辨率（见 `scene-runtime/vrRenderScalePolicy.ts`
-   * 头注释：官方 viewer 用 `maxPixelRatio / devicePixelRatio` 当 XRWebGLLayer 的
-   * framebufferScaleFactor，网页版渲染不读 maxPixelRatio）。下次进入 VR 生效。
-   */
-  setVrRenderScale(scale: number | null): void {
-    if (this.destroyed) return;
-    this.vrRenderScale = clampVrRenderScale(scale);
-  }
-
-  /** 当前设定的 VR 渲染分辨率比例（null = 官方默认）。 */
-  getVrRenderScale(): number | null {
-    return this.vrRenderScale;
   }
 
   getXRState(): object {
@@ -616,37 +583,6 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
       this.unsubscribers.delete(unsubscribe);
       unsubscribe();
     };
-  }
-
-  /**
-   * 会话创建前施加 VR 渲染分辨率。
-   *
-   * 官方 `createApp` 把 `maxPixelRatio` 钉成 `window.devicePixelRatio`（即
-   * framebufferScaleFactor = 1）；引擎 `XrManager.start` 用
-   * `gd.maxPixelRatio / window.devicePixelRatio` 作为 XRWebGLLayer 的 scale。
-   * 因此 `maxPixelRatio = devicePixelRatio * scale` ⇔ 头显内每眼分辨率 scale 倍。
-   */
-  private applyVrRenderScale(): void {
-    const scale = this.vrRenderScale;
-    if (scale === null) return;
-    const device = this.app?.graphicsDevice as { maxPixelRatio?: number } | undefined;
-    if (!device || typeof device.maxPixelRatio !== 'number') return;
-    const dpr = typeof window !== 'undefined' && window.devicePixelRatio > 0
-      ? window.devicePixelRatio
-      : 1;
-    this.vrPixelRatioBefore = device.maxPixelRatio;
-    device.maxPixelRatio = dpr * scale;
-  }
-
-  /** 还原 {@link applyVrRenderScale} 改过的 maxPixelRatio（幂等）。 */
-  private restoreVrRenderScale(): void {
-    const before = this.vrPixelRatioBefore;
-    if (before === null) return;
-    this.vrPixelRatioBefore = null;
-    const device = this.app?.graphicsDevice as { maxPixelRatio?: number } | undefined;
-    if (device && typeof device.maxPixelRatio === 'number') {
-      device.maxPixelRatio = before;
-    }
   }
 
   private prepareXRSpawn(): void {
@@ -1050,8 +986,6 @@ export class SuperSplatRuntime implements ScenePickingAdapter {
       this.xrFade?.reset();
       this.xrMenuVisible = false;
       this.applyFloorTeleportPolicy();
-      // 会话结束 → 还原 maxPixelRatio（桌面渲染 / 指针换算回到官方默认）。
-      this.restoreVrRenderScale();
     });
     // XR 会话可用后再兜一次安装（相机 Rig 在某些时序下创建得比 createViewer 早/晚）。
     this.subscribeEngine(xr as unknown as EventHandler, 'available', () => this.installOfficialXrMenu());

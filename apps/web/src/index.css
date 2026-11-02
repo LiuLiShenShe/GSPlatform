@@ -1880,15 +1880,6 @@ a {
 }
 
 /* GS-NEXT-04：「观察点」与「导览点」分组标题 —— 二者共用同一个「出生位置」层。 */
-/* GS-PERF-VR：VR 渲染分辨率选择（与出生位置选择器同一层，进入前可见）。 */
-.gs-xr__render-scale {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  max-width: min(72vw, 560px);
-}
-
 .gs-xr__viewpoints-group {
   margin: 6px 0 2px;
   font-size: 11px;
