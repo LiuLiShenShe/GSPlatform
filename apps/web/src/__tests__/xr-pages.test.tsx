@@ -27,7 +27,7 @@ import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 
 // ─── 官方 viewer 模块 mock（fake handle，事件语义对齐官方）─────────────────────
 let officialHandle: OfficialViewerHandle & { events: { fire: (...args: unknown[]) => void } };
-let createViewerCalls: Array<{ contentUrl?: string; settings?: object; renderer?: string }>;
+let createViewerCalls: Array<{ contentUrl?: string; settings?: object; renderer?: string; budget?: number }>;
 let destroyCalls: number;
 // FIX-XR-01: 每次 createViewer 返回的 handle 初始状态（默认 loaded:true 尽快加载，
 // 兼容既有测试；异步加载测试置 loaded:false 再手动触发加载完成）。
@@ -117,11 +117,12 @@ function makeOfficialHandle(options: { loaded?: boolean; canStartVR?: boolean } 
 }
 
 vi.mock('@playcanvas/supersplat-viewer/viewer', () => ({
-  createViewer: vi.fn(async (options: { contentUrl?: string; settings?: object; renderer?: string }) => {
+  createViewer: vi.fn(async (options: { contentUrl?: string; settings?: object; renderer?: string; budget?: number }) => {
     createViewerCalls.push({
       contentUrl: options.contentUrl,
       settings: options.settings,
       renderer: options.renderer,
+      budget: options.budget,
     });
     officialHandle = makeOfficialHandle(nextHandleOptions);
     return officialHandle;
@@ -339,6 +340,8 @@ describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数�
     const xrCall = createViewerCalls[0];
     expect(xrCall.contentUrl).toBe(runtimeDescriptorFixture.content.url); // Scene URL 相同
     expect(xrCall.renderer).toBe('webgl'); // renderer 必须 WebGL
+    // GS-UI-01 后续：VR 专用低 LOD —— XR 显式传 splat 预算（默认 0.5M）。
+    expect(xrCall.budget).toBe(0.5);
     expect(xrCall.settings).toEqual(expectedSettings); // settings = buildExperienceSettings(descriptor)
     u1.unmount();
 
@@ -350,6 +353,8 @@ describe('SSV-04 /xr/:sceneId — 统一官方 runtime（与 Desktop 同一数�
     const desktopCall = createViewerCalls[1];
     expect(desktopCall.contentUrl).toBe(xrCall.contentUrl); // Scene URL 相同
     expect(desktopCall.settings).toEqual(xrCall.settings); // settings 相同
+    // 桌面不传 budget（用官方 mobile/desktop 预算表）。
+    expect(desktopCall.budget).toBeUndefined();
     u2.unmount();
   });
 

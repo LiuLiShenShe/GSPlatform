@@ -278,6 +278,8 @@ export default function XRViewerPage() {
       <span className="gs-xr__diag" data-testid="diag-can-start-ar">{state.canStartAR ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-xr-mode">{state.xrMode ?? 'null'}</span>
       <span className="gs-xr__diag" data-testid="diag-gsplats">{state.gsplats}</span>
+      {/* GS-UI-01 后续：VR 专用低 LOD —— 官方 splat 预算（百万高斯）。 */}
+      <span className="gs-xr__diag" data-testid="diag-xr-splat-budget">{state.splatBudget}M</span>
       <span className="gs-xr__diag" data-testid="diag-has-collision">{state.hasCollision ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-walk-allowed">{state.effectiveWalkAllowed ? 'true' : 'false'}</span>
       <span className="gs-xr__diag" data-testid="diag-collision-stale">{state.collisionStale ? 'true' : 'false'}</span>

@@ -135,6 +135,15 @@ export interface SuperSplatRuntimeOptions {
   /** 运行模式 → renderer 策略。 */
   mode: RuntimeMode;
   /**
+   * 官方 splat 预算（**百万**高斯，覆盖官方 mobile/desktop × performanceMode 表）。
+   *
+   * 只用于 XR（VR 专用低 LOD）：官方预算表 mobile {low:1,high:2} / desktop
+   * {low:2,high:4}，PICO 浏览器 UA 可能被判成 desktop → 预算偏高。VR 入口显式给
+   * 一个更低的预算，官方只流式/渲染该预算以内的 LOD（= “VR 专用低 LOD 版”）。
+   * 未设置 → 用官方表（Desktop 不受影响）。
+   */
+  budget?: number;
+  /**
    * 是否启用官方 UI 层（SSV-06：官方 annotation hotspots / tooltip 只在
    * ``ui:true`` 时由 initUI 构建）。默认 false = headless，宿主自绘 UI。
    * 开启后本层注入作用域 CSS，隐藏官方冗余 chrome（.sse-ui），只保留标注层
@@ -1956,6 +1965,8 @@ function toCreateViewerOptions(options: SuperSplatRuntimeOptions): CreateViewerO
     // GS-NEXT-05：会话内导览目的地（与进入 VR 前的出生位置选择器同一份数据）。
     guidePoints: options.guidePoints ?? [],
     xrInitialCamera: options.xrInitialCamera ?? null,
+    // GS-UI-01 后续（VR 专用低 LOD）：显式 splat 预算，覆盖官方表。
+    budget: options.budget,
   } as CreateViewerOptions;
 }
 

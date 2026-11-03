@@ -36,6 +36,7 @@ import { SuperSplatRuntimeError } from '../../scene-runtime/runtimeErrors';
 import { hasAuthoredInitialCamera, applyInitialCameraPolicy } from '../../scene-runtime/initialCameraPolicy';
 import { decideWalkSafety } from '../../scene-runtime/walkSafetyPolicy';
 import { eligibleGuidePoints } from '../../scene-runtime/guidePoints';
+import { resolveXrSplatBudget } from '../../scene-runtime/xrSplatBudget';
 import { destinationKey, INITIAL_DESTINATION_ID } from '../../scene-runtime/xrDestinations';
 import { RuntimePerformanceDiagnostics } from '../../scene-runtime/RuntimePerformanceDiagnostics';
 import type { CameraPose } from '@playcanvas/supersplat-viewer/settings';
@@ -76,6 +77,11 @@ export interface OfficialXRViewerState {
   renderer: string;
   /** 当前帧已渲染 Gaussian 数。 */
   gsplats: number;
+  /**
+   * GS-UI-01 后续：VR 专用低 LOD —— 本次 XR 会话传给官方 viewer 的 splat
+   * 预算（百万高斯，`?budget=` 可覆盖）。诊断/真机取证用。
+   */
+  splatBudget: number;
   performanceMode: boolean;
   setPerformanceMode: (enabled: boolean) => void;
   performanceRecorder: RuntimePerformanceDiagnostics | null;
@@ -324,6 +330,9 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
           // GS-NEXT-05：会话内导览目的地 = 与桌面上拉**同一份**导览点数据。
           guidePoints: eligibleGuidePoints(desc.annotations),
           xrInitialCamera: hasAuthoredInitialCamera(desc) ? settings.cameras[0]?.initial ?? null : null,
+          // GS-UI-01 后续：VR 专用低 LOD —— 显式 splat 预算（默认 0.5M，
+          // `?budget=` 可覆盖），覆盖官方 mobile/desktop 预算表。
+          budget: resolveXrSplatBudget(window.location.search),
         });
         if (cancelled) {
           runtime.destroy();
@@ -645,6 +654,8 @@ export function useSuperSplatXR(input: string | SceneRuntimeDescriptorV1 | null,
     progress,
     renderer,
     gsplats,
+    /** VR 专用低 LOD：本次 XR 会话使用的官方 splat 预算（百万高斯）。 */
+    splatBudget: resolveXrSplatBudget(window.location.search),
     performanceMode,
     setPerformanceMode,
     performanceRecorder,
