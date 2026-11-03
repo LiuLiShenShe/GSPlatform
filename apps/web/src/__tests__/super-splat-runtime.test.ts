@@ -990,6 +990,29 @@ describe('相机 pose 封装（SSV-05）', () => {
     expect(hit!.position[2]).toBeCloseTo(3, 5);
   });
 
+  it('pickApproximateWorldPosition 相机在包围盒内 → 锚点必须在相机前方（不能返回相机自身）', async () => {
+    const fake = makeCameraHandle();
+    // 相机落到盒内（盒 z∈[-1,1]）；旧的 rayAabbEntry 会把入射点 clamp 到 t=0，
+    // 返回相机自身 → 解投影 depth≈0 → 轴标记被丢到屏幕左上角。
+    fake.cameraEntity.setPosition(0.5, 1.5, 0.5);
+    mockedCreateViewer.mockResolvedValueOnce(fake as unknown as ViewerHandle);
+    const runtime = await SuperSplatRuntime.create(defaultOptions());
+    const hit = runtime.pickApproximateWorldPosition(0, 0);
+    expect(hit).not.toBeNull();
+    // 相机(0.5,1.5,0.5) forward(0,0,-1)，回退深度=到盒中心(0,1,0)的距离 √0.75。
+    const d = Math.sqrt(0.75);
+    expect(hit!.position[0]).toBeCloseTo(0.5, 5);
+    expect(hit!.position[1]).toBeCloseTo(1.5, 5);
+    expect(hit!.position[2]).toBeCloseTo(0.5 - d, 5);
+    // 关键：与相机位置的距离必须显著大于 0（depth>0 才能投影到屏幕内）。
+    const dist = Math.hypot(
+      hit!.position[0] - 0.5,
+      hit!.position[1] - 1.5,
+      hit!.position[2] - 0.5,
+    );
+    expect(dist).toBeGreaterThan(0.1);
+  });
+
   it('pickApproximateWorldPosition 相机缺失时返回 null', async () => {
     const fake = makeFakeHandle();
     mockedCreateViewer.mockResolvedValueOnce(fake);

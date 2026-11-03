@@ -405,6 +405,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
           {pendingPick && (
             <AnnotationPickMarker
               anchor={pendingPick.runtime}
+              fallback={pendingPick.screen}
               projectPoint={projectPoint}
               onConfirm={onConfirmPick}
               onCancel={onCancelPick}
@@ -589,11 +590,14 @@ const PICK_AXIS_LENGTH = 0.25;
  */
 function AnnotationPickMarker({
   anchor,
+  fallback,
   projectPoint,
   onConfirm,
   onCancel,
 }: {
   anchor: { x: number; y: number; z: number };
+  /** 点击时的屏幕坐标 —— 投影不可用（相机缺失/点在相机后）时的兜底位置。 */
+  fallback: { x: number; y: number };
   /** RUNTIME 点 → 容器 CSS 像素；null = 相机不可用。 */
   projectPoint: (
     point: [number, number, number],
@@ -650,11 +654,14 @@ function AnnotationPickMarker({
   }, [anchor.x, anchor.y, anchor.z, projectPoint]);
 
   const origin = view.origin;
+  // 投影不可用（相机缺失 / 锚点落到相机身后）时，用点击屏幕坐标兜底，
+  // 而不是退化到 (0,0)（否则只剩一个白点贴在 viewer 左上角）。
+  const pos = origin ?? fallback;
   return (
     <div
       className="gs-pick-marker"
       data-testid="annotation-pick-marker"
-      style={{ left: origin ? origin.x : 0, top: origin ? origin.y : 0 }}
+      style={{ left: pos.x, top: pos.y }}
     >
       <svg className="gs-pick-marker__axes" width="1" height="1" aria-hidden>
         {view.axes.map((a) => (

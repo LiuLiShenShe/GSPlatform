@@ -115,6 +115,24 @@ describe('CollisionPanel（FIX-03 §9/§10）', () => {
     expect(rebuildCollision).toHaveBeenCalledWith('scene-1', undefined, true);
   });
 
+  it('构建被服务端拒绝时展示具体原因码（不再只有笼统提示）', async () => {
+    mockedGetCollision.mockRejectedValue({ status: 404 });
+    mockedBuildCollision.mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: { code: 'CONFLICT', message: '碰撞构建未获批准: ALREADY_SUCCEEDED' },
+      },
+    });
+    render(<CollisionPanel sceneId="scene-1" isOwner />);
+    await userEvent.click(
+      await screen.findByRole('checkbox', { name: /我确认仅生成非物理测试碰撞/ }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /构建碰撞/ }));
+    // ALREADY_SUCCEEDED → 明确告知「已是最新、请用重建」，而不是「请检查版本/尺度/预算」。
+    expect(await screen.findByText(/碰撞已是最新版本/)).toBeInTheDocument();
+  });
+
   it('只读用户不能手动构建或确认尺度', async () => {
     mockedGetCollision.mockRejectedValue({ status: 404 });
     render(<CollisionPanel sceneId="scene-1" isOwner={false} />);

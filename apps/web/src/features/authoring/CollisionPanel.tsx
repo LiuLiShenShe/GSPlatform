@@ -25,8 +25,33 @@ import {
   type CollisionAsset,
 } from '../../services/collisionApi';
 import { getSceneProcessing, type SceneProcessingSettings } from '../../services/sceneProcessingApi';
+import { toApiError } from '../../services/http';
 
 const { Text } = Typography;
+
+/**
+ * 把后端返回的「碰撞构建未获批准: <REASON_CODE>」翻译成可操作的人话。
+ * 后端拒绝时返回 409 + message（见 services/collision.py `_manual_decision`），
+ * 旧版前端只显示一句笼统的「请检查版本、尺度确认和资源预算」，作者无从下手。
+ */
+function collisionErrorText(error: unknown, action: 'build' | 'rebuild'): string {
+  const message = toApiError(error).message ?? '';
+  const code = message.match(/:\s*([A-Z_]+)\s*$/)?.[1] ?? '';
+  const map: Record<string, string> = {
+    ALREADY_SUCCEEDED: '碰撞已是最新版本，无需重复构建；如需重新生成请点「重建碰撞」。',
+    ALREADY_RUNNING: '碰撞构建任务正在进行中，请稍候刷新。',
+    CURRENT_VERSION_REQUIRED: '场景需要已发布且存在当前版本后才能构建碰撞。',
+    CALIBRATION_STALE: '尺度校准已过期（场景变换已变化）：请重新确认尺度，或勾选「确认仅生成非物理测试碰撞」后重试。',
+    CALIBRATION_UNVERIFIED: '场景尺度未验证：请先完成尺度确认，或勾选「确认仅生成非物理测试碰撞」后再构建。',
+    CALIBRATION_REQUIRES_UNIT_NORMALIZATION: '尺度未归一化（1 场景单位 ≠ 1 米）：请先归一化，或勾选「确认仅生成非物理测试碰撞」后再构建。',
+    RESOURCE_BUDGET_EXCEEDED: '超出碰撞资源预算（高斯数量或源文件大小超过上限）。',
+    POLICY_MANUAL_ONLY: '当前场景策略为「仅手动构建」，请直接点「构建碰撞/重建碰撞」。',
+  };
+  const prefix = action === 'build' ? '无法构建碰撞' : '无法重建碰撞';
+  const friendly = map[code];
+  if (friendly) return `${prefix}：${friendly}`;
+  return `${prefix}；不影响已发布场景查看${code ? `（原因 ${code}）` : '，请稍后重试'}`;
+}
 
 interface CollisionPanelProps {
   sceneId: string;
@@ -103,7 +128,7 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
       refreshTimer.current = setTimeout(fetchCollision, 2000);
     } catch (error) {
       console.error('Build failed:', error);
-      setBuildError('碰撞构建请求失败；不影响已发布场景查看，请检查版本、尺度确认和资源预算');
+      setBuildError(collisionErrorText(error, 'build'));
     } finally {
       setBuilding(false);
     }
@@ -117,7 +142,7 @@ export const CollisionPanel: React.FC<CollisionPanelProps> = ({ sceneId, isOwner
       refreshTimer.current = setTimeout(fetchCollision, 2000);
     } catch (error) {
       console.error('Rebuild failed:', error);
-      setBuildError('碰撞重建请求失败；不影响已发布场景查看');
+      setBuildError(collisionErrorText(error, 'rebuild'));
     } finally {
       setBuilding(false);
     }
