@@ -180,7 +180,11 @@ case "${1:-status}" in
         sed -e "s@__SCENE_ORIGIN_ROOT__@$GS_SCENE_ORIGIN_ROOT@g" -e "s@__WEB_PORT__@${GS_VR00_WEB_PORT:-5175}@g" "$ROOT/deploy/nginx/vr00-staging.conf" > "$STATE/nginx.conf"
         start_service proxy "$ROOT" docker run --rm --pull=never --name gsplatform-vr00-nginx-20261011 --label gsplatform.vr00=20261011 --network host --user "$UID:$(id -g)" --mount "type=bind,src=$STATE/nginx.conf,dst=/etc/nginx/nginx.conf,readonly" --mount "type=bind,src=$STATE,dst=$STATE,readonly" --mount "type=bind,src=$STATE/logs,dst=/logs" --mount type=bind,src=/home/test/gsplatform-data/published,dst=/home/test/gsplatform-data/published,readonly nginx:stable-alpine nginx
         if [[ "${GS_VR00_TUNNEL_ENABLED:-false}" == true ]]; then
-            start_service tunnel "$ROOT" cloudflared tunnel --protocol "${GS_VR00_TUNNEL_PROTOCOL:-auto}" --url http://127.0.0.1:5174 --no-autoupdate
+            # --config /dev/null: cloudflared 默认会加载 ~/.cloudflared/config.yml
+            # （若该文件存在，会接管 ingress 规则导致本 quick tunnel 全部请求被兜底 404，
+            #  表现为"请求到达 cloudflared 但从不连 origin"，见 2026-11-09 排障）。
+            # 显式指向空配置，让 quick tunnel 用默认 catch-all ingress（全部转发到 --url）。
+            start_service tunnel "$ROOT" cloudflared tunnel --config /dev/null --protocol "${GS_VR00_TUNNEL_PROTOCOL:-auto}" --url http://127.0.0.1:5174 --no-autoupdate
         fi
         curl --fail --silent --show-error http://127.0.0.1:18001/health/ready
         echo
