@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Uuid,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -23,25 +25,18 @@ from app.db.base import Base
 class Job(Base):
     __tablename__ = "jobs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, primary_key=True, default=uuid.uuid4
-    )
-    scene_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("scenes.id"), nullable=False
-    )
-    owner_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("users.id"), nullable=False
-    )
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    scene_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("scenes.id"), nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("users.id"), nullable=False)
     kind: Mapped[str] = mapped_column(String(40), nullable=False)
-    status: Mapped[str] = mapped_column(String(30), nullable=False)
-    progress: Mapped[int] = mapped_column(
-        BigInteger, default=0, nullable=False
+    task_parameters: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
     )
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    progress: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     stage: Mapped[str | None] = mapped_column(String(120), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(60), nullable=True)
-    error_message_safe: Mapped[str | None] = mapped_column(
-        String(1000), nullable=True
-    )
+    error_message_safe: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     attempt: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
     # FIX-UPLOAD-01.3 execution fencing.  ``attempt`` (above) is the existing
     # *dispatch-retry* counter for PUBLISH/RECONSTRUCT — it is bumped by the API
@@ -61,9 +56,7 @@ class Job(Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    celery_task_id: Mapped[str | None] = mapped_column(
-        String(120), nullable=True, index=True
-    )
+    celery_task_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -74,12 +67,8 @@ class Job(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -94,9 +83,7 @@ class Job(Base):
         ),
         CheckConstraint("progress BETWEEN 0 AND 100", name="progress_range"),
         CheckConstraint("attempt >= 0", name="attempt_non_negative"),
-        CheckConstraint(
-            "execution_generation >= 0", name="execution_generation_non_negative"
-        ),
+        CheckConstraint("execution_generation >= 0", name="execution_generation_non_negative"),
         Index("ix_jobs_owner_status", "owner_id", "status", "created_at"),
         Index("ix_jobs_scene_status", "scene_id", "status"),
     )

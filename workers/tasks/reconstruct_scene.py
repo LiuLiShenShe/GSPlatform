@@ -6,7 +6,7 @@ which is reentrant (resumes from stage-state completion markers):
 
 1. **reconstruct_cpu_stages** — PROBING→MAPPING (CPU-bound: ffprobe, ffmpeg,
    COLMAP). Runs on the ``cpu`` queue. On success it dispatches the GPU task.
-2. **reconstruct_train** — TRAINING only (GPU-bound: gsplat + torch). Runs on
+2. **reconstruct_train** — SEGMENTING→TRAINING (GPU-bound: gsplat + torch). Runs on
    the ``gpu`` queue. On success it dispatches the finish task.
 3. **reconstruct_finish** — CONVERTING→SUCCEEDED (CPU-bound: splat-transform,
    verify, publish). Runs on the ``cpu`` queue.
@@ -22,23 +22,24 @@ import logging
 import uuid
 from pathlib import Path
 
-from workers.celery_app import celery_app
-
 from app.core.config import settings
 from app.db.models.job import Job
 from app.db.session import SessionLocal
 from app.services.celery_client import send_task
+
+from workers.celery_app import celery_app
 
 logger = logging.getLogger("gsplatform.workers.reconstruct")
 
 _STORAGE_ROOT = Path(settings.storage_root)
 
 CPU_STAGES_RANGE = ("PROBING", "MAPPING")
-GPU_STAGE_RANGE = ("TRAINING", "TRAINING")
+GPU_STAGE_RANGE = ("SEGMENTING", "TRAINING")
 FINISH_STAGES_RANGE = ("CONVERTING", "SUCCEEDED")
 
 
 # ── helpers ────────────────────────────────────────────────────────────────── #
+
 
 def _load_job(session, job_id: str) -> Job | None:
     return session.query(Job).filter(Job.id == uuid.UUID(job_id)).first()
@@ -49,7 +50,7 @@ def _is_cancelled_factory(session, job_id: str):
     _jid = uuid.UUID(job_id)
 
     def _check() -> bool:
-        j = session.query(Job).filter(Job.id == _jid).first()
+        j = session.query(Job).populate_existing().filter(Job.id == _jid).first()
         return j is not None and j.status == "CANCEL_REQUESTED"
 
     return _check
@@ -72,12 +73,24 @@ def _run_stage_range(
     """
     from workers.reconstruction.orchestrator import run_pipeline
 
+    durable_job = _load_job(session, job_id)
+    parameters = (durable_job.task_parameters or {}) if durable_job else {}
+    upload_ids = parameters.get("uploadIds", upload_ids)
+    profile_name = parameters.get("profile", profile_name)
+
     def on_progress(stage: str, pct: int) -> None:
-        job = _load_job(session, job_id)
-        if job is not None:
-            job.stage = stage
-            job.progress = pct
-            session.flush()
+        # Tool readers call this on a background thread. Never share an ORM
+        # transaction with that thread or hold cancellation behind a row lock.
+        with SessionLocal() as progress_session:
+            job = _load_job(progress_session, job_id)
+            if job is not None and job.status not in (
+                "SUCCEEDED",
+                "FAILED",
+                "CANCELLED",
+            ):
+                job.stage = stage
+                job.progress = pct
+                progress_session.commit()
 
     def on_error(stage: str, code: str, message: str, suggestion: str) -> None:
         job = _load_job(session, job_id)
@@ -99,10 +112,12 @@ def _run_stage_range(
         on_progress=on_progress,
         on_error=on_error,
         session=session,
+        segmentation=parameters.get("segmentation", {"mode": "OFF"}),
     )
 
 
 # ── CPU stages: PROBING→MAPPING ────────────────────────────────────────────── #
+
 
 @celery_app.task(
     bind=True,
@@ -124,11 +139,20 @@ def reconstruct_cpu_stages(
     session = SessionLocal()
     job = _load_job(session, job_id)
     if job is None:
+        session.close()
         return {"ok": False, "error": "job_not_found"}
+    if job.status in ("CANCEL_REQUESTED", "CANCELLED"):
+        job.status = "CANCELLED"
+        session.commit()
+        session.close()
+        return {"ok": False, "error": "CANCELLED"}
+    if job.status == "SUCCEEDED":
+        session.close()
+        return {"ok": True, "stage": "SUCCEEDED"}
 
-    job.attempt += 1
+    job.attempt = max(1, job.attempt)
     job.status = "RUNNING"
-    session.flush()
+    session.commit()
 
     try:
         result = _run_stage_range(
@@ -157,16 +181,19 @@ def reconstruct_cpu_stages(
         logger.info("CPU stages done for job %s — dispatched gpu training", job_id)
         return result
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("reconstruct_cpu_stages FAILED for job %s", job_id)
         session.rollback()
-        _fail_job(session, job, {"error_message": str(exc)}, default_code="CPU_STAGES_FAILED")
+        _fail_job(
+            session, job, {"error_message": str(exc)}, default_code="CPU_STAGES_FAILED"
+        )
         return {"ok": False, "error": str(exc)}
     finally:
         session.close()
 
 
 # ── GPU stage: TRAINING only ───────────────────────────────────────────────── #
+
 
 @celery_app.task(
     bind=True,
@@ -189,10 +216,19 @@ def reconstruct_train(
     session = SessionLocal()
     job = _load_job(session, job_id)
     if job is None:
+        session.close()
         return {"ok": False, "error": "job_not_found"}
+    if job.status in ("CANCEL_REQUESTED", "CANCELLED"):
+        job.status = "CANCELLED"
+        session.commit()
+        session.close()
+        return {"ok": False, "error": "CANCELLED"}
+    if job.status == "SUCCEEDED":
+        session.close()
+        return {"ok": True, "stage": "SUCCEEDED"}
 
     job.status = "RUNNING"
-    session.flush()
+    session.commit()
 
     try:
         result = _run_stage_range(
@@ -217,16 +253,19 @@ def reconstruct_train(
         logger.info("Training done for job %s — dispatched finish", job_id)
         return result
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("reconstruct_train FAILED for job %s", job_id)
         session.rollback()
-        _fail_job(session, job, {"error_message": str(exc)}, default_code="TRAINING_FAILED")
+        _fail_job(
+            session, job, {"error_message": str(exc)}, default_code="TRAINING_FAILED"
+        )
         return {"ok": False, "error": str(exc)}
     finally:
         session.close()
 
 
 # ── CPU stages: CONVERTING→SUCCEEDED ────────────────────────────────────────── #
+
 
 @celery_app.task(
     bind=True,
@@ -249,10 +288,19 @@ def reconstruct_finish(
     session = SessionLocal()
     job = _load_job(session, job_id)
     if job is None:
+        session.close()
         return {"ok": False, "error": "job_not_found"}
+    if job.status in ("CANCEL_REQUESTED", "CANCELLED"):
+        job.status = "CANCELLED"
+        session.commit()
+        session.close()
+        return {"ok": False, "error": "CANCELLED"}
+    if job.status == "SUCCEEDED":
+        session.close()
+        return {"ok": True, "stage": "SUCCEEDED"}
 
     job.status = "RUNNING"
-    session.flush()
+    session.commit()
 
     try:
         result = _run_stage_range(
@@ -269,16 +317,25 @@ def reconstruct_finish(
             return result
 
         job.status = "SUCCEEDED"
+        from app.db.models.scene import Scene
+
+        published_scene = session.get(Scene, job.scene_id)
+        job.task_parameters = {
+            **(job.task_parameters or {}),
+            "resultVersionId": str(published_scene.current_version_id),
+        }
         job.stage = "SUCCEEDED"
         job.progress = 100
         session.commit()
         logger.info("Reconstruction complete for job %s: %s", job_id, result)
         return result
 
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("reconstruct_finish FAILED for job %s", job_id)
         session.rollback()
-        _fail_job(session, job, {"error_message": str(exc)}, default_code="FINISH_FAILED")
+        _fail_job(
+            session, job, {"error_message": str(exc)}, default_code="FINISH_FAILED"
+        )
         return {"ok": False, "error": str(exc)}
     finally:
         session.close()
@@ -286,13 +343,16 @@ def reconstruct_finish(
 
 # ── shared helpers ─────────────────────────────────────────────────────────── #
 
+
 def _fail_job(session, job: Job, result: dict, *, default_code: str) -> None:
     """Mark *job* FAILED using safe fields from *result* (never raw internals)."""
     try:
-        job.status = "FAILED"
+        session.refresh(job, attribute_names=["status"])
+        cancelled = job.status == "CANCEL_REQUESTED" or result.get("error") == "CANCELLED"
+        job.status = "CANCELLED" if cancelled else "FAILED"
         job.stage = result.get("stage") or job.stage or "UNKNOWN"
-        job.error_code = result.get("error") or default_code
-        job.error_message_safe = (result.get("error_message") or "")[:1000]
+        job.error_code = "CANCELLED" if cancelled else result.get("error") or default_code
+        job.error_message_safe = "任务已取消" if cancelled else (result.get("error_message") or "")[:1000]
         job.progress = int(result.get("progress") or 0)
         session.commit()
     except Exception:  # noqa: BLE001

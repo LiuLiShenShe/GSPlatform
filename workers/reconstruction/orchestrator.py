@@ -21,14 +21,22 @@ import logging
 import re
 import shutil
 import struct
+import subprocess
 import sys
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from workers.reconstruction import colmap_pipeline, colmap_reader, convert_sog
-from workers.reconstruction import extract_frames, probe, quality_gate
+from workers.reconstruction import (
+    colmap_pipeline,
+    colmap_reader,
+    convert_sog,
+    extract_frames,
+    probe,
+    quality_gate,
+)
 from workers.reconstruction.command_runner import CommandRunner, quote_argv
 from workers.reconstruction.profiles import Profile, load_profile
 from workers.reconstruction.progress import StageProgress
@@ -46,7 +54,7 @@ logger = logging.getLogger("gsplatform.workers.orchestrator")
 # name, so we must re-inject PYTHONPATH (CommandRunner strips it by default).
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-__all__ = ["run_pipeline", "StageError", "detect_input_kind", "sniff_extension"]
+__all__ = ["StageError", "detect_input_kind", "run_pipeline", "sniff_extension"]
 
 # Progress / error callback contracts (injected by the Celery task):
 #   on_progress(stage: str, pct: int)
@@ -133,10 +141,14 @@ def detect_input_kind(path: Path) -> str:
         res = runner.run(
             [
                 "ffprobe",
-                "-v", "error",
-                "-select_streams", "v:0",
-                "-show_entries", "stream=codec_type",
-                "-of", "json",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "json",
                 str(path),
             ]
         )
@@ -165,6 +177,8 @@ class JobContext:
     on_progress: ProgressCallback | None
     on_error: ErrorCallback | None
     session: Any  # SQLAlchemy session — required only for PUBLISHING
+    segmentation: dict = field(default_factory=lambda: {"mode": "OFF"})
+    segmentation_model: dict | None = None
 
     # derived dirs
     input_dir: Path = field(init=False)
@@ -214,14 +228,14 @@ def _file_hash(path: Path) -> str:
 
 
 def _tree_hash(directory: Path) -> str:
-    """Deterministic hash of a directory's (relpath, size) manifest."""
+    """Deterministic hash of a directory's (relpath, content digest) manifest."""
     if not directory.is_dir():
         return sha256_of_text("MISSING-DIR")
     entries = []
     for p in sorted(directory.rglob("*")):
         if p.is_file():
             rel = p.relative_to(directory).as_posix()
-            entries.append(f"{rel}:{p.stat().st_size}")
+            entries.append(f"{rel}:{_file_hash(p)}")
     return sha256_of_text("\n".join(entries))
 
 
@@ -237,7 +251,9 @@ def _sources_hash(ctx: JobContext) -> str:
 
 def _section_params(ctx: JobContext, section_name: str) -> dict:
     """Section dict without a ``profile`` key (it collides with the explicit kwarg)."""
-    return {k: v for k, v in ctx.profile.section(section_name).items() if k != "profile"}
+    return {
+        k: v for k, v in ctx.profile.section(section_name).items() if k != "profile"
+    }
 
 
 def _hash_for_stage(ctx: JobContext, stage: str) -> tuple[str, str]:
@@ -253,11 +269,15 @@ def _hash_for_stage(ctx: JobContext, stage: str) -> tuple[str, str]:
     if stage == "PROBING":
         return _sources_hash(ctx), param_hash(profile=name, version=ctx.profile.version)
     if stage == "EXTRACTING":
-        return _tree_hash(ctx.input_dir), param_hash(profile=name, **_section_params(ctx, "extract"))
+        return _tree_hash(ctx.input_dir), param_hash(
+            profile=name, **_section_params(ctx, "extract")
+        )
     if stage == "PRECHECK":
         ph = param_hash(
             profile=name,
-            min_registered_images=int(ctx.profile.colmap().get("min_registered_images", 5)),
+            min_registered_images=int(
+                ctx.profile.colmap().get("min_registered_images", 5)
+            ),
         )
         return _tree_hash(ctx.frames_dir), ph
     if stage in ("FEATURES", "MATCHING", "MAPPING"):
@@ -265,15 +285,40 @@ def _hash_for_stage(ctx: JobContext, stage: str) -> tuple[str, str]:
         # one runs, so it must not be part of the input hash — a resumed
         # attempt would otherwise mismatch every COLMAP-stage marker and re-run
         # finished stages (colmap's mapper refuses an existing sparse dir).
-        return _tree_hash(ctx.frames_dir), param_hash(profile=name, **_section_params(ctx, "colmap"))
+        return _tree_hash(ctx.frames_dir), param_hash(
+            profile=name, **_section_params(ctx, "colmap")
+        )
     if stage == "TRAINING":
         ih = _tree_hash(ctx.colmap_dir / "sparse") + "|" + _tree_hash(ctx.frames_dir)
-        return ih, param_hash(profile=name, **_section_params(ctx, "gsplat"))
+        if ctx.segmentation.get("mode") != "OFF":
+            ih += "|" + _tree_hash(ctx.job_dir / "segmentation")
+        return ih, param_hash(
+            profile=name,
+            segmentation=ctx.segmentation,
+            trainerVersion=3,
+            **_section_params(ctx, "gsplat"),
+        )
+    if stage == "SEGMENTING":
+        from workers.reconstruction.segmentation import runtime_identity
+
+        try:
+            if ctx.segmentation.get("mode") != "OFF" and ctx.segmentation_model is None:
+                ctx.segmentation_model = runtime_identity()
+            model = ctx.segmentation_model
+        except (ValueError, OSError, subprocess.SubprocessError) as exc:
+            raise StageError("SEGMENTING", "SAM3_UNAVAILABLE", str(exc)) from exc
+        return _tree_hash(ctx.frames_dir), param_hash(
+            segmentation=ctx.segmentation, model=model
+        )
     if stage == "CONVERTING":
         ply = ctx.job_dir / "gsplat" / "final.ply"
-        return _file_hash(ply), param_hash(profile=name, **_section_params(ctx, "convert"))
+        return _file_hash(ply), param_hash(
+            profile=name, **_section_params(ctx, "convert")
+        )
     if stage in ("VERIFYING", "PUBLISHING"):
-        return _tree_hash(ctx.streamed_dir), param_hash(profile=name, **_section_params(ctx, "convert"))
+        return _tree_hash(ctx.streamed_dir), param_hash(
+            profile=name, **_section_params(ctx, "convert")
+        )
     raise KeyError(f"unknown stage {stage!r}")
 
 
@@ -298,7 +343,7 @@ def _append_log(ctx: JobContext, text: str) -> None:
         max_bytes = int(ctx.profile.resource().get("max_log_bytes", 2_097_152))
         if log_path.stat().st_size > max_bytes:
             lines = log_path.read_text(encoding="utf-8").splitlines()
-            keep = lines[-max(1, len(lines) // 2):]
+            keep = lines[-max(1, len(lines) // 2) :]
             log_path.write_text("\n".join(keep) + "\n", encoding="utf-8")
     except OSError:
         pass
@@ -309,14 +354,14 @@ def _report(ctx: JobContext, stage: str, pct: int) -> None:
     if ctx.on_progress is not None:
         try:
             ctx.on_progress(stage, pct)
-        except Exception:  # noqa: BLE001 — a broken callback must not kill the pipeline
+        except Exception:
             logger.exception("on_progress callback failed (stage=%s)", stage)
     if ctx.celery_task is not None:
         try:
             ctx.celery_task.update_state(
                 state="PROGRESS", meta={"stage": stage, "progress": pct}
             )
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("celery update_state failed (stage=%s)", stage)
     logger.info("[job %s] stage %s progress=%d", ctx.job_id, stage, pct)
 
@@ -325,7 +370,7 @@ def _report_error(ctx: JobContext, exc: StageError) -> None:
     if ctx.on_error is not None:
         try:
             ctx.on_error(exc.stage, exc.code, exc.message, exc.suggestion)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("on_error callback failed (stage=%s)", exc.stage)
     if ctx.celery_task is not None:
         try:
@@ -338,8 +383,8 @@ def _report_error(ctx: JobContext, exc: StageError) -> None:
                     "suggestion": exc.suggestion,
                 },
             )
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.exception("celery failure update failed (stage=%s)", exc.stage)
 
 
 def _make_runner(
@@ -351,7 +396,7 @@ def _make_runner(
         timeout = int(res.get("gpu_time_s", 7200))
     else:
         timeout = int(res.get("cpu_time_s", 3600))
-    env = {"PYTHONPATH": str(REPO_ROOT)} if gpu else None
+    env = {"PYTHONPATH": str(REPO_ROOT), "CUDA_VISIBLE_DEVICES": "0"} if gpu else None
     return CommandRunner(
         cwd=ctx.job_dir,
         env=env,
@@ -372,7 +417,11 @@ def _classify_inputs(ctx: JobContext) -> None:
     """
     if ctx.video_path is not None or ctx.photo_dir is not None:
         return
-    video = [p for p in ctx.input_dir.iterdir() if p.is_file() and p.suffix.lower() in probe.VIDEO_EXTS]
+    video = [
+        p
+        for p in ctx.input_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in probe.VIDEO_EXTS
+    ]
     if len(video) == 1:
         ctx.video_path = video[0]
     else:
@@ -411,7 +460,9 @@ def _rebuild_convert_state(ctx: JobContext) -> None:
         # so a resume can still recover a job staged by either generation.
         nested = sorted(staged.glob("*/manifest.json"))
         if len(nested) > 1:
-            raise StageError("CONVERTING", "CONVERT_FAILED", "多个候选转换版本，拒绝不明确的恢复")
+            raise StageError(
+                "CONVERTING", "CONVERT_FAILED", "多个候选转换版本，拒绝不明确的恢复"
+            )
         if nested:
             staged = nested[0].parent
             ctx.streamed_dir = staged
@@ -477,10 +528,14 @@ def _stage_probing(ctx: JobContext) -> None:
     # COLMAP's mapper down divergent initial-pair paths and makes
     # registration count unreproducible.
     input_files = [d for _, d in copies]
-    video_candidates = [f for f in input_files if sniff_extension(f) in probe.VIDEO_EXTS]
+    video_candidates = [
+        f for f in input_files if sniff_extension(f) in probe.VIDEO_EXTS
+    ]
     if len(ctx.upload_ids) == 1 and video_candidates:
         ctx.video_path = video_candidates[0]
-    elif len(ctx.upload_ids) == 1 and sniff_extension(input_files[0]) in probe.IMAGE_EXTS:
+    elif (
+        len(ctx.upload_ids) == 1 and sniff_extension(input_files[0]) in probe.IMAGE_EXTS
+    ):
         ctx.video_path = None
     else:
         ctx.video_path = None
@@ -509,10 +564,16 @@ def _stage_probing(ctx: JobContext) -> None:
     try:
         quality_gate.gate_probe(probe_result, input_limits)
     except quality_gate.GateError as exc:
-        raise StageError("PROBING", exc.error_code, exc.error_message, exc.suggestion) from exc
+        raise StageError(
+            "PROBING", exc.error_code, exc.error_message, exc.suggestion
+        ) from exc
 
     ctx.manager.write(_marker(ctx, "PROBING", "ok"))
-    logger.info("[job %s] PROBING ok (kind=%s)", ctx.job_id, "video" if ctx.video_path else "photos")
+    logger.info(
+        "[job %s] PROBING ok (kind=%s)",
+        ctx.job_id,
+        "video" if ctx.video_path else "photos",
+    )
 
 
 def _stage_extracting(ctx: JobContext) -> None:
@@ -553,7 +614,9 @@ def _stage_extracting(ctx: JobContext) -> None:
         )
         if not extract_result.ok:
             raise StageError(
-                "EXTRACTING", "EXTRACT_FAILED", extract_result.error or "ffmpeg 抽帧失败",
+                "EXTRACTING",
+                "EXTRACT_FAILED",
+                extract_result.error or "ffmpeg 抽帧失败",
                 "请确认视频可解码且未损坏。",
             )
         try:
@@ -561,28 +624,46 @@ def _stage_extracting(ctx: JobContext) -> None:
                 extract_result, int(ctx.profile.extract().get("max_frames", 300))
             )
         except quality_gate.GateError as exc:
-            raise StageError("EXTRACTING", exc.error_code, exc.error_message, exc.suggestion) from exc
+            raise StageError(
+                "EXTRACTING", exc.error_code, exc.error_message, exc.suggestion
+            ) from exc
         ctx.frame_count = extract_result.frame_count
     else:
         # photo set: copy from input/photos into frames/ with server names
         if ctx.photo_dir is None:
             raise StageError("EXTRACTING", "NO_PHOTOS", "没有可用的照片输入")
+        if ctx.frames_dir.exists():
+            shutil.rmtree(ctx.frames_dir)
         ctx.frames_dir.mkdir(parents=True, exist_ok=True)
         photos = sorted(
-            p for p in ctx.photo_dir.iterdir()
+            p
+            for p in ctx.photo_dir.iterdir()
             if p.is_file() and p.suffix.lower() in probe.IMAGE_EXTS
         )
+        from PIL import Image, ImageOps
+
         for i, p in enumerate(photos, 1):
-            dst = ctx.frames_dir / f"frame_{i:05d}{p.suffix.lower()}"
+            # One canonical, physically oriented RGB frame for COLMAP, SAM3 and
+            # training. EXIF orientation is consumed here, never independently.
+            dst = ctx.frames_dir / f"frame_{i:05d}.png"
             if not dst.exists():
-                shutil.copy2(p, dst)
+                with Image.open(p) as source:
+                    rgb = ImageOps.exif_transpose(source).convert("RGB")
+                    width = int(ctx.profile.extract().get("target_width", 1280))
+                    if rgb.width > width:
+                        rgb = rgb.resize(
+                            (width, round(rgb.height * width / rgb.width)),
+                            Image.Resampling.LANCZOS,
+                        )
+                    rgb.save(dst)
         ctx.frame_count = len(photos)
         max_frames = int(ctx.profile.extract().get("max_frames", 300))
         if ctx.frame_count == 0:
             raise StageError("EXTRACTING", "NO_FRAMES", "没有生成任何帧")
         if ctx.frame_count > max_frames:
             raise StageError(
-                "EXTRACTING", "TOO_MANY_FRAMES",
+                "EXTRACTING",
+                "TOO_MANY_FRAMES",
                 f"照片数量 {ctx.frame_count} 超过上限 {max_frames}",
                 "请减少照片数量或使用较低质量 profile。",
             )
@@ -597,7 +678,8 @@ def _stage_precheck(ctx: JobContext) -> None:
     min_images = int(ctx.profile.colmap().get("min_registered_images", 5))
     if ctx.frame_count < min_images:
         raise StageError(
-            "PRECHECK", "TOO_FEW_FRAMES",
+            "PRECHECK",
+            "TOO_FEW_FRAMES",
             f"可用帧/照片仅 {ctx.frame_count} 张，至少需要 {min_images} 张",
             "请提供更多照片或更长的视频片段。",
         )
@@ -612,7 +694,8 @@ def _stage_features(ctx: JobContext) -> None:
     )
     if not result.ok:
         raise StageError(
-            "FEATURES", "FEATURE_EXTRACTOR_FAILED",
+            "FEATURES",
+            "FEATURE_EXTRACTOR_FAILED",
             result.error or "COLMAP feature_extractor 失败",
             "请检查输入图像是否可读。",
         )
@@ -627,7 +710,8 @@ def _stage_matching(ctx: JobContext) -> None:
     )
     if not result.ok:
         raise StageError(
-            "MATCHING", "MATCHER_FAILED",
+            "MATCHING",
+            "MATCHER_FAILED",
             result.error or "COLMAP 匹配失败",
             "可尝试更换 matching 策略或检查图像重叠度。",
         )
@@ -700,7 +784,8 @@ def _stage_mapping(ctx: JobContext) -> None:
             )
             if not match.ok:
                 raise StageError(
-                    "MATCHING", "MATCHER_FAILED",
+                    "MATCHING",
+                    "MATCHER_FAILED",
                     match.error or "COLMAP 匹配失败",
                     "可尝试更换 matching 策略或检查图像重叠度。",
                 )
@@ -717,13 +802,16 @@ def _stage_mapping(ctx: JobContext) -> None:
         )
         if not result.ok:
             raise StageError(
-                "MAPPING", "MAPPER_FAILED",
+                "MAPPING",
+                "MAPPER_FAILED",
                 result.error or "COLMAP mapper 失败",
                 "请检查图像质量或重叠度。",
             )
         model_dir = _pick_best_sparse_model(ctx.colmap_dir / "sparse")
         if model_dir is None:
-            raise StageError("MAPPING", "NO_SPARSE_MODEL", "COLMAP mapper 未生成稀疏模型")
+            raise StageError(
+                "MAPPING", "NO_SPARSE_MODEL", "COLMAP mapper 未生成稀疏模型"
+            )
         try:
             model = colmap_reader.read_sparse_model(model_dir)
         except FileNotFoundError as exc:
@@ -737,7 +825,10 @@ def _stage_mapping(ctx: JobContext) -> None:
             gate_error = exc
             logger.warning(
                 "[job %s] MAPPING attempt %d/%d failed gate: %s (%d reg)",
-                ctx.job_id, attempt, max_attempts, exc.error_message,
+                ctx.job_id,
+                attempt,
+                max_attempts,
+                exc.error_message,
                 model.registered_image_count,
             )
             if attempt == max_attempts:
@@ -748,14 +839,22 @@ def _stage_mapping(ctx: JobContext) -> None:
         registered = model.registered_image_count
         total = result.total or ctx.frame_count
         message = gate_error.error_message or f"仅注册 {registered}/{total} 张图像"
-        raise StageError("MAPPING", gate_error.error_code, message, gate_error.suggestion)
+        raise StageError(
+            "MAPPING", gate_error.error_code, message, gate_error.suggestion
+        )
 
     ctx.manager.write(
-        _marker(ctx, "MAPPING", f"reg={model.registered_image_count}_pts={model.point_count}")
+        _marker(
+            ctx,
+            "MAPPING",
+            f"reg={model.registered_image_count}_pts={model.point_count}",
+        )
     )
     logger.info(
         "[job %s] MAPPING ok (registered=%d points=%d)",
-        ctx.job_id, model.registered_image_count, model.point_count,
+        ctx.job_id,
+        model.registered_image_count,
+        model.point_count,
     )
 
 
@@ -774,6 +873,87 @@ def _parse_gsiter(line: str) -> tuple[int, int] | None:
     return None
 
 
+def _stage_segmenting(ctx: JobContext) -> None:
+    if ctx.segmentation.get("mode", "OFF") == "OFF":
+        ctx.manager.write(_marker(ctx, "SEGMENTING", "OFF"))
+        return
+    from workers.reconstruction.segmentation import runtime_identity, validate_manifest
+
+    directory = ctx.job_dir / "segmentation"
+    directory.mkdir(exist_ok=True)
+    try:
+        identity = ctx.segmentation_model or runtime_identity()
+        ctx.segmentation_model = identity
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        raise StageError("SEGMENTING", "SAM3_UNAVAILABLE", str(exc)) from exc
+    request_path = directory / "request.json"
+    # A crash after inference but before the completion marker must not force
+    # another model load. Accept only the exact model/prompt and verified files.
+    try:
+        manifest = validate_manifest(directory, ctx.frames_dir)
+        if (
+            manifest.get("model") == identity
+            and manifest.get("prompt") == ctx.segmentation["prompt"]
+        ):
+            ctx.manager.write(
+                _marker(ctx, "SEGMENTING", _file_hash(directory / "manifest.json"))
+            )
+            return
+    except (ValueError, OSError, KeyError):
+        pass
+    request_path.write_text(
+        json.dumps(
+            {
+                "imagesDir": str(ctx.frames_dir),
+                "outputDir": str(directory),
+                "prompt": ctx.segmentation["prompt"],
+                "model": identity,
+            }
+        )
+    )
+
+    def progress(line: str) -> None:
+        match = re.search(r"SAM3FRAME done=(\d+) total=(\d+)", line)
+        if match:
+            _report(
+                ctx,
+                "SEGMENTING",
+                ctx.progress.advance(
+                    "SEGMENTING", int(match[1]) / max(int(match[2]), 1)
+                ),
+            )
+
+    runner = _make_runner(ctx, gpu=True, on_progress=progress)
+    result = runner.run(
+        [
+            identity["python"],
+            str(REPO_ROOT / "workers/reconstruction/sam3_infer.py"),
+            "--request",
+            str(request_path),
+        ]
+    )
+    (directory / "inference.log").write_text(result.output)
+    if not result.ok:
+        code = "CANCELLED" if result.cancelled else "SAM3_INFERENCE_FAILED"
+        if "SAM3_EMPTY_OR_INSUFFICIENT" in result.output:
+            code = "SAM3_INSUFFICIENT_VIEWS"
+        raise StageError(
+            "SEGMENTING",
+            code,
+            "SAM3 未产生足够有效掩膜"
+            if code == "SAM3_INSUFFICIENT_VIEWS"
+            else "SAM3 分割未完成，请检查模型环境或任务日志",
+            "请检查目标提示词、可见视角或模型环境；不会自动切换为完整场景。",
+        )
+    try:
+        validate_manifest(directory, ctx.frames_dir)
+    except (ValueError, OSError, KeyError) as exc:
+        raise StageError("SEGMENTING", "SAM3_INVALID_MASKS", str(exc)) from exc
+    ctx.manager.write(
+        _marker(ctx, "SEGMENTING", _file_hash(directory / "manifest.json"))
+    )
+
+
 def _stage_training(ctx: JobContext) -> None:
     """Invoke the gsplat training subprocess and stream real iteration progress."""
     gsplat_sec = ctx.profile.gsplat()
@@ -782,10 +962,22 @@ def _stage_training(ctx: JobContext) -> None:
     ctx.output_ply.parent.mkdir(parents=True, exist_ok=True)
     checkpoint_dir = ctx.gsplat_dir / "checkpoints"
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    # A changed prompt/model/mask/trainer may never reuse an old training checkpoint.
+    training_identity = param_hash(hashes=_hash_for_stage(ctx, "TRAINING"))
+    checkpoint_identity = checkpoint_dir / "identity.json"
+    if (
+        not checkpoint_identity.is_file()
+        or checkpoint_identity.read_text() != training_identity
+    ):
+        shutil.rmtree(checkpoint_dir)
+        checkpoint_dir.mkdir()
+    checkpoint_identity.write_text(training_identity)
 
     sparse_dir = ctx.colmap_dir / "sparse" / "0"
     if not sparse_dir.is_dir():
-        raise StageError("TRAINING", "NO_SPARSE_MODEL", "缺少 COLMAP 稀疏模型，无法训练")
+        raise StageError(
+            "TRAINING", "NO_SPARSE_MODEL", "缺少 COLMAP 稀疏模型，无法训练"
+        )
 
     # params.json for resume + a safe invocation summary
     params = {
@@ -807,19 +999,43 @@ def _stage_training(ctx: JobContext) -> None:
     )
 
     train_argv = [
-        sys.executable, "-m", "workers.reconstruction.train_gsplat_script",
-        "--colmap-dir", str(sparse_dir),
-        "--images-dir", str(ctx.frames_dir),
-        "--output", str(ctx.output_ply),
-        "--iterations", str(iterations),
-        "--sh-degree", str(params["sh_degree"]),
-        "--lr", str(params["lr"]),
-        "--save-interval", str(params["save_interval"]),
-        "--seed", str(params["seed"]),
-        "--device", "cuda:0",
-        "--checkpoint-dir", str(checkpoint_dir),
-        "--min-splats", "100",
+        sys.executable,
+        "-m",
+        "workers.reconstruction.train_gsplat_script",
+        "--colmap-dir",
+        str(sparse_dir),
+        "--images-dir",
+        str(ctx.frames_dir),
+        "--output",
+        str(ctx.output_ply),
+        "--iterations",
+        str(iterations),
+        "--sh-degree",
+        str(params["sh_degree"]),
+        "--lr",
+        str(params["lr"]),
+        "--save-interval",
+        str(params["save_interval"]),
+        "--downscale",
+        str(params["downscale"]),
+        "--seed",
+        str(params["seed"]),
+        "--device",
+        "cuda:0",
+        "--checkpoint-dir",
+        str(checkpoint_dir),
+        "--min-splats",
+        "100",
     ]
+    if ctx.segmentation.get("mode", "OFF") != "OFF":
+        train_argv.extend(
+            [
+                "--masks-dir",
+                str(ctx.job_dir / "segmentation/masks"),
+                "--segmentation-manifest",
+                str(ctx.job_dir / "segmentation/manifest.json"),
+            ]
+        )
     if params["random_init"]:
         train_argv.append("--random-init")
     if not params["densify"]:
@@ -844,12 +1060,14 @@ def _stage_training(ctx: JobContext) -> None:
         output = result.output.lower()
         if "out of memory" in output or "cuda out of memory" in output:
             raise StageError(
-                "TRAINING", "TRAINING_OOM",
+                "TRAINING",
+                "TRAINING_OOM",
                 "GPU 显存不足，训练失败",
                 "请降低 profile 质量或等待 GPU 空闲后重试。",
             )
         raise StageError(
-            "TRAINING", "TRAINING_FAILED",
+            "TRAINING",
+            "TRAINING_FAILED",
             result.error or result.output[-1000:] or "gsplat 训练失败",
             "请检查 GPU 环境或降低训练参数后重试。",
         )
@@ -859,12 +1077,14 @@ def _stage_training(ctx: JobContext) -> None:
     try:
         quality_gate.gate_training_output(ctx.output_ply, min_splats=100)
     except quality_gate.GateError as exc:
-        raise StageError("TRAINING", exc.error_code, exc.error_message, exc.suggestion) from exc
+        raise StageError(
+            "TRAINING", exc.error_code, exc.error_message, exc.suggestion
+        ) from exc
 
-    ctx.manager.write(
-        _marker(ctx, "TRAINING", f"{ctx.output_ply.stat().st_size}bytes")
+    ctx.manager.write(_marker(ctx, "TRAINING", f"{ctx.output_ply.stat().st_size}bytes"))
+    logger.info(
+        "[job %s] TRAINING ok (%d bytes)", ctx.job_id, ctx.output_ply.stat().st_size
     )
-    logger.info("[job %s] TRAINING ok (%d bytes)", ctx.job_id, ctx.output_ply.stat().st_size)
 
 
 def _stage_converting(ctx: JobContext) -> None:
@@ -874,7 +1094,9 @@ def _stage_converting(ctx: JobContext) -> None:
     if not ctx.output_ply.is_file():
         raise StageError("CONVERTING", "NO_TRAINED_PLY", "缺少训练产物，无法转换")
     if not ctx.scene_id:
-        raise StageError("CONVERTING", "CONVERT_FAILED", "缺少 scene_id，无法生成版本目录")
+        raise StageError(
+            "CONVERTING", "CONVERT_FAILED", "缺少 scene_id，无法生成版本目录"
+        )
 
     if ctx.streamed_dir.exists():
         shutil.rmtree(ctx.streamed_dir, ignore_errors=True)
@@ -889,7 +1111,9 @@ def _stage_converting(ctx: JobContext) -> None:
         gpu=str(convert_sec.get("gpu", "cpu")),
     )
     if not cr.ok:
-        raise StageError("CONVERTING", "CONVERT_FAILED", cr.reason or "Streamed SOG 转换失败")
+        raise StageError(
+            "CONVERTING", "CONVERT_FAILED", cr.reason or "Streamed SOG 转换失败"
+        )
     ctx.convert_result = cr
     ctx.version_id = cr.version_id
     # convert_to_streamed_sog now writes into a VERSION-scoped subdirectory of
@@ -908,7 +1132,9 @@ def _stage_verifying(ctx: JobContext) -> None:
     try:
         quality_gate.gate_publish(ctx.streamed_dir)
     except quality_gate.GateError as exc:
-        raise StageError("VERIFYING", exc.error_code, exc.error_message, exc.suggestion) from exc
+        raise StageError(
+            "VERIFYING", exc.error_code, exc.error_message, exc.suggestion
+        ) from exc
     ctx.manager.write(_marker(ctx, "VERIFYING", "ok"))
     logger.info("[job %s] VERIFYING ok", ctx.job_id)
 
@@ -956,20 +1182,31 @@ def _stage_publishing(ctx: JobContext) -> None:
             version_id=ctx.version_id,
             manifest=cr.manifest or {},
             entry_bytes=cr.entry_bytes,
-            entry_url=((cr.manifest or {}).get("content") or
-                       (cr.manifest or {}).get("stream") or {})["entryUrl"],
-            counts=((cr.manifest or {}).get("content") or
-                    (cr.manifest or {}).get("stream") or {}).get("counts", []),
+            entry_url=(
+                (cr.manifest or {}).get("content")
+                or (cr.manifest or {}).get("stream")
+                or {}
+            )["entryUrl"],
+            counts=(
+                (cr.manifest or {}).get("content")
+                or (cr.manifest or {}).get("stream")
+                or {}
+            ).get("counts", []),
             source_sha256=cr.source_sha256,
         )
-    except Exception as exc:  # noqa: BLE001 — surface a stable publish error
+    except Exception as exc:
         logger.exception("[job %s] PUBLISHING failed", ctx.job_id)
         raise StageError(
             "PUBLISHING", "PUBLISH_FAILED", f"版本发布失败: {exc}"
         ) from exc
 
     ctx.manager.write(_marker(ctx, "PUBLISHING", ctx.version_id))
-    logger.info("[job %s] PUBLISHING ok (scene=%s version=%s)", ctx.job_id, scene_id, ctx.version_id)
+    logger.info(
+        "[job %s] PUBLISHING ok (scene=%s version=%s)",
+        ctx.job_id,
+        scene_id,
+        ctx.version_id,
+    )
 
 
 STAGE_HANDLERS: dict[str, Callable[[JobContext], None]] = {
@@ -979,6 +1216,7 @@ STAGE_HANDLERS: dict[str, Callable[[JobContext], None]] = {
     "FEATURES": _stage_features,
     "MATCHING": _stage_matching,
     "MAPPING": _stage_mapping,
+    "SEGMENTING": _stage_segmenting,
     "TRAINING": _stage_training,
     "CONVERTING": _stage_converting,
     "VERIFYING": _stage_verifying,
@@ -1003,6 +1241,7 @@ def run_pipeline(
     on_progress: ProgressCallback | None = None,
     on_error: ErrorCallback | None = None,
     session: Any = None,
+    segmentation: dict | None = None,
 ) -> dict:
     """Run the reconstruction pipeline for *job_id* over ``stage_range``.
 
@@ -1037,19 +1276,28 @@ def run_pipeline(
         on_progress=on_progress,
         on_error=on_error,
         session=session,
+        segmentation=segmentation or {"mode": "OFF"},
     )
     ctx.tool_versions = _tool_versions()
 
     for d in (
-        ctx.input_dir, ctx.frames_dir, ctx.colmap_dir / "sparse",
-        ctx.gsplat_dir / "checkpoints", ctx.streamed_dir,
-        ctx.logs_dir, ctx.stage_state_dir,
+        ctx.input_dir,
+        ctx.frames_dir,
+        ctx.colmap_dir / "sparse",
+        ctx.gsplat_dir / "checkpoints",
+        ctx.streamed_dir,
+        ctx.logs_dir,
+        ctx.stage_state_dir,
     ):
         d.mkdir(parents=True, exist_ok=True)
 
     logger.info(
         "[job %s] run_pipeline attempt=%d range=%s..%s dir=%s",
-        job_id, attempt, stage_range[0], stage_range[1], ctx.job_dir,
+        job_id,
+        attempt,
+        stage_range[0],
+        stage_range[1],
+        ctx.job_dir,
     )
     _append_log(ctx, f"start attempt={attempt} profile={profile_name}")
 
@@ -1057,10 +1305,18 @@ def run_pipeline(
         start_idx = RECONSTRUCTION_STAGES.index(stage_range[0])
         end_idx = RECONSTRUCTION_STAGES.index(stage_range[1])
     except ValueError:
-        return {"ok": False, "error": "BAD_STAGE_RANGE", "error_message": f"非法阶段范围: {stage_range}"}
+        return {
+            "ok": False,
+            "error": "BAD_STAGE_RANGE",
+            "error_message": f"非法阶段范围: {stage_range}",
+        }
 
     if start_idx > end_idx:
-        return {"ok": False, "error": "BAD_STAGE_RANGE", "error_message": f"阶段范围逆序: {stage_range}"}
+        return {
+            "ok": False,
+            "error": "BAD_STAGE_RANGE",
+            "error_message": f"阶段范围逆序: {stage_range}",
+        }
 
     stages = RECONSTRUCTION_STAGES[start_idx : end_idx + 1]
     last_done: str | None = None
@@ -1071,14 +1327,31 @@ def run_pipeline(
         if cancel_check():
             logger.info("[job %s] cancellation requested at %s", job_id, stage)
             return {
-                "ok": False, "error": "CANCELLED", "error_message": "任务已取消",
-                "stage": stage, "progress": ctx.progress.at_start(stage),
+                "ok": False,
+                "error": "CANCELLED",
+                "error_message": "任务已取消",
+                "stage": stage,
+                "progress": ctx.progress.at_start(stage),
             }
 
         handler = STAGE_HANDLERS[stage]
         try:
             input_hash, ph = _hash_for_stage(ctx, stage)
-            if ctx.manager.is_complete(stage, input_hash=input_hash, param_hash=ph):
+            complete = ctx.manager.is_complete(
+                stage, input_hash=input_hash, param_hash=ph
+            )
+            if (
+                complete
+                and stage == "SEGMENTING"
+                and ctx.segmentation.get("mode") != "OFF"
+            ):
+                from workers.reconstruction.segmentation import validate_manifest
+
+                try:
+                    validate_manifest(ctx.job_dir / "segmentation", ctx.frames_dir)
+                except (ValueError, OSError, KeyError):
+                    complete = False
+            if complete:
                 logger.info("[job %s] stage %s skipped (marker match)", job_id, stage)
                 _append_log(ctx, f"stage {stage} skipped (marker)")
                 _report(ctx, stage, ctx.progress.advance(stage, 1.0))
@@ -1094,7 +1367,13 @@ def run_pipeline(
         except StageError as exc:
             _append_log(ctx, f"stage {exc.stage} FAILED: {exc.code} {exc.message}")
             _report_error(ctx, exc)
-            logger.warning("[job %s] stage %s failed: %s (%s)", job_id, exc.stage, exc.code, exc.message)
+            logger.warning(
+                "[job %s] stage %s failed: %s (%s)",
+                job_id,
+                exc.stage,
+                exc.code,
+                exc.message,
+            )
             return {
                 "ok": False,
                 "error": exc.code,
@@ -1103,12 +1382,15 @@ def run_pipeline(
                 "stage": exc.stage,
                 "progress": ctx.progress.at_start(exc.stage),
             }
-        except Exception:  # noqa: BLE001 — wrap unknown failures
+        except Exception:
             logger.exception("[job %s] stage %s crashed", job_id, stage)
             safe = "重建流程内部错误，请查看日志或稍后重试"
             return {
-                "ok": False, "error": "INTERNAL_ERROR", "error_message": safe,
-                "stage": stage, "progress": ctx.progress.at_start(stage),
+                "ok": False,
+                "error": "INTERNAL_ERROR",
+                "error_message": safe,
+                "stage": stage,
+                "progress": ctx.progress.at_start(stage),
             }
 
     # success — report the terminal state.
@@ -1120,11 +1402,22 @@ def run_pipeline(
             if marker is not None:
                 ctx.version_id = marker.output_hash
         _report(ctx, "SUCCEEDED", 100)
-        return {"ok": True, "version_id": ctx.version_id, "stage": "SUCCEEDED", "progress": 100}
+        return {
+            "ok": True,
+            "version_id": ctx.version_id,
+            "stage": "SUCCEEDED",
+            "progress": 100,
+        }
 
     if not last_done:
         # Nothing in this range needed to run (e.g. only SUCCEEDED) — done.
-        return {"ok": True, "stage": "SUCCEEDED", "progress": 100, "job_dir": str(ctx.job_dir), "attempt": attempt}
+        return {
+            "ok": True,
+            "stage": "SUCCEEDED",
+            "progress": 100,
+            "job_dir": str(ctx.job_dir),
+            "attempt": attempt,
+        }
 
     final_pct = ctx.progress.advance(last_done, 1.0)
     return {

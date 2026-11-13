@@ -33,7 +33,7 @@ colmap:
 gsplat:
   iterations: 1200
   sh_degree: 0
-  lr: 0.01
+  lr: 0.00016
   downscale: 1
   save_interval: 200
   random_init: false
@@ -53,12 +53,13 @@ stage_weights:
   FEATURES: 10
   MATCHING: 10
   MAPPING: 12
+  SEGMENTING: 8
   TRAINING: 24
   CONVERTING: 12
   VERIFYING: 6
   PUBLISHING: 6
 
-precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "TRAINING", "CONVERTING"]
+precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "SEGMENTING", "TRAINING", "CONVERTING"]
 
 resource:
   cpu_time_s: 7200

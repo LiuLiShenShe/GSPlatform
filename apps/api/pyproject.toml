@@ -64,6 +64,7 @@ dev = [
 recon = [
     "torch==2.14.0+cu126",
     "gsplat==1.5.3",
+    "scipy==1.16.1",
 ]
 
 [tool.hatch.build.targets.wheel]

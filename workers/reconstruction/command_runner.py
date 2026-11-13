@@ -109,7 +109,10 @@ class CommandRunner:
         exe = self._resolve(argv[0])
         if exe is None:
             return RunResult(
-                command=argv, returncode=-1, ok=False, error=f"可执行文件未找到: {argv[0]}"
+                command=argv,
+                returncode=-1,
+                ok=False,
+                error=f"可执行文件未找到: {argv[0]}",
             )
 
         started = time.monotonic()
@@ -138,14 +141,19 @@ class CommandRunner:
 
         def _poll() -> None:
             assert proc.stdout is not None
-            chunk = proc.stdout.readline()
-            while chunk:
-                captured.write(chunk)
-                if self._on_progress is not None:
-                    self._on_progress(chunk)
-                if _is_progress_end(chunk):
-                    break
+            try:
                 chunk = proc.stdout.readline()
+                while chunk:
+                    captured.write(chunk)
+                    if self._on_progress is not None:
+                        self._on_progress(chunk)
+                    if _is_progress_end(chunk):
+                        break
+                    chunk = proc.stdout.readline()
+            finally:
+                # The reader owns this stream. Closing it from the polling
+                # thread races with delayed progress callbacks and loses output.
+                proc.stdout.close()
 
         poll_thread = _spawn_poll(_poll)  # reader keeps stdout draining
 
@@ -164,16 +172,13 @@ class CommandRunner:
                     break
                 time.sleep(0.5)
         finally:
-            poll_thread.join(timeout=2.0)
-            if proc.stdout is not None:
-                proc.stdout.close()
-
-        try:
-            proc.wait(timeout=self._kill_grace)
-        except subprocess.TimeoutExpired:
-            if proc.poll() is None:
-                self._kill_group(proc.pid)
-                proc.wait(timeout=5)
+            try:
+                proc.wait(timeout=self._kill_grace)
+            except subprocess.TimeoutExpired:
+                if proc.poll() is None:
+                    self._kill_group(proc.pid)
+                    proc.wait(timeout=5)
+            poll_thread.join(timeout=60.0)
 
         duration = time.monotonic() - started
         return RunResult(
@@ -265,7 +270,11 @@ class _BoundedCapture:
 
     def text(self) -> str:
         if self._head and self._tail:
-            return "".join(self._head) + "\n…[输出过长，省略中间部分]…\n" + "".join(self._tail)
+            return (
+                "".join(self._head)
+                + "\n…[输出过长，省略中间部分]…\n"
+                + "".join(self._tail)
+            )
         if self._head:
             return "".join(self._head)
         return "".join(self._tail)

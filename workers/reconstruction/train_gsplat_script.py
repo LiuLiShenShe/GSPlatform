@@ -20,7 +20,7 @@ the resume checkpoint; ``--cancel-file`` gives the orchestrator a soft-stop path
 from __future__ import annotations
 
 import argparse
-import math
+import json
 import os
 import sys
 import tempfile
@@ -29,11 +29,15 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
 from gsplat import DefaultStrategy, export_splats, rasterization
 from gsplat.utils import normalized_quat_to_rotmat
 
 from workers.reconstruction.colmap_reader import read_sparse_model
+from workers.reconstruction.masked_training import (
+    aligned_target,
+    foreground_loss,
+    multiview_foreground_points,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -41,7 +45,15 @@ from workers.reconstruction.colmap_reader import read_sparse_model
 # --------------------------------------------------------------------------- #
 def _init_from_points(
     model, device: torch.device, dtype: torch.dtype, rng: np.random.Generator
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, float]:
+) -> tuple[
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    torch.Tensor,
+    float,
+]:
     """Initialize the Gaussian parameters from the COLMAP point cloud.
 
     Returns (means, scales, quats, opacities, sh0, shN, scene_scale) as CPU
@@ -79,18 +91,24 @@ def _init_from_points(
         scene_scale = radius
 
     n = means.shape[0]
-    # gsplat stores parameters in "analytic" space: scales are log-scales and
-    # opacities are logits (simple_trainer applies torch.exp / torch.sigmoid at
-    # the rasterization call; DefaultStrategy's densification ops also undo log /
-    # logit internally). log(0.001*scene_scale) yields the spec's requested
-    # LINEAR scale of 0.001*scene_scale after exp.
-    scales = torch.full(
-        (n, 3), float(math.log(max(0.001 * scene_scale, 1e-8))), dtype=dtype, device=device
-    )
-    quats = torch.tensor([[1.0, 0.0, 0.0, 0.0]] * n, dtype=dtype, device=device)
+    if n < 2:
+        raise ValueError("COLMAP 初始化至少需要两个不同的三维点")
+    # Match gsplat v1.5.3 simple_trainer: initialize footprint from local
+    # three-neighbour spacing, rather than one tiny scene-wide constant.
+    # The CPU tree avoids an N x N GPU distance matrix for large COLMAP models.
+    from scipy.spatial import cKDTree
+
+    positions = means.detach().cpu().numpy()
+    distances, _ = cKDTree(positions).query(positions, k=min(4, n), workers=1)
+    spacing = np.sqrt(np.mean(np.square(distances[:, 1:]), axis=1))
+    scales = torch.as_tensor(spacing, dtype=dtype, device=device).clamp_min(1e-7)
+    scales = scales.log()[:, None].repeat(1, 3)
+    quats = torch.rand((n, 4), dtype=dtype, device=device)
     # Opacity logit for sigma == 0.1 (spec); linearized via sigmoid at render.
-    opacities = torch.full((n,), float(torch.logit(torch.tensor(0.1))), dtype=dtype, device=device)
-    sh0 = colors.unsqueeze(1)  # [N, 1, 3]
+    opacities = torch.full(
+        (n,), float(torch.logit(torch.tensor(0.1))), dtype=dtype, device=device
+    )
+    sh0 = ((colors - 0.5) / 0.28209479177387814).unsqueeze(1)  # RGB -> degree-zero SH
     shN = torch.zeros((n, 0, 3), dtype=dtype, device=device)
     return means, scales, quats, opacities, sh0, shN, scene_scale
 
@@ -98,8 +116,9 @@ def _init_from_points(
 # --------------------------------------------------------------------------- #
 # Camera handling
 # --------------------------------------------------------------------------- #
-def build_camera_data(model, images_dir: Path, downscale: int, device: torch.device,
-                      dtype: torch.dtype) -> tuple[list[dict], list[Path | None]]:
+def build_camera_data(
+    model, images_dir: Path, downscale: int, device: torch.device, dtype: torch.dtype
+) -> tuple[list[dict], list[Path | None]]:
     """Build per-image (viewmat, K) from COLMAP and locate each frame on disk.
 
     ``images`` may use either ``some/path.jpg`` or ``some/path.png``; PIL handles
@@ -122,12 +141,15 @@ def build_camera_data(model, images_dir: Path, downscale: int, device: torch.dev
             continue
         fx, fy, cx, cy = cam.focal_xy_cxy()
         K = torch.tensor(
-            [[fx / downscale, 0.0, cx / downscale],
-             [0.0, fy / downscale, cy / downscale],
-             [0.0, 0.0, 1.0]],
-            dtype=dtype, device=device,
+            [
+                [fx / downscale, 0.0, cx / downscale],
+                [0.0, fy / downscale, cy / downscale],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=dtype,
+            device=device,
         )
-        views.append({"viewmat": viewmat, "K": K, "camera": cam})
+        views.append({"viewmat": viewmat, "K": K, "camera": cam, "name": img.name})
         frames.append(_find_frame(images_dir, img.name))
     return views, frames
 
@@ -156,9 +178,11 @@ def _find_frame(images_dir: Path, name: str) -> Path | None:
             continue
     # Flat glob fallback (COLMAP image name might be nested, extractor flat).
     try:
-        flat = list(images_dir.glob(f"*{stem}.jpg")) + list(images_dir.glob(f"*{stem}.png"))
+        flat = list(images_dir.glob(f"*{stem}.jpg")) + list(
+            images_dir.glob(f"*{stem}.png")
+        )
         if flat:
-            return sorted(flat)[0]
+            return min(flat)
     except OSError:
         pass
     return None
@@ -191,22 +215,65 @@ def _checkpoint_dir_from_cache(cache: dict) -> dict:
 # Main
 # --------------------------------------------------------------------------- #
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    ap = argparse.ArgumentParser(description="Train 3D Gaussians from a COLMAP sparse model")
-    ap.add_argument("--colmap-dir", type=Path, required=True, help="COLMAP sparse/<N> dir (cameras.bin etc.)")
-    ap.add_argument("--images-dir", type=Path, required=True, help="Extracted image frames")
+    ap = argparse.ArgumentParser(
+        description="Train 3D Gaussians from a COLMAP sparse model"
+    )
+    ap.add_argument(
+        "--colmap-dir",
+        type=Path,
+        required=True,
+        help="COLMAP sparse/<N> dir (cameras.bin etc.)",
+    )
+    ap.add_argument(
+        "--images-dir", type=Path, required=True, help="Extracted image frames"
+    )
     ap.add_argument("--output", type=Path, required=True, help="Output PLY path")
-    ap.add_argument("--iterations", type=int, default=1200, help="Training iterations (profile gsplat.iterations)")
-    ap.add_argument("--sh-degree", type=int, default=0, help="Spherical harmonics degree")
-    ap.add_argument("--lr", type=float, default=0.01, help="Base learning rate")
-    ap.add_argument("--downscale", type=int, default=1, help="Image downscale factor (divides focal length & principal point)")
-    ap.add_argument("--save-interval", type=int, default=200, help="Checkpoints every N iterations")
+    ap.add_argument(
+        "--iterations",
+        type=int,
+        default=1200,
+        help="Training iterations (profile gsplat.iterations)",
+    )
+    ap.add_argument(
+        "--sh-degree", type=int, default=0, help="Spherical harmonics degree"
+    )
+    ap.add_argument(
+        "--lr", type=float, default=0.00016,
+        help="Initial position learning rate, multiplied by scene scale",
+    )
+    ap.add_argument(
+        "--downscale",
+        type=int,
+        default=1,
+        help="Image downscale factor (divides focal length & principal point)",
+    )
+    ap.add_argument(
+        "--save-interval", type=int, default=200, help="Checkpoints every N iterations"
+    )
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--device", type=str, default="cuda:0")
-    ap.add_argument("--checkpoint-dir", type=Path, default=None,
-                    help="Optional dir; resumes from the latest checkpoint inside if present")
-    ap.add_argument("--cancel-file", type=Path, default=None,
-                    help="Optional file; if it exists mid-run, exit cleanly")
-    ap.add_argument("--min-splats", type=int, default=100, help="Minimum splat count required in output")
+    ap.add_argument(
+        "--checkpoint-dir",
+        type=Path,
+        default=None,
+        help="Optional dir; resumes from the latest checkpoint inside if present",
+    )
+    ap.add_argument(
+        "--cancel-file",
+        type=Path,
+        default=None,
+        help="Optional file; if it exists mid-run, exit cleanly",
+    )
+    ap.add_argument(
+        "--min-splats",
+        type=int,
+        default=100,
+        help="Minimum splat count required in output",
+    )
+    ap.add_argument("--masks-dir", type=Path)
+    ap.add_argument("--segmentation-manifest", type=Path)
+    ap.add_argument("--random-init", action="store_true")
+    ap.add_argument("--no-densify", action="store_true")
     return ap.parse_args(argv)
 
 
@@ -232,12 +299,20 @@ def main(argv: list[str] | None = None) -> int:
         # 1. Load the COLMAP model.
         model = read_sparse_model(args.colmap_dir)
         if model.registered_image_count < 3:
-            _log_error("NOT_ENOUGH_IMAGES", f"只找到 {model.registered_image_count} 张已注册图像（需要 >= 3）")
+            _log_error(
+                "NOT_ENOUGH_IMAGES",
+                f"只找到 {model.registered_image_count} 张已注册图像（需要 >= 3）",
+            )
             return 1
-        print(f"COLMAP model loaded: {model.registered_image_count} images, {model.point_count} points", flush=True)
+        print(
+            f"COLMAP model loaded: {model.registered_image_count} images, {model.point_count} points",
+            flush=True,
+        )
 
         # 2. Cameras + frames.
-        views, frames = build_camera_data(model, args.images_dir, args.downscale, device, dtype)
+        views, frames = build_camera_data(
+            model, args.images_dir, args.downscale, device, dtype
+        )
         if not views:
             _log_error("NO_CAMERAS", "COLMAP 模型没有可用的相机")
             return 1
@@ -245,14 +320,61 @@ def main(argv: list[str] | None = None) -> int:
 
         missing = sum(1 for f in frames if f is None)
         if missing:
-            print(f"WARN {missing}/{len(frames)} COLMAP 图像在 --images-dir 未找到，将仅使用可用帧", flush=True)
+            print(
+                f"WARN {missing}/{len(frames)} COLMAP 图像在 --images-dir 未找到，将仅使用可用帧",
+                flush=True,
+            )
         available = [i for i, f in enumerate(frames) if f is not None]
         if len(available) < 3:
-            _log_error("NOT_ENOUGH_IMAGES", f"实际可用帧只有 {len(available)} 张（需要 >= 3）")
+            _log_error(
+                "NOT_ENOUGH_IMAGES", f"实际可用帧只有 {len(available)} 张（需要 >= 3）"
+            )
             return 1
 
-        full_viewmats = torch.stack([views[i]["viewmat"] for i in available], dim=0)  # [C,4,4]
-        full_Ks = torch.stack([views[i]["K"] for i in available], dim=0)              # [C,3,3]
+        if args.downscale < 1:
+            raise ValueError("downscale must be positive")
+        if bool(args.masks_dir) != bool(args.segmentation_manifest):
+            raise ValueError(
+                "mask directory and segmentation manifest are required together"
+            )
+        if args.masks_dir:
+            from workers.reconstruction.segmentation import validate_manifest
+
+            validate_manifest(args.segmentation_manifest.parent, args.images_dir)
+        targets_cache, masks_cache, valid_cache = [], [], []
+        for index in available:
+            name = views[index]["name"]
+            mask_path = args.masks_dir / (name + ".png") if args.masks_dir else None
+            rgb, mask, valid, intrinsic = aligned_target(
+                frames[index], views[index]["camera"], args.downscale, mask_path
+            )
+            views[index]["K"] = intrinsic.to(device)
+            targets_cache.append(rgb)
+            masks_cache.append(mask)
+            valid_cache.append(valid)
+        if args.masks_dir and sum(bool(m.sum()) for m in masks_cache) < 3:
+            raise ValueError("Fewer than three registered cameras see the SAM3 target")
+        original_points = model.point_count
+        if args.masks_dir:
+            points = list(model.points3d.values())
+            keep = multiview_foreground_points(
+                np.asarray([p.xyz for p in points]),
+                [views[i] for i in available],
+                masks_cache,
+            )
+            model.points3d = {
+                p.id: p for p, retained in zip(points, keep, strict=True) if retained
+            }
+            if model.point_count < args.min_splats:
+                raise ValueError(
+                    f"Target only has {model.point_count} supported COLMAP points; need {args.min_splats}"
+                )
+            print(
+                f"MASK_INIT original={original_points} retained={model.point_count}",
+                flush=True,
+            )
+        full_viewmats = torch.stack([views[i]["viewmat"] for i in available], dim=0)
+        full_Ks = torch.stack([views[i]["K"] for i in available], dim=0)
 
         # 3. Detect an existing checkpoint BEFORE sizing params: after
         # densification the checkpoint holds more splats than the fresh init,
@@ -265,7 +387,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.checkpoint_dir is not None:
             ckpt_path = _latest_checkpoint(args.checkpoint_dir)
             if ckpt_path is not None:
-                ckpt_meta = torch.load(ckpt_path, map_location=device, weights_only=True)
+                ckpt_meta = torch.load(
+                    ckpt_path, map_location=device, weights_only=True
+                )
 
         if ckpt_meta is not None:
             means = ckpt_meta["params"]["means"].to(device).clone()
@@ -274,7 +398,9 @@ def main(argv: list[str] | None = None) -> int:
             opacities = ckpt_meta["params"]["opacities"].to(device).clone()
             sh0 = ckpt_meta["params"]["sh0"].to(device).clone()
             shN = ckpt_meta["params"]["shN"].to(device).clone()
-            scene_scale = float(ckpt_meta.get("strategy_state", {}).get("scene_scale", 1.0))
+            scene_scale = float(
+                ckpt_meta.get("strategy_state", {}).get("scene_scale", 1.0)
+            )
             n_splats = means.shape[0]
             start_step = int(ckpt_meta.get("step", 0)) + 1
             best_loss = float(ckpt_meta.get("best_loss", float("inf")))
@@ -285,7 +411,9 @@ def main(argv: list[str] | None = None) -> int:
             n_splats = means.shape[0]
             K_deg = (args.sh_degree + 1) ** 2
             if shN.shape[1] != max(K_deg - 1, 0):
-                shN = torch.zeros((n_splats, max(K_deg - 1, 0), 3), dtype=dtype, device=device)
+                shN = torch.zeros(
+                    (n_splats, max(K_deg - 1, 0), 3), dtype=dtype, device=device
+                )
 
         # 4. Params + optimizers (1:1 mapping, required by DefaultStrategy's sanity check).
         param_names = ["means", "scales", "quats", "opacities", "sh0", "shN"]
@@ -300,14 +428,17 @@ def main(argv: list[str] | None = None) -> int:
         for p in params.values():
             p.requires_grad_(True)
         lrs: dict[str, float] = {
-            "means": args.lr,
-            "scales": args.lr,
-            "quats": args.lr,
-            "opacities": args.lr * 10.0,
-            "sh0": args.lr / 10.0,
-            "shN": args.lr / 10.0,
+            "means": args.lr * scene_scale,
+            "scales": 0.005,
+            "quats": 0.001,
+            "opacities": 0.05,
+            "sh0": 0.0025,
+            "shN": 0.0025 / 20,
         }
-        optimizers = {name: torch.optim.Adam([params[name]], lr=lrs[name]) for name in param_names}
+        optimizers = {
+            name: torch.optim.Adam([params[name]], lr=lrs[name], eps=1e-15)
+            for name in param_names
+        }
 
         if ckpt_meta is not None:
             for name, opt in optimizers.items():
@@ -329,19 +460,29 @@ def main(argv: list[str] | None = None) -> int:
         # 5. Training loop.
         total = args.iterations
         n_images = len(available)
-        batch_size = min(4, n_images)
+        # One view also supports genuine photo sets with varying camera sizes.
+        batch_size = 1
         final_loss = best_loss
         cancelled = False
+        components = {}
+        last_step = start_step - 1
 
         for step in range(start_step, total):
+            last_step = step
             try:
-                torch.cuda.empty_cache()
+                # Same exponential position schedule as the pinned official
+                # trainer. Calculate from the absolute step so interrupted runs
+                # resume exactly without a separate scheduler checkpoint.
+                optimizers["means"].param_groups[0]["lr"] = (
+                    lrs["means"] * 0.01 ** (step / total)
+                )
                 idxs = torch.randint(0, n_images, (batch_size,), device=device)
                 viewmats = torch.index_select(full_viewmats, 0, idxs)
                 Ks = torch.index_select(full_Ks, 0, idxs)
-                targets = torch.stack([
-                    _load_frame(frames[available[int(i)]], device, dtype)  # type: ignore[arg-type]
-                    for i in idxs.tolist()], dim=0)
+                sampled = idxs.tolist()
+                targets = torch.stack([targets_cache[i] for i in sampled]).to(device)
+                valid = torch.stack([valid_cache[i] for i in sampled]).to(device)
+                height, width = targets.shape[1:3]
 
                 images, alphas, info = rasterization(
                     means=params["means"],
@@ -349,18 +490,35 @@ def main(argv: list[str] | None = None) -> int:
                     scales=torch.exp(params["scales"]),
                     opacities=torch.sigmoid(params["opacities"]),
                     colors=torch.cat([params["sh0"], params["shN"]], dim=1),
-                    viewmats=viewmats, Ks=Ks, width=width, height=height,
-                    sh_degree=args.sh_degree, packed=False,
+                    viewmats=viewmats,
+                    Ks=Ks,
+                    width=width,
+                    height=height,
+                    sh_degree=min(step // 1000, args.sh_degree),
+                    packed=False,
                 )
                 images = images[..., :3]  # RGB mode already; defensive slice
-                assert images.shape == targets.shape, f"render {images.shape} != target {targets.shape}"
+                assert images.shape == targets.shape, (
+                    f"render {images.shape} != target {targets.shape}"
+                )
 
-                strategy.step_pre_backward(params, optimizers, strategy_state, step, info)
+                strategy.step_pre_backward(
+                    params, optimizers, strategy_state, step, info
+                )
 
                 # Plain L1 over the rendered frame (spec: L1 loss, rendered vs
                 # target image). Gradients flow to every pixel a splat touches;
                 # empty background pixels contribute a constant offset only.
-                loss = torch.abs(images - targets).mean()
+                if args.masks_dir:
+                    masks = torch.stack([masks_cache[i] for i in sampled]).to(device)
+                    loss, components = foreground_loss(
+                        images, alphas, targets, masks, valid
+                    )
+                else:
+                    loss = (torch.abs(images - targets) * valid).sum() / (
+                        valid.sum() * 3
+                    ).clamp_min(1)
+                    components = {}
 
                 for opt in optimizers.values():
                     opt.zero_grad(set_to_none=True)
@@ -369,26 +527,44 @@ def main(argv: list[str] | None = None) -> int:
                     if p.grad is not None:
                         torch.nan_to_num_(p.grad, nan=0.0, posinf=0.0, neginf=0.0)
                 if not torch.isfinite(loss).item():
-                    _log_error("NAN_LOSS", f"step {step} loss 非有限（{loss.item():.6f}），中止")
+                    _log_error(
+                        "NAN_LOSS",
+                        f"step {step} loss 非有限（{loss.item():.6f}），中止",
+                    )
                     return 1
 
                 for opt in optimizers.values():
                     opt.step()
 
-                strategy.step_post_backward(params, optimizers, strategy_state, step, info)
+                if not args.no_densify:
+                    strategy.step_post_backward(
+                        params, optimizers, strategy_state, step, info
+                    )
 
                 with torch.no_grad():
                     final_loss = float(loss.detach())
-                    if final_loss < best_loss:
-                        best_loss = final_loss
+                    best_loss = min(best_loss, final_loss)
 
                 if step % 10 == 0 or step == total - 1:
-                    print(f"GSITER step={step} total={total} loss={final_loss:.6f}", flush=True)
+                    print(
+                        f"GSITER step={step} total={total} loss={final_loss:.6f}",
+                        flush=True,
+                    )
 
-                if args.checkpoint_dir is not None and args.save_interval > 0 and step % args.save_interval == 0:
-                    _save_checkpoint(args, params, optimizers, strategy_state, step, best_loss)
+                if (
+                    args.checkpoint_dir is not None
+                    and args.save_interval > 0
+                    and step % args.save_interval == 0
+                ):
+                    _save_checkpoint(
+                        args, params, optimizers, strategy_state, step, best_loss
+                    )
 
-                if args.cancel_file is not None and step % 100 == 0 and args.cancel_file.exists():
+                if (
+                    args.cancel_file is not None
+                    and step % 100 == 0
+                    and args.cancel_file.exists()
+                ):
                     print(f"CANCELLED at step {step} (cancel-file present)", flush=True)
                     cancelled = True
                     break
@@ -399,11 +575,16 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
 
         elapsed = time.monotonic() - start_wall
-        print(f"training wall time: {elapsed:.1f}s ({elapsed / max(1, total - start_step):.3f}s/iter)", flush=True)
+        print(
+            f"training wall time: {elapsed:.1f}s ({elapsed / max(1, total - start_step):.3f}s/iter)",
+            flush=True,
+        )
 
         # 6. Final checkpoint (also on cancel, so partial progress is resumable).
         if args.checkpoint_dir is not None:
-            _save_checkpoint(args, params, optimizers, strategy_state, total - 1, best_loss)
+            _save_checkpoint(
+                args, params, optimizers, strategy_state, last_step, best_loss
+            )
 
         if cancelled:
             # Soft stop: exit 0 but never claim TRAINING_DONE — the orchestrator
@@ -420,8 +601,14 @@ def main(argv: list[str] | None = None) -> int:
         final_shN = params["shN"].detach().clone()
         try:
             export_splats(
-                final_means, final_scales, final_quats, final_opacities,
-                final_sh0, final_shN, format="ply", save_to=str(args.output),
+                final_means,
+                final_scales,
+                final_quats,
+                final_opacities,
+                final_sh0,
+                final_shN,
+                format="ply",
+                save_to=str(args.output),
             )
         except Exception as exc:  # noqa: BLE001 — surface the raw exporter error
             _log_error("EXPORT_FAIL", f"gsplat 导出失败: {exc}")
@@ -441,10 +628,41 @@ def main(argv: list[str] | None = None) -> int:
             _log_error("NAN_PARAMS", "训练输出存在 NaN/Inf，已清理")
             return 1
         if n_out < args.min_splats:
-            _log_error("TOO_FEW_SPLATS", f"输出只有 {n_out} 个高斯（需要 >= {args.min_splats}）")
+            _log_error(
+                "TOO_FEW_SPLATS",
+                f"输出只有 {n_out} 个高斯（需要 >= {args.min_splats}）",
+            )
             return 1
 
         print(f"TRAINING_DONE splats={n_out} loss={final_loss:.6f}", flush=True)
+        statistics = {
+            "trainerVersion": 3,
+            "iterations": total,
+            "completedIterations": last_step + 1,
+            "shDegree": args.sh_degree,
+            "initialLearningRates": lrs,
+            "finalPositionLearningRate": optimizers["means"].param_groups[0]["lr"],
+            "masked": bool(args.masks_dir),
+            "registeredViews": n_images,
+            "effectiveForegroundViews": sum(bool(m.sum()) for m in masks_cache)
+            if args.masks_dir
+            else n_images,
+            "foregroundCoverage": [float(m.mean()) for m in masks_cache]
+            if args.masks_dir
+            else [],
+            "initialColmapPoints": original_points,
+            "targetInitialPoints": model.point_count,
+            "outputGaussians": n_out,
+            "finalLoss": final_loss,
+            "lossComponents": {k: float(v) for k, v in components.items()},
+            "seconds": elapsed,
+            "peakAllocatedBytes": torch.cuda.max_memory_allocated(device)
+            if device.type == "cuda"
+            else 0,
+        }
+        (args.output.parent / "training-stats.json").write_text(
+            json.dumps(statistics, indent=2)
+        )
         return 0
 
     except FileNotFoundError as exc:
@@ -483,7 +701,9 @@ def _latest_checkpoint(checkpoint_dir: Path) -> Path | None:
     return max(ckpts, key=key)
 
 
-def _save_checkpoint(args, params, optimizers, strategy_state, step: int, best_loss: float) -> None:
+def _save_checkpoint(
+    args, params, optimizers, strategy_state, step: int, best_loss: float
+) -> None:
     assert args.checkpoint_dir is not None
     args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
     cache = {

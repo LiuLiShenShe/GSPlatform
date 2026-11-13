@@ -30,10 +30,10 @@ CAMERA_MODELS = {
 }
 
 _CAMERA_PARAM_COUNT = {
-    0: 3,   # f, cx, cy
-    1: 4,   # fx, fy, cx, cy
-    2: 4,   # f, cx, cy, k1
-    3: 5,   # f, cx, cy, k1, k2
+    0: 3,  # f, cx, cy
+    1: 4,  # fx, fy, cx, cy
+    2: 4,  # f, cx, cy, k1
+    3: 5,  # f, cx, cy, k1, k2
     4: 8,
     5: 8,
     6: 12,
@@ -60,11 +60,23 @@ class Camera:
         """Return (fx, fy, cx, cy) for the common pinhole-family models."""
         p = self.params
         model = self.model
-        if model in ("SIMPLE_PINHOLE", "SIMPLE_RADIAL", "SIMPLE_RADIAL_FISHEYE"):
+        if model in (
+            "SIMPLE_PINHOLE",
+            "SIMPLE_RADIAL",
+            "RADIAL",
+            "SIMPLE_RADIAL_FISHEYE",
+            "RADIAL_FISHEYE",
+        ):
             f, cx, cy = p[0], p[1], p[2]
             return f, f, cx, cy
-        if model in ("PINHOLE", "RADIAL", "OPENCV", "FULL_OPENCV", "OPENCV_FISHEYE",
-                     "FOV", "RADIAL_FISHEYE", "THIN_PRISM_FISHEYE"):
+        if model in (
+            "PINHOLE",
+            "OPENCV",
+            "FULL_OPENCV",
+            "OPENCV_FISHEYE",
+            "FOV",
+            "THIN_PRISM_FISHEYE",
+        ):
             fx, fy = p[0], p[1]
             cx, cy = p[2], p[3]
             return fx, fy, cx, cy

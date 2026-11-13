@@ -4,7 +4,7 @@
 # run is tested on the reference hardware; the UI must not advertise
 # "free high quality" while the backend cannot yet cap its cost.
 name: high
-version: 1
+version: 2
 
 input:
   max_bytes: 8589934592          # 8 GB per job
@@ -22,7 +22,7 @@ extract:
 colmap:
   camera_model: "OPENCV"
   single_camera: 0
-  use_gpu: true
+  use_gpu: false                 # COLMAP runs in the CPU stage range
   matching: "sequential"         # large sets: sequential window matching
   max_features_per_image: 16384
   min_registered_ratio: 0.75
@@ -31,7 +31,7 @@ colmap:
 gsplat:
   iterations: 30000
   sh_degree: 2
-  lr: 0.008
+  lr: 0.00016
   downscale: 1
   save_interval: 1000
   random_init: false
@@ -49,12 +49,13 @@ stage_weights:
   FEATURES: 10
   MATCHING: 10
   MAPPING: 12
+  SEGMENTING: 8
   TRAINING: 24
   CONVERTING: 12
   VERIFYING: 6
   PUBLISHING: 6
 
-precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "TRAINING", "CONVERTING"]
+precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "SEGMENTING", "TRAINING", "CONVERTING"]
 
 resource:
   cpu_time_s: 28800

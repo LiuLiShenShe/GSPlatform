@@ -2,7 +2,7 @@
 # Balanced default: up to 4 GB input, ~300 frames, fuller COLMAP matching,
 # longer gsplat training with densification. GPU enabled when available.
 name: standard
-version: 1
+version: 2
 
 input:
   max_bytes: 4294967296          # 4 GB per job
@@ -20,16 +20,16 @@ extract:
 colmap:
   camera_model: "SIMPLE_RADIAL"
   single_camera: 1
-  use_gpu: true                  # honored when a usable GPU adapter exists
+  use_gpu: false                 # CPU queue must also work on headless hosts
   matching: "exhaustive"
   max_features_per_image: 8192
   min_registered_ratio: 0.7
   min_registered_images: 10
 
 gsplat:
-  iterations: 8000
-  sh_degree: 1
-  lr: 0.01
+  iterations: 30000
+  sh_degree: 2
+  lr: 0.00016
   downscale: 1
   save_interval: 500
   random_init: false
@@ -47,12 +47,13 @@ stage_weights:
   FEATURES: 10
   MATCHING: 10
   MAPPING: 12
+  SEGMENTING: 8
   TRAINING: 24
   CONVERTING: 12
   VERIFYING: 6
   PUBLISHING: 6
 
-precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "TRAINING", "CONVERTING"]
+precise_stages: ["EXTRACTING", "FEATURES", "MATCHING", "SEGMENTING", "TRAINING", "CONVERTING"]
 
 resource:
   cpu_time_s: 14400

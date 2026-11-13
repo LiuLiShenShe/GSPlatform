@@ -14,6 +14,7 @@ import uuid
 from collections.abc import Callable
 from typing import NoReturn
 
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -72,6 +73,27 @@ class ReconstructionService:
         # 2. Create (or reuse, on retry) draft Scene (status=PROCESSING).
         scene = self._find_or_create_draft_scene(req, identity, uploads)
 
+        parameters = {
+            "uploadIds": [str(uid) for uid in req.uploadIds],
+            "profile": req.profile,
+            "segmentation": req.segmentation.model_dump(),
+        }
+        # A lost HTTP response must not enqueue the same long GPU work twice.
+        self._session.query(Scene.id).filter(Scene.id == scene.id).with_for_update().one()
+        active = (
+            self._session.query(Job)
+            .filter(
+                Job.scene_id == scene.id,
+                Job.owner_id == identity.user_id,
+                Job.kind == "RECONSTRUCT",
+                Job.status.in_(["QUEUED", "RUNNING", "CANCEL_REQUESTED"]),
+                Job.task_parameters == parameters,
+            )
+            .first()
+        )
+        if active is not None:
+            self._session.commit()
+            return self._job_to_out(active, scene)
         # 3. Create Job(kind=RECONSTRUCT, status=QUEUED, progress=0).
         job = Job(
             scene_id=scene.id,
@@ -79,6 +101,7 @@ class ReconstructionService:
             kind=JobKind.RECONSTRUCT.value,
             status=JobStatus.QUEUED.value,
             progress=0,
+            task_parameters=parameters,
         )
         self._session.add(job)
         self._session.flush()
@@ -132,9 +155,7 @@ class ReconstructionService:
         if job.kind != JobKind.RECONSTRUCT.value:
             raise ConflictError("仅支持取消重建任务")
         if job.status not in (JobStatus.QUEUED.value, JobStatus.RUNNING.value):
-            raise ConflictError(
-                f"任务状态为 {job.status}，无法取消"
-            )
+            raise ConflictError(f"任务状态为 {job.status}，无法取消")
 
         job.status = JobStatus.CANCEL_REQUESTED.value
         self._session.commit()
@@ -212,14 +233,10 @@ class ReconstructionService:
             # Accept RECONSTRUCT (intended) or PUBLISH (legacy compat) purpose,
             # but reject purpose-mismatched uploads with a clear message.
             if us.purpose not in ("RECONSTRUCT", "PUBLISH"):
-                raise ConflictError(
-                    f"上传 {uid} 的用途为 {us.purpose}，不支持用于重建"
-                )
+                raise ConflictError(f"上传 {uid} 的用途为 {us.purpose}，不支持用于重建")
 
             if us.status not in _COMPLETE_UPLOAD_STATUSES:
-                raise ConflictError(
-                    f"上传 {uid} 状态为 {us.status}，尚未完成"
-                )
+                raise ConflictError(f"上传 {uid} 状态为 {us.status}，尚未完成")
 
             uploads.append(us)
         return uploads
@@ -248,20 +265,24 @@ class ReconstructionService:
         if existing is not None:
             return existing
 
-        title = req.sceneTitle
-        description = req.description
-        scene = Scene(
-            owner_id=identity.user_id,
-            slug=slug,
-            title=title,
-            description=description,
-            category="experiment",
-            visibility=req.visibility,
-            status=SceneStatus.PROCESSING.value,
+        self._session.execute(
+            insert(Scene)
+            .values(
+                owner_id=identity.user_id,
+                slug=slug,
+                title=req.sceneTitle,
+                description=req.description,
+                category="experiment",
+                visibility=req.visibility,
+                status=SceneStatus.PROCESSING.value,
+            )
+            .on_conflict_do_nothing(index_elements=["slug"])
         )
-        self._session.add(scene)
-        self._session.flush()
-        return scene
+        return (
+            self._session.query(Scene)
+            .filter(Scene.slug == slug, Scene.owner_id == identity.user_id)
+            .one()
+        )
 
     @staticmethod
     def _generate_slug(owner_id: uuid.UUID, seed: uuid.UUID) -> str:

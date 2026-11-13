@@ -30,6 +30,7 @@ RECONSTRUCTION_STAGES: tuple[str, ...] = (
     "FEATURES",
     "MATCHING",
     "MAPPING",
+    "SEGMENTING",
     "TRAINING",
     "CONVERTING",
     "VERIFYING",
@@ -65,7 +66,9 @@ class CompletionMarker:
             stage=str(data["stage"]),
             input_hash=str(data["input_hash"]),
             param_hash=str(data["param_hash"]),
-            tool_versions={str(k): str(v) for k, v in (data.get("tool_versions") or {}).items()},
+            tool_versions={
+                str(k): str(v) for k, v in (data.get("tool_versions") or {}).items()
+            },
             output_hash=str(data["output_hash"]),
         )
 
@@ -98,7 +101,9 @@ class StageManager:
         if not path.exists():
             return None
         try:
-            return CompletionMarker.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            return CompletionMarker.from_dict(
+                json.loads(path.read_text(encoding="utf-8"))
+            )
         except (ValueError, KeyError, OSError):
             return None
 

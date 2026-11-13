@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.config import get_settings
 
 # ---- capabilities & profiles ------------------------------------------------ #
+
 
 class ComputeCapabilitiesOut(BaseModel):
     """Machine capability snapshot for the compute layer."""
@@ -38,6 +41,27 @@ class ComputeProfileOut(BaseModel):
 
 # ---- reconstruction job ---------------------------------------------------- #
 
+
+class SegmentationSettings(BaseModel):
+    """The prompt names every matching instance to keep, never objects to erase."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    mode: Literal["OFF", "KEEP_PROMPTED_OBJECT"] = "OFF"
+    prompt: str | None = Field(default=None, max_length=500)
+
+    @model_validator(mode="after")
+    def validate_prompt(self) -> SegmentationSettings:
+        if self.mode == "KEEP_PROMPTED_OBJECT" and not self.prompt:
+            raise ValueError("请输入要保留并重建的目标提示词")
+        if self.mode == "KEEP_PROMPTED_OBJECT":
+            concepts = [part.strip() for part in re.split(r"[;\n]", self.prompt or "")]
+            if not all(concepts) or len(concepts) > 8:
+                raise ValueError("多个目标请用分号分隔，最多 8 个且不可为空")
+        if self.mode == "OFF" and self.prompt:
+            raise ValueError("完整场景模式不接受分割提示词")
+        return self
+
+
 class CreateReconstructionRequest(BaseModel):
     """Submit a new 3DGS reconstruction from already-uploaded media."""
 
@@ -47,6 +71,7 @@ class CreateReconstructionRequest(BaseModel):
     profile: str = Field(default="draft", min_length=1, max_length=30)
     sceneTitle: str = Field(min_length=1, max_length=200, alias="sceneTitle")
     description: str | None = Field(default=None, max_length=5000)
+    segmentation: SegmentationSettings = Field(default_factory=SegmentationSettings)
     visibility: str = Field(
         default_factory=lambda: get_settings().default_upload_visibility,
         pattern=r"^(PRIVATE|UNLISTED|PUBLIC)$",
