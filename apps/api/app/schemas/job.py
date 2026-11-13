@@ -20,5 +20,7 @@ class JobOut(BaseModel):
     errorMessage: str | None = Field(default=None, alias="errorMessage")
     createdAt: datetime = Field(alias="createdAt")
     updatedAt: datetime = Field(alias="updatedAt")
+    result: dict | None = None
+    segmentation: dict | None = None
 
     model_config = {"populate_by_name": True}

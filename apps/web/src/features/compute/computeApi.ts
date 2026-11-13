@@ -39,6 +39,7 @@ export interface ReconstructRequest {
   sceneTitle: string;
   description?: string | null;
   visibility?: string;
+  segmentation?: { mode: 'OFF' | 'KEEP_PROMPTED_OBJECT'; prompt?: string };
 }
 
 export interface ReconstructResponse {
@@ -64,6 +65,19 @@ export interface ComputeJob {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  result?: { sceneSlug: string; versionId: string; assetVersion: string; editUrl: string; viewUrl: string } | null;
+  segmentation?: { mode: 'OFF' | 'KEEP_PROMPTED_OBJECT'; prompt?: string } | null;
+}
+
+export interface SegmentationPreview {
+  ready: boolean;
+  validViews?: number;
+  totalViews?: number;
+  frames: { name: string; coverage: number; instances: number; previewUrl: string }[];
+}
+
+export async function fetchSegmentationPreview(jobId: string): Promise<SegmentationPreview> {
+  return (await httpClient.get<SegmentationPreview>(`/jobs/${encodeURIComponent(jobId)}/segmentation`)).data;
 }
 
 // ── 接口函数 ────────────────────────────────────────────────────────────────

@@ -29,9 +29,10 @@ import {
   fetchCapabilities,
   fetchJob,
   fetchProfiles,
+  fetchSegmentationPreview,
   submitReconstruction,
 } from '../features/compute/computeApi';
-import type { ComputeJob, ComputeProfile } from '../features/compute/computeApi';
+import type { ComputeJob, ComputeProfile, SegmentationPreview } from '../features/compute/computeApi';
 import { toApiError } from '../services/http';
 
 const { Dragger } = Upload;
@@ -39,7 +40,7 @@ const { Dragger } = Upload;
 const ACCEPTED_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'jpg', 'jpeg', 'png', 'webp'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv'];
 const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
-const MAX_FILE_COUNT = 20;
+const MAX_FILE_COUNT = 300;
 const POLL_INTERVAL_MS = 2000;
 const TERMINAL_STATUSES = ['SUCCEEDED', 'FAILED', 'CANCELLED'];
 
@@ -51,6 +52,7 @@ const STAGE_LABELS: Record<string, string> = {
   FEATURES: '特征提取',
   MATCHING: '特征匹配',
   MAPPING: '稀疏重建',
+  SEGMENTING: '识别并分割目标',
   TRAINING: '高斯训练',
   CONVERTING: '格式转换',
   VERIFYING: '资产验证',
@@ -75,7 +77,7 @@ const PROFILE_LABELS: Record<string, string> = {
 /** 后端不可达时的兜底档位（与 workers/reconstruction/profiles 一致）。 */
 const FALLBACK_PROFILES: ComputeProfile[] = [
   { name: 'draft', version: 1, maxInputBytes: 1_048_576_000, maxImages: 80, maxVideoSeconds: 300, iterations: 1200, stages: [] },
-  { name: 'standard', version: 1, maxInputBytes: 4_294_967_296, maxImages: 300, maxVideoSeconds: 1200, iterations: 8000, stages: [] },
+  { name: 'standard', version: 2, maxInputBytes: 4_294_967_296, maxImages: 300, maxVideoSeconds: 1200, iterations: 30000, stages: [] },
   { name: 'high', version: 1, maxInputBytes: 8_589_934_592, maxImages: 800, maxVideoSeconds: 2400, iterations: 30_000, stages: [] },
 ];
 
@@ -134,12 +136,38 @@ export default function ComputePage() {
   const [description, setDescription] = useState('');
   const [visibility, setVisibility] = useState('PUBLIC');
   const [rightsChecked, setRightsChecked] = useState(false);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(() => localStorage.getItem('gs-reconstruction-job'));
   const [job, setJob] = useState<ComputeJob | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [targetMode, setTargetMode] = useState<'OFF' | 'KEEP_PROMPTED_OBJECT'>('OFF');
+  const [targetPrompt, setTargetPrompt] = useState('');
+  const [segmentationPreview, setSegmentationPreview] = useState<SegmentationPreview | null>(null);
+  const enteredEdit = useRef<string | null>(null);
+
+  useEffect(() => { if (jobId) setStep(2); }, [jobId]);
+
+  useEffect(() => {
+    if (job?.status !== 'SUCCEEDED' || !job.result || enteredEdit.current === job.id) return;
+    const destination = new URL(job.result.editUrl, window.location.origin);
+    if (destination.origin !== window.location.origin
+        || destination.pathname !== `/model/edit/${job.result.sceneSlug}`) return;
+    enteredEdit.current = job.id;
+    navigate(destination.pathname + destination.search);
+  }, [job, navigate]);
+
+  useEffect(() => {
+    if (!jobId || job?.segmentation?.mode !== 'KEEP_PROMPTED_OBJECT') return;
+    let stopped = false;
+    void fetchSegmentationPreview(jobId).then(result => {
+      if (!stopped) setSegmentationPreview(result);
+    }).catch(() => { /* The stage can be pending; next job update retries. */ });
+    return () => { stopped = true; };
+  }, [jobId, job?.stage, job?.progress, job?.segmentation?.mode]);
 
   const uploaderRefs = useRef<Map<string, ResumableUploader>>(new Map());
   const startedRef = useRef<Set<string>>(new Set());
+  const activeUploads = useRef<Set<string>>(new Set());
+  const [uploadQueueTick, setUploadQueueTick] = useState(0);
   const titleTouched = useRef(false);
 
   // ── 挂载时拉取档位与能力探测（后端不可达则用兜底，不阻塞流程） ──────────
@@ -304,22 +332,25 @@ export default function ComputePage() {
     [handleUploadEvent],
   );
 
-  // 文件进入列表后立即开始真实上传（每个 uid 只启动一次）。
+  // Keep three transfers active, below the API's five-session limit.
   useEffect(() => {
     for (const f of fileList) {
+      if (activeUploads.current.size >= 3) break;
       if (f.originFileObj && !startedRef.current.has(f.uid)) {
         startedRef.current.add(f.uid);
-        void startUpload(f);
+        activeUploads.current.add(f.uid);
+        void startUpload(f, uploadStates[f.uid]?.session ?? undefined).finally(() => {
+          activeUploads.current.delete(f.uid);
+          setUploadQueueTick(value => value + 1);
+        });
       }
     }
-  }, [fileList, startUpload]);
+  }, [fileList, startUpload, uploadQueueTick, uploadStates]);
 
   const retryUpload = (uid: string): void => {
-    const file = fileList.find((f) => f.uid === uid);
-    const cur = uploadStates[uid];
-    if (!file || !cur) return;
-    // 复用原会话：ResumableUploader 会重新查询服务端 offset 断点续传。
-    void startUpload(file, cur.session ?? undefined);
+    if (activeUploads.current.has(uid)) return;
+    startedRef.current.delete(uid);
+    setUploadQueueTick(value => value + 1);
   };
 
   const removeUpload = (uid: string): void => {
@@ -399,6 +430,10 @@ export default function ComputePage() {
       message.error('请填写场景标题。');
       return;
     }
+    if (targetMode === 'KEEP_PROMPTED_OBJECT' && !targetPrompt.trim()) {
+      message.error('请输入要保留并重建的目标提示词。');
+      return;
+    }
     setSubmitting(true);
     try {
       const resp = await submitReconstruction({
@@ -407,8 +442,11 @@ export default function ComputePage() {
         sceneTitle: sceneTitle.trim(),
         description: description.trim() ? description.trim() : null,
         visibility,
+        segmentation: targetMode === 'OFF' ? { mode: 'OFF' }
+          : { mode: targetMode, prompt: targetPrompt.trim() },
       });
       setJobId(resp.jobId);
+      localStorage.setItem('gs-reconstruction-job', resp.jobId);
       setJob({
         id: resp.jobId,
         sceneId: resp.sceneId ?? '',
@@ -449,9 +487,7 @@ export default function ComputePage() {
   };
 
   const goToScene = (): void => {
-    if (job?.sceneId) {
-      navigate(`/scene/${encodeURIComponent(job.sceneId)}`);
-    }
+    if (job?.result) navigate(job.result.viewUrl);
   };
 
   const selectedProfile = profiles.find((p) => p.name === quality);
@@ -483,6 +519,7 @@ export default function ComputePage() {
 
       {step === 0 && (
         <div>
+          {jobId && <Button onClick={() => setStep(2)}>继续查看上次重建任务</Button>}
           <Dragger
             multiple
             accept={ACCEPTED_EXTENSIONS.map((ext) => `.${ext}`).join(',')}
@@ -600,6 +637,22 @@ export default function ComputePage() {
       {step === 1 && (
         <div>
           <Space orientation="vertical" size={16} style={{ width: '100%', maxWidth: 360 }}>
+            <Typography.Text>已选照片 {fileList.filter(f => !VIDEO_EXTENSIONS.includes(extOf(f.name))).length} 张
+              {hasVideo ? '（含视频，将提取照片）' : ''}</Typography.Text>
+            <label>
+              <Typography.Text>重建目标</Typography.Text>
+              <Select aria-label="重建模式" value={targetMode} onChange={setTargetMode}
+                style={{ width: '100%' }} options={[
+                  { value: 'OFF', label: '完整场景重建' },
+                  { value: 'KEEP_PROMPTED_OBJECT', label: '提示词目标重建' },
+                ]} />
+            </label>
+            {targetMode === 'KEEP_PROMPTED_OBJECT' && <label>
+              <Typography.Text>分割提示词</Typography.Text>
+              <Input aria-label="分割提示词" value={targetPrompt} maxLength={500}
+                onChange={event => setTargetPrompt(event.target.value)} placeholder="例如 potted plant; blue cube" />
+              <Typography.Text type="secondary">描述要保留并重建的目标，保留所有匹配物体。多个目标用分号分隔，最多 8 个，例如 potted plant; blue cube；若要标定，请包含标定物。计算过程中会显示实际分割预览。</Typography.Text>
+            </label>}
             <label>
               <Typography.Text>质量</Typography.Text>
               <Select
@@ -690,7 +743,8 @@ export default function ComputePage() {
               <Button
                 type="primary"
                 loading={submitting}
-                disabled={!rightsChecked || !allUploaded}
+                disabled={!rightsChecked || !allUploaded
+                  || (targetMode === 'KEEP_PROMPTED_OBJECT' && !targetPrompt.trim())}
                 title={submitHint}
                 aria-describedby="compute-submit-hint"
                 onClick={() => void handleSubmit()}
@@ -710,6 +764,11 @@ export default function ComputePage() {
 
       {step === 2 && (
         <div>
+          {terminal && <Button onClick={() => {
+            localStorage.removeItem('gs-reconstruction-job');
+            setJobId(null); setJob(null); setFileList([]); setUploadStates({});
+            setSegmentationPreview(null); setStep(0);
+          }}>新建重建任务</Button>}
           {job && (
             <Space orientation="vertical" size={16} style={{ width: '100%', maxWidth: 480 }}>
               <Space>
@@ -720,17 +779,16 @@ export default function ComputePage() {
                 {stageLabel && <Typography.Text strong>{stageLabel}</Typography.Text>}
               </Space>
 
-              {isTraining ? (
+              {isTraining && !terminal && (
                 <Space>
                   <Spin size="small" />
-                  <Typography.Text type="secondary">训练中，无精确百分比</Typography.Text>
+                  <Typography.Text type="secondary">根据已完成的训练迭代更新整体进度</Typography.Text>
                 </Space>
-              ) : (
-                <Progress
-                  percent={job.progress}
-                  status={job.status === 'FAILED' ? 'exception' : job.status === 'SUCCEEDED' ? 'success' : 'active'}
-                />
               )}
+              <Progress
+                percent={job.progress}
+                status={job.status === 'FAILED' ? 'exception' : job.status === 'SUCCEEDED' ? 'success' : 'active'}
+              />
 
               {!terminal && (
                 <div>
@@ -755,13 +813,25 @@ export default function ComputePage() {
                   }
                   action={
                     job.sceneId ? (
-                      <Button type="primary" onClick={goToScene}>
-                        查看重建场景
-                      </Button>
+                      <Space>
+                        <Button type="primary" disabled={!job.result} onClick={() => {
+                          if (job.result) navigate(job.result.editUrl);
+                        }}>进入场景编辑与尺度标定</Button>
+                        <Button disabled={!job.result} onClick={goToScene}>查看场景</Button>
+                      </Space>
                     ) : undefined
                   }
                 />
               )}
+
+              {segmentationPreview?.ready && <div style={{ marginTop: 16 }}>
+                <Typography.Title level={5}>目标分割预览</Typography.Title>
+                <Typography.Text>有效视角 {segmentationPreview.validViews} / {segmentationPreview.totalViews}；左侧原图，右侧实际前景掩膜。</Typography.Text>
+                {segmentationPreview.frames.map(frame => <figure key={frame.name}>
+                  <img src={frame.previewUrl} alt={`${frame.name} 原图与实际分割结果`} style={{ width: '100%' }} />
+                  <figcaption>{frame.name} · {frame.instances} 个匹配物体 · 前景 {(frame.coverage * 100).toFixed(1)}%</figcaption>
+                </figure>)}
+              </div>}
 
               {job.status === 'FAILED' && (
                 <Alert

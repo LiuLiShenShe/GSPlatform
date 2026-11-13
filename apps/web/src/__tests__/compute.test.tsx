@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   fetchCapabilities: vi.fn(),
   submitReconstruction: vi.fn(),
   fetchJob: vi.fn(),
+  fetchSegmentationPreview: vi.fn(),
   cancelJob: vi.fn(),
   createUploadSession: vi.fn(),
   ResumableUploader: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('../features/compute/computeApi', () => ({
   fetchCapabilities: mocks.fetchCapabilities,
   submitReconstruction: mocks.submitReconstruction,
   fetchJob: mocks.fetchJob,
+  fetchSegmentationPreview: mocks.fetchSegmentationPreview,
   cancelJob: mocks.cancelJob,
 }));
 
@@ -66,6 +68,8 @@ async function addVideoFile(): Promise<void> {
 
 describe('免费计算页（ComputePage）', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
     mocks.fetchProfiles.mockResolvedValue(PROFILES);
     mocks.fetchCapabilities.mockResolvedValue(CAPABILITIES_OK);
     mocks.submitReconstruction.mockResolvedValue({
@@ -80,6 +84,7 @@ describe('免费计算页（ComputePage）', () => {
       sceneId: 'scene-1',
     });
     mocks.fetchJob.mockResolvedValue(JOB_RUNNING);
+    mocks.fetchSegmentationPreview.mockResolvedValue({ ready: false, frames: [] });
     mocks.cancelJob.mockResolvedValue({
       ...JOB_RUNNING,
       status: 'CANCELLED',
@@ -194,5 +199,63 @@ describe('免费计算页（ComputePage）', () => {
     await waitFor(() => expect(mocks.createUploadSession).toHaveBeenCalled());
     expect(spy).toHaveBeenCalledWith('beforeunload', expect.any(Function));
     spy.mockRestore();
+  });
+
+  it('目标模式要求提示词，并把保留目标参数交给真实提交接口', async () => {
+    renderApp({ route: '/compute' });
+    await addVideoFile();
+    await userEvent.click(screen.getByRole('button', { name: /下一步：参数确认/ }));
+    await userEvent.click(screen.getByRole('combobox', { name: '重建模式' }));
+    await userEvent.click(screen.getByText('提示词目标重建', { selector: '.ant-select-item-option-content' }));
+    await userEvent.click(screen.getByRole('checkbox'));
+    const submit = screen.getByRole('button', { name: /提交计算/ });
+    expect(submit).toBeDisabled();
+    await userEvent.type(screen.getByLabelText('分割提示词'), 'potted plant; blue cube');
+    await userEvent.click(submit);
+    expect(mocks.submitReconstruction).toHaveBeenCalledWith(expect.objectContaining({
+      segmentation: { mode: 'KEEP_PROMPTED_OBJECT', prompt: 'potted plant; blue cube' },
+    }));
+  });
+
+  it.each([null, { sceneSlug: 'plant', versionId: 'version-1', assetVersion: 'v1',
+    editUrl: 'https://invalid.example/model/edit/plant', viewUrl: '/scene/plant' }])(
+    '成功任务缺少有效发布结果时保持在任务页', async result => {
+      localStorage.setItem('gs-reconstruction-job', 'job-1');
+      mocks.fetchJob.mockResolvedValue({ ...JOB_RUNNING, status: 'SUCCEEDED', result });
+      const { router } = renderApp({ route: '/compute' });
+      await waitFor(() => expect(mocks.fetchJob).toHaveBeenCalled());
+      expect(router.state.location.pathname).toBe('/compute');
+    });
+
+  it('成功后用后端给出的真实 slug 和版本进入尺度标定', async () => {
+    localStorage.setItem('gs-reconstruction-job', 'job-1');
+    const editUrl = '/model/edit/shanghai-lujiazui?workspace=calibration&version=version-1';
+    mocks.fetchJob.mockResolvedValue({ ...JOB_RUNNING, status: 'SUCCEEDED', result: {
+      sceneSlug: 'shanghai-lujiazui', versionId: 'version-1', assetVersion: 'v1', editUrl,
+      viewUrl: '/scene/shanghai-lujiazui',
+    } });
+    const { router } = renderApp({ route: '/compute' });
+    await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe(editUrl));
+  });
+
+  it('批量照片上传最多同时创建三个会话，并在完成后继续队列', async () => {
+    const finish: (() => void)[] = [];
+    mocks.ResumableUploader.mockImplementation((_file, session, onEvent) => ({
+      run: () => new Promise<void>(resolve => finish.push(() => {
+        onEvent({ type: 'completed', result: { uploadId: session.uploadId, status: 'UPLOADED', jobId: null } });
+        resolve();
+      })), cancel: vi.fn(async () => {}),
+    }));
+    renderApp({ route: '/compute' });
+    fireEvent.change(document.querySelector('input[type=file]')!, { target: { files:
+      Array.from({ length: 6 }, (_, i) => new File(['x'], `${i}.jpg`, { type: 'image/jpeg' })),
+    } });
+    await waitFor(() => expect(mocks.createUploadSession).toHaveBeenCalledTimes(3));
+    finish.shift()!();
+    await waitFor(() => expect(mocks.createUploadSession).toHaveBeenCalledTimes(4));
+    for (const complete of finish.splice(0)) complete();
+    await waitFor(() => expect(mocks.createUploadSession).toHaveBeenCalledTimes(6));
+    for (const complete of finish.splice(0)) complete();
+    expect(await screen.findByText(/全部上传完成/)).toBeInTheDocument();
   });
 });
