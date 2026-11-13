@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import re
 import shutil
 import struct
@@ -312,8 +313,10 @@ def _hash_for_stage(ctx: JobContext, stage: str) -> tuple[str, str]:
         )
     if stage == "CONVERTING":
         ply = ctx.job_dir / "gsplat" / "final.ply"
+        conversion = _section_params(ctx, "convert")
+        conversion["gpu"] = os.environ.get("GS_CONVERT_GPU", str(conversion.get("gpu", "cpu")))
         return _file_hash(ply), param_hash(
-            profile=name, **_section_params(ctx, "convert")
+            profile=name, **conversion
         )
     if stage in ("VERIFYING", "PUBLISHING"):
         return _tree_hash(ctx.streamed_dir), param_hash(
@@ -1108,7 +1111,7 @@ def _stage_converting(ctx: JobContext) -> None:
         ctx.streamed_dir,
         scene_id=ctx.scene_id,
         profile_name=str(convert_sec.get("profile", "balanced")),
-        gpu=str(convert_sec.get("gpu", "cpu")),
+        gpu=os.environ.get("GS_CONVERT_GPU", str(convert_sec.get("gpu", "cpu"))),
     )
     if not cr.ok:
         raise StageError(

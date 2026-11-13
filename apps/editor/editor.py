@@ -18,7 +18,10 @@ from urllib.request import urlopen
 ROOT = Path(__file__).resolve().parent
 PIN = json.loads((ROOT / "editor-version.json").read_text())
 BASE = PIN["basePath"]
-CSP = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob:; worker-src 'self' blob:; media-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+# Official PCUI NumericInput evaluates sanitized arithmetic with Function().
+# Restrict this exception to the independent Editor; the main application CSP
+# remains stricter. Without it, Measure silently restores the original length.
+CSP = "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob:; worker-src 'self' blob:; media-src 'self' blob:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
 
 
 def digest(path):

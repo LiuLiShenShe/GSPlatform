@@ -81,3 +81,21 @@ export function officialEditorUrl(session: EditSession): string {
   }
   return address.href;
 }
+
+export interface CalibrationMeasurement {
+  sourceVersionId: string;
+  resultVersionId: string;
+  referenceName: string;
+  originalDistance: number;
+  realLength: number;
+  unit: 'mm' | 'cm' | 'm';
+  remeasuredDistance: number;
+  provenance: string;
+}
+
+export async function completeCalibration(slug: string, sessionId: string, measurement: CalibrationMeasurement) {
+  return (await httpClient.post(`${sessionPath(slug, sessionId)}/calibration`, measurement)).data as {
+    state: 'ASSUMED'; physicalWalkAllowed: false;
+    evidence: { absoluteErrorMeters: number; relativeError: number; evidenceSha256: string };
+  };
+}

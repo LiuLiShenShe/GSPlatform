@@ -57,6 +57,16 @@ try {
     elements.map(element => Number(element.textContent.replaceAll(',', ''))));
   const initial = await stats();
   if (!await page.evaluate(() => isSecureContext && !!navigator.gpu)) throw new Error('WebGPU secure context absent');
+  // The official PCUI parser needs the Editor CSP's eval exception. Merely
+  // rendering successfully misses silently ignored numeric transformations.
+  const scaleField = page.locator('.transform-scale input');
+  await scaleField.fill('0.9');
+  await scaleField.press('Enter');
+  await page.waitForTimeout(300);
+  if (Number(await scaleField.inputValue()) !== 0.9) throw new Error('Official numeric scale edit was ignored (check Editor CSP)');
+  await scaleField.fill('1');
+  await scaleField.press('Enter');
+  if (Number(await scaleField.inputValue()) !== 1) throw new Error('Official numeric scale restore failed');
   await page.keyboard.press('Shift+f');
   await page.waitForTimeout(1000);
   await page.screenshot({ path: `${output}/before.png` });

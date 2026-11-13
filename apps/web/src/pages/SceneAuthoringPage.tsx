@@ -12,7 +12,7 @@
  *     （避免相机跳回已保存视角）。
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Drawer, Modal } from 'antd';
 import { PcuiAuthoringWorkspace, type ManagementKind, type WorkspaceSelection } from '../features/authoring/pcui/AuthoringWorkspace';
 import { useSceneAuthoring } from '../features/authoring/useSceneAuthoring';
@@ -971,7 +971,9 @@ export default function SceneAuthoringPage() {
   // 平台级入口（§3.5 / §4：Editor / 版本 / 碰撞）
   // ------------------------------------------------------------------ //
 
-  const [management, setManagement] = useState<ManagementKind | null>(null);
+  const [searchParams] = useSearchParams();
+  const [management, setManagement] = useState<ManagementKind | null>(() =>
+    searchParams.get('workspace') === 'calibration' ? 'calibration' : null);
   const handleOpenManagement = useCallback((kind: ManagementKind) => {
     setManagement(kind);
   }, []);
@@ -1150,7 +1152,7 @@ export default function SceneAuthoringPage() {
           既有安全面板原样保留，只改变入口位置。 */}
       <Drawer
         title={
-          management === 'editor'
+          management === 'calibration' ? '尺度标定（整个模型等比例缩放）' : management === 'editor'
             ? 'Gaussian 几何编辑（官方 SuperSplat Editor v3.5.2）'
             : management === 'versions'
               ? '版本历史'
@@ -1163,6 +1165,7 @@ export default function SceneAuthoringPage() {
         destroyOnHidden={false}
       >
         {management === 'editor' && <GaussianEditorPanel sceneId={effectiveSceneId} />}
+        {management === 'calibration' && <GaussianEditorPanel sceneId={effectiveSceneId} calibration />}
         {management === 'versions' && (
           <VersionPanel sceneId={effectiveSceneId} onSwitched={handleVersionSwitched} />
         )}

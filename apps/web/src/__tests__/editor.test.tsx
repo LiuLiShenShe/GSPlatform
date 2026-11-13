@@ -93,4 +93,20 @@ describe('Official editor orchestration, not Gaussian algorithms', () => {
     expect(httpClient.patch).toHaveBeenCalledTimes(3);
     expect(event).toHaveBeenLastCalledWith({ type: 'error', message: 'Expired', code: 'EDIT_SESSION_INVALID' });
   });
+
+  it('clears measurements from another source when a new official session opens', async () => {
+    localStorage.setItem('gs-calibration-draft:scene-1', JSON.stringify({
+      sourceVersionId: 'older-version', editSessionId: 'older-edit',
+      referenceName: 'cube', originalDistance: 2, realLength: 20, unit: 'mm',
+      remeasuredDistance: .02, provenance: 'Older measurement',
+    }));
+    renderWithRouter(<GaussianEditorPanel sceneId="scene-1" calibration />);
+    await screen.findByText(/Private guitar/);
+    fireEvent.click(screen.getByRole('button', { name: '打开 SuperSplat Editor' }));
+    await waitFor(() => expect(window.open).toHaveBeenCalled());
+    const saved = JSON.parse(localStorage.getItem('gs-calibration-draft:scene-1')!);
+    expect(saved).toMatchObject({ sourceVersionId: 'version-1', editSessionId: 'edit-1',
+      originalDistance: null, remeasuredDistance: null, provenance: '', realLength: 20 });
+    expect(screen.getByLabelText('原始测量距离')).toHaveValue('');
+  });
 });

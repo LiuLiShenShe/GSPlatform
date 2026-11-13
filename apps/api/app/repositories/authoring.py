@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db.models.scene_annotation import SceneAnnotation
@@ -27,10 +28,16 @@ class ScenePresentationRepository:
         row = self.get_by_scene(scene_id)
         if row is not None:
             return row
-        row = ScenePresentation(scene_id=scene_id)
-        self._session.add(row)
-        self._session.flush()
-        return row
+        # Runtime and authoring fetch concurrently on first Edit entry. Let the
+        # unique scene key serialize creation without aborting either request.
+        self._session.execute(
+            insert(ScenePresentation)
+            .values(scene_id=scene_id)
+            .on_conflict_do_nothing(index_elements=["scene_id"])
+        )
+        return self._session.execute(
+            select(ScenePresentation).where(ScenePresentation.scene_id == scene_id)
+        ).scalar_one()
 
     def delete_by_scene(self, scene_id: uuid.UUID) -> None:
         self._session.execute(

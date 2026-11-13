@@ -55,7 +55,7 @@ export type WorkspaceSelection =
   | { kind: 'annotation'; id: string }
   | { kind: 'viewpoint'; id: string };
 
-export type ManagementKind = 'editor' | 'versions' | 'collision';
+export type ManagementKind = 'editor' | 'calibration' | 'versions' | 'collision';
 
 /** GS-UI-01 Req3/4：右侧属性面板的可折叠分区（场景设置 / 标注管理 / 视角管理）。 */
 export type RightPanelTab = 'scene' | 'annotation' | 'viewpoint';
@@ -344,6 +344,7 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
         />
         <PcuiButton text="预览" onClick={props.onPreview} />
         <PcuiButton text="Gaussian 编辑" onClick={() => props.onOpenManagement('editor')} />
+        <PcuiButton text="尺度标定" onClick={() => props.onOpenManagement('calibration')} />
         <PcuiButton text="版本历史" onClick={() => props.onOpenManagement('versions')} />
         <PcuiButton text="碰撞" onClick={() => props.onOpenManagement('collision')} />
         <PcuiButton

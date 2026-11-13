@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import re
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -20,6 +22,7 @@ from app.db.models.scene import Scene, SceneVersion
 from app.db.models.scene_edit_session import SceneEditSession
 from app.db.models.upload_session import UploadSession
 from app.schemas.editor_session import (
+    CalibrationMeasurementRequest,
     CreateEditSessionRequest,
     EditExportRequest,
     EditSessionOut,
@@ -60,10 +63,12 @@ class EditorSessionService:
         try:
             receipt = json.loads(Path(self.settings.editor_build_manifest).read_text())
             identity = receipt["artifactSha256"]
-            if (receipt["upstreamCommit"] != EDITOR_COMMIT
-                    or receipt["basePath"] != "/gaussian-editor/"
-                    or not isinstance(identity, str)
-                    or not re.fullmatch(r"[a-f0-9]{64}", identity)):
+            if (
+                receipt["upstreamCommit"] != EDITOR_COMMIT
+                or receipt["basePath"] != "/gaussian-editor/"
+                or not isinstance(identity, str)
+                or not re.fullmatch(r"[a-f0-9]{64}", identity)
+            ):
                 raise ValueError("invalid receipt")
         except (OSError, ValueError, KeyError, TypeError) as exc:
             raise ServiceUnavailableError("Editor 固定构建凭据无效") from exc
@@ -78,16 +83,20 @@ class EditorSessionService:
         manifest = (version.manifest or {}) if version else {}
         counts = (manifest.get("content") or manifest.get("stream") or {}).get("counts", [])
         return EditSourceOut(
-            sceneId=scene.id, sceneTitle=scene.title, currentVersionId=scene.current_version_id,
+            sceneId=scene.id,
+            sceneTitle=scene.title,
+            currentVersionId=scene.current_version_id,
             assetVersion=version.asset_version if version else None,
-            format=version.format if version else None, counts=counts or [scene.splat_count or 0],
+            format=version.format if version else None,
+            counts=counts or [scene.splat_count or 0],
             editorEnabled=self.settings.editor_enabled,
             maxGaussians=self.settings.editor_max_gaussians,
             spatialState=spatial.state if spatial else None,
         )
 
-    def create(self, slug: str, body: CreateEditSessionRequest,
-               identity: RequestIdentity) -> EditSessionOut:
+    def create(
+        self, slug: str, body: CreateEditSessionRequest, identity: RequestIdentity
+    ) -> EditSessionOut:
         scene = self.owner_scene(slug, identity)
         if scene.current_version_id != body.expectedCurrentVersion:
             raise EditBaseVersionChanged("当前版本已变化，请重新读取场景后创建编辑会话")
@@ -117,17 +126,25 @@ class EditorSessionService:
             "lod-meta.json" if streamed else "scene.ply" if version.format == "ply" else "scene.sog"
         )
         SceneAssetService(self.settings).resolve(
-            scene, f"versions/{version.asset_version}/{entry}",
+            scene,
+            f"versions/{version.asset_version}/{entry}",
             access_scope=SceneAssetAccessScope.OWNER,
         )
         now = datetime.now(UTC)
         edit = SceneEditSession(
-            scene_id=scene.id, owner_id=identity.user_id, source_version_id=version.id,
+            scene_id=scene.id,
+            owner_id=identity.user_id,
+            source_version_id=version.id,
             source_asset_version=version.asset_version,
             source_kind="SELECTED_STREAMED_LOD" if streamed else "FULL_RESOLUTION_SOURCE",
-            source_entry=entry, source_counts=counts, selected_lod=lod,
-            editor_upstream_commit=EDITOR_COMMIT, editor_build_identity=build, status="CREATED",
-            created_at=now, expires_at=now + timedelta(hours=self.settings.editor_session_hours),
+            source_entry=entry,
+            source_counts=counts,
+            selected_lod=lod,
+            editor_upstream_commit=EDITOR_COMMIT,
+            editor_build_identity=build,
+            status="CREATED",
+            created_at=now,
+            expires_at=now + timedelta(hours=self.settings.editor_session_hours),
         )
         self.session.add(edit)
         self.session.flush()
@@ -135,13 +152,25 @@ class EditorSessionService:
         self.session.commit()
         return result
 
-    def owned(self, slug: str, session_id: uuid.UUID, identity: RequestIdentity,
-              *, active: bool = False, lock: bool = False) -> tuple[Scene, SceneEditSession]:
+    def owned(
+        self,
+        slug: str,
+        session_id: uuid.UUID,
+        identity: RequestIdentity,
+        *,
+        active: bool = False,
+        lock: bool = False,
+    ) -> tuple[Scene, SceneEditSession]:
         scene = self.owner_scene(slug, identity)
-        query = select(SceneEditSession).where(
-            SceneEditSession.id == session_id, SceneEditSession.scene_id == scene.id,
-            SceneEditSession.owner_id == identity.user_id,
-        ).execution_options(populate_existing=True)
+        query = (
+            select(SceneEditSession)
+            .where(
+                SceneEditSession.id == session_id,
+                SceneEditSession.scene_id == scene.id,
+                SceneEditSession.owner_id == identity.user_id,
+            )
+            .execution_options(populate_existing=True)
+        )
         if lock:
             query = query.with_for_update()
         edit = self.session.scalars(query).one_or_none()
@@ -159,13 +188,88 @@ class EditorSessionService:
         scene, edit = self.owned(slug, session_id, identity)
         return self.out(scene, edit)
 
+    def complete_calibration(
+        self,
+        slug: str,
+        session_id: uuid.UUID,
+        body: CalibrationMeasurementRequest,
+        identity: RequestIdentity,
+    ) -> dict:
+        from app.db.models.scene_processing import SceneProcessingSettings
+        from app.services.scene_processing import transform_identity
+
+        scene, edit = self.owned(slug, session_id, identity, lock=True)
+        # Serialize against version switches and authoring writes.
+        self.session.execute(select(Scene.id).where(Scene.id == scene.id).with_for_update())
+        self.session.refresh(scene)
+        if (
+            edit.status != "COMPLETED"
+            or edit.result_version_id is None
+            or not edit.result_sha256
+            or edit.source_version_id != body.sourceVersionId
+            or edit.result_version_id != body.resultVersionId
+            or edit.source_version_id == edit.result_version_id
+            or scene.current_version_id != edit.result_version_id
+        ):
+            raise EditBaseVersionChanged("标定必须绑定此编辑会话已发布且仍为当前的独立新版本")
+        result = self.session.get(SceneVersion, edit.result_version_id)
+        if result is None or result.scene_id != scene.id:
+            raise EditSessionError("标定结果版本不存在")
+        if body.endpoints:
+            values = [x for point in body.endpoints for x in point]
+            if not all(math.isfinite(x) for x in values):
+                raise ConflictError("测量端点必须为有限坐标")
+            distance = math.dist(*body.endpoints)
+            if not math.isclose(distance, body.originalDistance, rel_tol=1e-4, abs_tol=1e-7):
+                raise ConflictError("测量端点与记录的原距离不一致")
+        real_meters = body.realLength * {"mm": 0.001, "cm": 0.01, "m": 1}[body.unit]
+        factor = real_meters / body.originalDistance
+        if not math.isfinite(factor) or factor <= 0:
+            raise ConflictError("缩放倍率非法")
+        evidence = {
+            **body.model_dump(mode="json"),
+            "realLengthMeters": real_meters,
+            "scaleFactor": factor,
+            "geometryScaleAppliedBy": "OFFICIAL_SUPERSPLAT_MEASURE",
+            "exportSha256": edit.result_sha256,
+            "editorCommit": edit.editor_upstream_commit,
+            "editorBuildIdentity": edit.editor_build_identity,
+            "editSessionId": str(edit.id),
+            "recordedBy": str(identity.user_id),
+            "recordedAt": datetime.now(UTC).isoformat(),
+            "absoluteErrorMeters": abs(body.remeasuredDistance - real_meters),
+            "relativeError": abs(body.remeasuredDistance - real_meters) / real_meters,
+            "transformIdentity": transform_identity(self.session, scene),
+            "evidenceTrust": "USER_TRANSCRIBED_OFFICIAL_EDITOR; NO_PUBLIC_MEASUREMENT_ATTESTATION",
+        }
+        canonical = json.dumps(evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        evidence["evidenceSha256"] = hashlib.sha256(canonical.encode()).hexdigest()
+        row = self.session.get(SceneProcessingSettings, scene.id)
+        if row is None:
+            row = SceneProcessingSettings(scene_id=scene.id)
+            self.session.add(row)
+        # The official Editor has no public attestation API. A UI transcription
+        # cannot grant VERIFIED or enable physical Walk, even with good numbers.
+        row.calibration_state = "ASSUMED"
+        row.meters_per_scene_unit = 1.0
+        row.reference_method = "USER_ASSUMPTION"
+        row.reference_value = real_meters
+        row.calibration_source_version = result.asset_version
+        row.calibration_transform_identity = evidence["transformIdentity"]
+        row.calibration_evidence = evidence
+        edit.provenance = {**(edit.provenance or {}), "calibration": evidence}
+        self.session.commit()
+        return {"state": "ASSUMED", "physicalWalkAllowed": False, "evidence": evidence}
+
     def cleanup_exports(self) -> int:
         from app.storage import LocalDiskStorage
 
         cutoff = datetime.now(UTC) - timedelta(days=self.settings.editor_export_retention_days)
         records = self.session.scalars(
-            select(SceneEditSession).where(SceneEditSession.expires_at < cutoff)
-            .with_for_update(skip_locked=True).limit(100)
+            select(SceneEditSession)
+            .where(SceneEditSession.expires_at < cutoff)
+            .with_for_update(skip_locked=True)
+            .limit(100)
         ).all()
         storage = LocalDiskStorage(self.settings.storage_root)
         cleaned = 0
@@ -185,7 +289,10 @@ class EditorSessionService:
         return cleaned
 
     def create_upload(
-        self, slug: str, session_id: uuid.UUID, body: EditExportRequest,
+        self,
+        slug: str,
+        session_id: uuid.UUID,
+        body: EditExportRequest,
         identity: RequestIdentity,
     ) -> UploadSessionOut:
         from app.services.celery_client import send_task
@@ -193,22 +300,35 @@ class EditorSessionService:
         from app.storage import LocalDiskStorage
 
         scene, edit = self.owned(slug, session_id, identity, active=True, lock=True)
-        uploads = UploadService(self.session, LocalDiskStorage(self.settings.storage_root),
-                                self.settings, send_task=send_task)
+        uploads = UploadService(
+            self.session,
+            LocalDiskStorage(self.settings.storage_root),
+            self.settings,
+            send_task=send_task,
+        )
         if edit.upload_id:
             upload = self.session.get(UploadSession, edit.upload_id)
-            if (upload is None or upload.total_size != body.size
-                    or upload.upload_format != body.format
-                    or upload.declared_sha256 != body.sha256):
+            if (
+                upload is None
+                or upload.total_size != body.size
+                or upload.upload_format != body.format
+                or upload.declared_sha256 != body.sha256
+            ):
                 raise EditSessionError("会话已有不同导出文件，不能替换或重复创建上传")
             return uploads._to_out(upload)
         if edit.source_kind == "SELECTED_STREAMED_LOD":
             if not body.acknowledgeSelectedLod or body.selectedLod != edit.selected_lod:
                 raise EditSessionError("必须确认官方 Editor 实际选择的 LOD 与会话一致")
         request = CreateUploadRequest(
-            filename=body.filename, format=body.format, mime_type=body.mime_type,
-            size=body.size, sha256=body.sha256, title=scene.title, description=scene.description,
-            category=scene.category, visibility=scene.visibility,
+            filename=body.filename,
+            format=body.format,
+            mime_type=body.mime_type,
+            size=body.size,
+            sha256=body.sha256,
+            title=scene.title,
+            description=scene.description,
+            category=scene.category,
+            visibility=scene.visibility,
         )
         return uploads.create_session(request, identity, edit_session=edit)
 
@@ -221,48 +341,76 @@ class EditorSessionService:
             edit.cancelled_at = datetime.now(UTC)
         return self.out(scene, edit)
 
-    def source(self, slug: str, session_id: uuid.UUID, asset_version: str, resource: str,
-               identity: RequestIdentity) -> ResolvedSceneAsset:
+    def source(
+        self,
+        slug: str,
+        session_id: uuid.UUID,
+        asset_version: str,
+        resource: str,
+        identity: RequestIdentity,
+    ) -> ResolvedSceneAsset:
         scene, edit = self.owned(slug, session_id, identity, active=True)
         if self.build_identity() != edit.editor_build_identity:
             raise EditSessionError("编辑器部署构建已变化，请创建新的授权会话")
         if asset_version != edit.source_asset_version:
             raise NotFoundError("资源版本与编辑会话不符")
         version = self.session.get(SceneVersion, edit.source_version_id)
-        if (version is None or version.scene_id != scene.id
-                or version.asset_version != asset_version):
+        if (
+            version is None
+            or version.scene_id != scene.id
+            or version.asset_version != asset_version
+        ):
             raise NotFoundError("编辑来源版本不存在")
         resolved = SceneAssetService(self.settings).resolve(
-            scene, f"versions/{asset_version}/{resource}", access_scope=SceneAssetAccessScope.OWNER,
+            scene,
+            f"versions/{asset_version}/{resource}",
+            access_scope=SceneAssetAccessScope.OWNER,
         )
         if edit.status == "CREATED":
             edit.status = "OPENED"
             edit.opened_at = datetime.now(UTC)
-        return ResolvedSceneAsset(resolved.absolute_path, resolved.x_accel_path,
-                                  resolved.media_type, "private, no-store")
+        return ResolvedSceneAsset(
+            resolved.absolute_path, resolved.x_accel_path, resolved.media_type, "private, no-store"
+        )
 
     def out(self, scene: Scene, edit: SceneEditSession) -> EditSessionOut:
-        source = (f"/api/v1/scenes/{scene.slug}/edit-sessions/{edit.id}/source/"
-                  f"versions/{edit.source_asset_version}/{edit.source_entry}")
+        source = (
+            f"/api/v1/scenes/{scene.slug}/edit-sessions/{edit.id}/source/"
+            f"versions/{edit.source_asset_version}/{edit.source_entry}"
+        )
         job = self.session.get(Job, edit.job_id) if edit.job_id else None
         upload = self.session.get(UploadSession, edit.upload_id) if edit.upload_id else None
-        result = (self.session.get(SceneVersion, edit.result_version_id)
-                  if edit.result_version_id else None)
+        result = (
+            self.session.get(SceneVersion, edit.result_version_id)
+            if edit.result_version_id
+            else None
+        )
         status = edit.status
         if upload and status not in ("COMPLETED", "CANCELLED", "EXPIRED", "FAILED"):
             status = upload.status
         return EditSessionOut(
-            id=edit.id, sceneId=scene.id, sceneSlug=scene.slug, sceneTitle=scene.title,
-            sourceVersionId=edit.source_version_id, sourceAssetVersion=edit.source_asset_version,
-            sourceKind=edit.source_kind, sourceCounts=edit.source_counts,
+            id=edit.id,
+            sceneId=scene.id,
+            sceneSlug=scene.slug,
+            sceneTitle=scene.title,
+            sourceVersionId=edit.source_version_id,
+            sourceAssetVersion=edit.source_asset_version,
+            sourceKind=edit.source_kind,
+            sourceCounts=edit.source_counts,
             selectedLod=edit.selected_lod,
             editorUpstreamCommit=edit.editor_upstream_commit,
             editorBuildIdentity=edit.editor_build_identity,
-            status=status, createdAt=edit.created_at, expiresAt=edit.expires_at,
-            sourceUrl=source, editorUrl="/gaussian-editor/?" + urlencode({"load": source}),
-            uploadId=edit.upload_id, resultVersionId=edit.result_version_id,
-            resultCounts=((result.manifest or {}).get("stream", {}).get("counts")
-                          if result else None),
+            status=status,
+            createdAt=edit.created_at,
+            expiresAt=edit.expires_at,
+            sourceUrl=source,
+            editorUrl="/gaussian-editor/?" + urlencode({"load": source}),
+            uploadId=edit.upload_id,
+            resultVersionId=edit.result_version_id,
+            resultCounts=(
+                (result.manifest or {}).get("stream", {}).get("counts") if result else None
+            ),
             errorCode=edit.error_code,
-            progress=int(job.progress) if job else 0, stage=job.stage if job else None,
+            progress=int(job.progress) if job else 0,
+            stage=job.stage if job else None,
         )

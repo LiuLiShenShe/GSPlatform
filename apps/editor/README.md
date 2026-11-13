@@ -23,6 +23,14 @@ network/form/frame activity; do not configure `/api/id`. `.ssproj` is an editabl
 project, not a publishing Gaussian asset. Export PLY/SOG locally and return to
 GSPlatform to upload. No private Editor API or auto-save integration is used.
 
+The Editor-only CSP permits `unsafe-eval`: the pinned official PCUI NumericInput
+uses `Function()` to parse sanitized arithmetic, including Measure lengths. A
+WASM-only exception makes numeric edits silently restore their previous values.
+Keep the main application's stricter CSP; reverse proxies must not add that
+second policy to `/gaussian-editor/`. Verify a real Measure rescale and exported
+geometry, not just successful rendering. External network destinations remain
+blocked by `connect-src 'self' blob:`.
+
 See `docs/operations/SUPERSPLAT_EDITOR_DEPLOYMENT.md` and the Phase 3 report.
 
 Clean tracked-source build/start/static gate: `./deploy/scripts/verify_editor_source.sh`.

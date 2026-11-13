@@ -1,9 +1,25 @@
 """Session DTOs contain controlled same-origin URLs, never access credentials."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class CalibrationMeasurementRequest(BaseModel):
+    """User transcription from the unmodified official Editor, never trusted telemetry."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    sourceVersionId: UUID
+    resultVersionId: UUID
+    referenceName: str = Field(min_length=1, max_length=200)
+    originalDistance: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    realLength: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    unit: Literal["mm", "cm", "m"]
+    remeasuredDistance: float = Field(gt=0, allow_inf_nan=False, strict=True)
+    provenance: str = Field(min_length=1, max_length=2000)
+    endpoints: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
 
 
 class CreateEditSessionRequest(BaseModel):

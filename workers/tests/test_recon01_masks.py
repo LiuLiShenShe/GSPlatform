@@ -123,7 +123,7 @@ def test_resume_after_inference_crash_reuses_only_exact_verified_manifest(
     monkeypatch.setattr(
         segmentation, "runtime_identity", lambda: calls.append(1) or identity
     )
-    monkeypatch.setattr(orchestrator, "_tool_versions", lambda: {})
+    monkeypatch.setattr(orchestrator, "_tool_versions", dict)
 
     def forbidden_runner(*args, **kwargs):
         raise AssertionError("completed, verified inference must not load SAM3 again")
@@ -136,3 +136,21 @@ def test_resume_after_inference_crash_reuses_only_exact_verified_manifest(
     assert orchestrator.run_pipeline(*arguments, segmentation=settings)["ok"]
     changed = {**settings, "prompt": "another object"}
     assert not orchestrator.run_pipeline(*arguments, segmentation=changed)["ok"]
+
+
+def test_conversion_backend_override_changes_resume_identity(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from workers.reconstruction.orchestrator import _hash_for_stage
+    from workers.reconstruction.profiles import load_profile
+
+    context = SimpleNamespace(
+        job_dir=tmp_path, profile=load_profile("standard"), profile_name="standard"
+    )
+    # No trained file is needed to compare parameter identities.
+    monkeypatch.delenv("GS_CONVERT_GPU", raising=False)
+    cpu = _hash_for_stage(context, "CONVERTING")
+    monkeypatch.setenv("GS_CONVERT_GPU", "0")
+    accelerated = _hash_for_stage(context, "CONVERTING")
+    assert cpu[0] == accelerated[0]
+    assert cpu[1] != accelerated[1]
