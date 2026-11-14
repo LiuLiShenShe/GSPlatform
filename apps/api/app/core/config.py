@@ -10,6 +10,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = "gsplatform-api"
@@ -128,6 +129,9 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/0"
     celery_result_backend: str = "redis://localhost:6379/1"
+    # Late-acknowledged reconstruction tasks can legitimately take eight hours.
+    # Producers and all consumers sharing Redis must use the same window.
+    celery_visibility_timeout_s: int = Field(default=43200, gt=0)
 
     # Rate-limiter backend (FIX-06 §15): "redis" shares counters across
     # uvicorn workers (with in-memory fallback on outage); "memory" is the

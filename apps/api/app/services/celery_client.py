@@ -30,6 +30,12 @@ def _get_broker() -> Celery:
         _broker.conf.task_always_eager = False
         _broker.conf.result_expires = 3600
         _broker.conf.task_default_queue = "gsplatform"
+        visibility = settings.celery_visibility_timeout_s
+        _broker.conf.update(
+            visibility_timeout=visibility,
+            broker_transport_options={"visibility_timeout": visibility},
+            result_backend_transport_options={"visibility_timeout": visibility},
+        )
         # Mirror the worker-side routing table (workers/celery_app.py) so the
         # producer sends Phase 07 reconstruction stages to the CPU/GPU queues
         # instead of the default one.

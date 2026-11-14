@@ -35,6 +35,15 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    # Redis' one-hour default redelivers a still-running full-quality task.
+    # Match the API producer and keep this above the longest task hard limit.
+    visibility_timeout=settings.celery_visibility_timeout_s,
+    broker_transport_options={
+        "visibility_timeout": settings.celery_visibility_timeout_s,
+    },
+    result_backend_transport_options={
+        "visibility_timeout": settings.celery_visibility_timeout_s,
+    },
     # Publish pipeline can legitimately run >1h on very large PLY (decimate ×3
     # + SOG stack on 10M+ gaussians).  Sized by env so operators can tune
     # without a deploy; defaults raised from the historical 3600s/3300s.
