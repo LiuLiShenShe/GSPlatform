@@ -1,0 +1,135 @@
+{
+  "sourceCommit": "d0fc4d1",
+  "base": "http://127.0.0.1:5174",
+  "browser": "145.0.7632.116",
+  "startedAt": "2026-11-14T16:19:34.981Z",
+  "login": {
+    "passed": true,
+    "method": "existing private QA account, normal UI"
+  },
+  "gsplatGaussian": {
+    "loaded": true,
+    "count": 600103,
+    "camera": {
+      "position": [
+        7.067687511444092,
+        -5.60568904876709,
+        -21.50894546508789
+      ],
+      "target": [
+        7.0676875114440945,
+        -5.60568904876709,
+        1.5619240324726782
+      ],
+      "fov": 55
+    }
+  },
+  "twodGaussian": {
+    "loaded": true,
+    "count": 375688,
+    "camera": {
+      "position": [
+        6.114920616149902,
+        -5.909082412719727,
+        -19.92837905883789
+      ],
+      "target": [
+        6.114920616149905,
+        -5.909082412719727,
+        2.0972665412325746
+      ],
+      "fov": 55
+    }
+  },
+  "twodMeshPreview": {
+    "counts": {
+      "vertices": 140634,
+      "faces": 249999
+    },
+    "status": "已加载：140,634 顶点 / 249,999 三角面 · 简化预览"
+  },
+  "twodMeshFull": {
+    "counts": {
+      "vertices": 1401157,
+      "faces": 2675832
+    },
+    "status": "已加载：1,401,157 顶点 / 2,675,832 三角面 · 原始完整网格"
+  },
+  "twodMeshDownload": {
+    "bytes": 106245151,
+    "sha256": "5b8494b610947569504a01c1534b5deb7524c326af024ff5a3548ab7691f8783"
+  },
+  "twodGaussianDownloads": [
+    {
+      "name": "browser-2dgs-compatible.ply",
+      "bytes": 61613838,
+      "sha256": "a2aa74a05a706410fa489a02ed43e32f267ce449c19fc663183c6637799ef6f1"
+    },
+    {
+      "name": "browser-2dgs-native.ply",
+      "bytes": 60111063,
+      "sha256": "89d20d8b178cc8b38c613af06361a6c8b47c17d2ec96897773ca3056483c8361"
+    }
+  ],
+  "gsplatGaussianAfterDeploy": {
+    "count": 600103,
+    "camera": {
+      "position": [
+        0.4720194339752197,
+        -0.8386098742485046,
+        -5.115248203277588
+      ],
+      "target": [
+        0.47201943397522117,
+        -0.8386098742485046,
+        6.661983302989702
+      ],
+      "fov": 55
+    }
+  },
+  "gsplatMeshPreview": {
+    "counts": {
+      "vertices": 130882,
+      "faces": 249999
+    },
+    "status": "已加载：130,882 顶点 / 249,999 三角面 · 简化预览"
+  },
+  "gsplatMeshFull": {
+    "counts": {
+      "vertices": 293906,
+      "faces": 573486
+    },
+    "status": "已加载：293,906 顶点 / 573,486 三角面 · 原始完整网格"
+  },
+  "gsplatDownloads": [
+    {
+      "name": "browser-gsplat-mesh.ply",
+      "bytes": 22444850,
+      "sha256": "467f0eefbe945ecf6233851acd2b7702c28439141a36018bc3a9e2e5bb4e4015"
+    },
+    {
+      "name": "browser-gsplat-gaussian.ply",
+      "bytes": 91216608,
+      "sha256": "091a0d8b8fc116d66f640b5a72c35c3b6a2d6337cc372b21a5bc07f6b5b4e07a"
+    }
+  ],
+  "finishedAt": "2026-11-14T16:51:50.613Z",
+  "errors": [],
+  "failedRequests": [],
+  "twodGaussianAfterDeploy": {
+    "count": 375688,
+    "camera": {
+      "position": [
+        0.169250950217247,
+        -0.806739330291748,
+        -5.050625801086426
+      ],
+      "target": [
+        0.1692509502172484,
+        -0.806739330291748,
+        6.372742123776817
+      ],
+      "fov": 55
+    }
+  }
+}

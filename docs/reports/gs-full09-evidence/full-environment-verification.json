@@ -1,0 +1,24 @@
+{
+  "building": {
+    "unchanged": true,
+    "sceneId": "e2f54542-40a1-494f-b260-ad8fd28156e6",
+    "slug": "u-06924576399e",
+    "ownerId": "e0c5c9d5-534f-4e8e-a460-15e4143bc861",
+    "versionId": "01c63c7c-8eb5-498e-bcc0-77215e92ca12",
+    "assetVersion": "da7bf4207044",
+    "entry": "versions/da7bf4207044/lod-meta.json",
+    "sha256": "df735f57c853a77c5b5a758a6c19c5b7e76654581e9f8aba13521f7088fa75ab",
+    "bytes": 1758379
+  },
+  "health": {
+    "status": "ready",
+    "service": "gsplatform-api"
+  },
+  "workerVisibility": 43200,
+  "producerVisibility": 43200,
+  "apiPort": 18001,
+  "frontendPort": 5174,
+  "storageRoot": "/home/test/.local/state/gsplatform-vr00-20261011/storage",
+  "deployedCommit": "d0fc4d1",
+  "gpuEncoding": "0"
+}

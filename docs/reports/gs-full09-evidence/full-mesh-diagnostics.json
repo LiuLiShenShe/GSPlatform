@@ -1,0 +1,26 @@
+{
+  "gsplat": {
+    "vertices": 293906,
+    "faces": 573486,
+    "components": 121,
+    "largestComponentFaces": 314789,
+    "componentsWithUnder100Faces": 82,
+    "facesInComponentsUnder100Faces": 1524,
+    "note": "Connected-component counts are not a count of unwanted geometry. Leaves and calibration cube can be disconnected; native TSDF and NKSR use different built-in filters.",
+    "previewVertices": 130882,
+    "previewFaces": 249999,
+    "originalUnchanged": true
+  },
+  "2dgs": {
+    "vertices": 1401157,
+    "faces": 2675832,
+    "components": 50,
+    "largestComponentFaces": 2627592,
+    "componentsWithUnder100Faces": 0,
+    "facesInComponentsUnder100Faces": 0,
+    "note": "Connected-component counts are not a count of unwanted geometry. Leaves and calibration cube can be disconnected; native TSDF and NKSR use different built-in filters.",
+    "previewVertices": 140634,
+    "previewFaces": 249999,
+    "originalUnchanged": true
+  }
+}

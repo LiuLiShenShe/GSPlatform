@@ -1,0 +1,123 @@
+[
+  {
+    "algorithm": "gsplat",
+    "sceneId": "f15fc095-dab2-570e-9223-42cc1c4db9ce",
+    "slug": "review-gsplat-full-30000",
+    "title": "全量照片 · gsplat 30000次 + NKSR",
+    "ownerId": "e0c5c9d5-534f-4e8e-a460-15e4143bc861",
+    "versionId": "eeab18cb-992e-4294-97a6-4cf8585f6339",
+    "assetVersion": "7dac4cdfda03e72f",
+    "registeredPhotos": 242,
+    "gaussianCount": 600103,
+    "viewUrl": "/scene/review-gsplat-full-30000",
+    "reviewUrl": "/api/v1/scenes/review-gsplat-full-30000/assets/versions/7dac4cdfda03e72f/review/index.html",
+    "sourceJobId": "1dd697e2-5894-4c2f-a082-e2a168eb000c",
+    "originalViewUrl": "/scene/r-0407bfd4b545",
+    "originalEditUrl": "/model/edit/r-0407bfd4b545?workspace=calibration&version=75d6784c-ce7b-4a5a-b6b9-2b98308240f4",
+    "mesh": {
+      "method": "NKSR",
+      "input": "GSPLAT_EXPECTED_DEPTH_ORIENTED_NORMALS",
+      "inputPoints": 150000,
+      "voxelSizeSourceUnits": 0.03862772136926651,
+      "weightsSha256": "c2edb6437d6485c2ed48a756523849628f0c34e232c601113ff657db8714e955",
+      "vertices": 293906,
+      "faces": 573486,
+      "scaleFactor": 1,
+      "units": "scene",
+      "sizeBytes": 22444850,
+      "sha256": "467f0eefbe945ecf6233851acd2b7702c28439141a36018bc3a9e2e5bb4e4015",
+      "boundsSourceUnits": [
+        [
+          -16.209924697875977,
+          -0.7975479960441589,
+          -2.286851167678833
+        ],
+        [
+          0.7930133938789368,
+          13.2321138381958,
+          6.1418070793151855
+        ]
+      ],
+      "scaleStatus": "UNCALIBRATED",
+      "reconstructionJobId": "1dd697e2-5894-4c2f-a082-e2a168eb000c",
+      "originalPhotosSubmitted": 250,
+      "decodablePhotos": 247,
+      "registeredPhotos": 242,
+      "iterations": 30000,
+      "manuallyCleaned": false,
+      "note": "Raw training coordinates for visual review. No physical calibration has been claimed."
+    },
+    "diagnostics": {
+      "vertices": 293906,
+      "faces": 573486,
+      "components": 121,
+      "largestComponentFaces": 314789,
+      "componentsWithUnder100Faces": 82,
+      "facesInComponentsUnder100Faces": 1524,
+      "note": "Connected-component counts are not a count of unwanted geometry. Leaves and calibration cube can be disconnected; native TSDF and NKSR use different built-in filters.",
+      "previewVertices": 130882,
+      "previewFaces": 249999,
+      "originalUnchanged": true
+    }
+  },
+  {
+    "algorithm": "2dgs",
+    "sceneId": "0e48befc-f8de-51b9-a1e0-176c15200b54",
+    "slug": "review-2dgs-full-30000",
+    "title": "全量照片 · 2dgs 30000次 + 原生 TSDF",
+    "ownerId": "e0c5c9d5-534f-4e8e-a460-15e4143bc861",
+    "versionId": "4d66b4eb-c0cb-414d-b023-0d338cfe82f8",
+    "assetVersion": "9edfac9ac523d157",
+    "registeredPhotos": 246,
+    "gaussianCount": 375688,
+    "viewUrl": "/scene/review-2dgs-full-30000",
+    "reviewUrl": "/api/v1/scenes/review-2dgs-full-30000/assets/versions/9edfac9ac523d157/review/index.html",
+    "sourceJobId": "b6630a28-65bd-42b4-b9d8-ca7070268ac3",
+    "originalViewUrl": "/scene/r-c2984c52a635",
+    "originalEditUrl": "/model/edit/r-c2984c52a635?workspace=calibration&version=7604de30-2e59-4ea8-8cf0-d6193771753b",
+    "mesh": {
+      "method": "2DGS_NATIVE_TSDF",
+      "voxelSizeSourceUnits": 0.005579259188563421,
+      "depthTruncSourceUnits": 5.7131614090889435,
+      "meshResolution": 1024,
+      "vertices": 1401157,
+      "faces": 2675832,
+      "scaleFactor": 1,
+      "units": "scene",
+      "sizeBytes": 106245151,
+      "sha256": "5b8494b610947569504a01c1534b5deb7524c326af024ff5a3548ab7691f8783",
+      "boundsSourceUnits": [
+        [
+          -1.5194154551060457,
+          -0.8568899905545145,
+          1.627715069627757
+        ],
+        [
+          1.0931132159943429,
+          2.5357733012020747,
+          3.874795506457296
+        ]
+      ],
+      "scaleStatus": "UNCALIBRATED",
+      "reconstructionJobId": "b6630a28-65bd-42b4-b9d8-ca7070268ac3",
+      "originalPhotosSubmitted": 250,
+      "decodablePhotos": 247,
+      "registeredPhotos": 246,
+      "iterations": 30000,
+      "manuallyCleaned": false,
+      "note": "Raw training coordinates for visual review. No physical calibration has been claimed."
+    },
+    "diagnostics": {
+      "vertices": 1401157,
+      "faces": 2675832,
+      "components": 50,
+      "largestComponentFaces": 2627592,
+      "componentsWithUnder100Faces": 0,
+      "facesInComponentsUnder100Faces": 0,
+      "note": "Connected-component counts are not a count of unwanted geometry. Leaves and calibration cube can be disconnected; native TSDF and NKSR use different built-in filters.",
+      "previewVertices": 140634,
+      "previewFaces": 249999,
+      "originalUnchanged": true
+    }
+  }
+]

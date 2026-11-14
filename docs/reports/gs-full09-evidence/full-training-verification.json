@@ -1,0 +1,28 @@
+[
+  {
+    "algorithm": "gsplat",
+    "jobId": "1dd697e2-5894-4c2f-a082-e2a168eb000c",
+    "checkpoint": "/home/test/.local/state/gsplatform-vr00-20261011/storage/jobs/1dd697e2-5894-4c2f-a082-e2a168eb000c/attempt-1/gsplat/checkpoints/checkpoint_029999.pt",
+    "checkpointStep": 29999,
+    "checkpointIndexing": "zero-based",
+    "completedIterations": 30000,
+    "registeredPhotos": 242,
+    "gaussianCount": 600103,
+    "finiteParameters": true,
+    "plyBytes": 91216608,
+    "plySha256": "091a0d8b8fc116d66f640b5a72c35c3b6a2d6337cc372b21a5bc07f6b5b4e07a"
+  },
+  {
+    "algorithm": "2dgs",
+    "jobId": "b6630a28-65bd-42b4-b9d8-ca7070268ac3",
+    "checkpoint": "/home/test/.local/state/gsplatform-vr00-20261011/storage/jobs/b6630a28-65bd-42b4-b9d8-ca7070268ac3/attempt-1/gsplat/checkpoints/2dgs/chkpnt30000.pth",
+    "checkpointStep": 30000,
+    "checkpointIndexing": "one-based",
+    "completedIterations": 30000,
+    "registeredPhotos": 246,
+    "gaussianCount": 375688,
+    "finiteParameters": true,
+    "plyBytes": 61613838,
+    "plySha256": "a2aa74a05a706410fa489a02ed43e32f267ce449c19fc663183c6637799ef6f1"
+  }
+]

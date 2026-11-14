@@ -1,0 +1,17 @@
+{
+  "vr00-publish@test": {
+    "visibility": 43200,
+    "brokerVisibility": 43200,
+    "resultVisibility": 43200
+  },
+  "vr00-gpu@test": {
+    "visibility": 43200,
+    "brokerVisibility": 43200,
+    "resultVisibility": 43200
+  },
+  "vr00-cpu@test": {
+    "visibility": 43200,
+    "brokerVisibility": 43200,
+    "resultVisibility": 43200
+  }
+}
