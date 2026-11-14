@@ -761,6 +761,33 @@ def _pick_best_sparse_model(sparse_root: Path) -> Path | None:
     return best
 
 
+def _canonical_sparse_model(sparse_root: Path, selected: Path) -> Path:
+    """Expose the accepted component at the path all trainers/meshers read.
+
+    Keep the original components for diagnosis. Stage the full copy before
+    replacing 0 so a failed copy cannot discard the existing model.
+    """
+    canonical = sparse_root / "0"
+    if selected == canonical:
+        return canonical
+    token = uuid.uuid4().hex
+    staged = sparse_root.parent / f"sparse-selected-{token}"
+    previous = sparse_root.parent / f"sparse-unselected-0-{token}"
+    try:
+        shutil.copytree(selected, staged)
+        if canonical.exists():
+            canonical.rename(previous)
+        try:
+            staged.rename(canonical)
+        except OSError:
+            if previous.exists() and not canonical.exists():
+                previous.rename(canonical)
+            raise
+    finally:
+        shutil.rmtree(staged, ignore_errors=True)
+    return canonical
+
+
 def _stage_mapping(ctx: JobContext) -> None:
     """Run COLMAP mapper, then retry matcher+mapper on low registration.
 
@@ -854,6 +881,9 @@ def _stage_mapping(ctx: JobContext) -> None:
             "MAPPING", gate_error.error_code, message, gate_error.suggestion
         )
 
+    # The gate can accept sparse/1 (or any other component), but every
+    # downstream training/mesh adapter consumes sparse/0. They must agree.
+    _canonical_sparse_model(ctx.colmap_dir / "sparse", model.path)
     ctx.manager.write(
         _marker(
             ctx,
