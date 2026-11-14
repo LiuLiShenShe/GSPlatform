@@ -25,6 +25,7 @@ colmap:
   use_gpu: false                 # COLMAP runs in the CPU stage range
   matching: "sequential"         # large sets: sequential window matching
   max_features_per_image: 16384
+  num_threads: 8                 # bound CPU SIFT memory on many-core hosts
   min_registered_ratio: 0.75
   min_registered_images: 30
 

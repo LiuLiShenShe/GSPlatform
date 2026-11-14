@@ -25,6 +25,15 @@ from workers.reconstruction.colmap_reader import read_sparse_model
 logger = logging.getLogger("gsplatform.workers.colmap")
 
 
+def _num_threads(profile: dict) -> int:
+    # COLMAP defaults to all host CPUs. CPU SIFT allocates image pyramids per
+    # worker; on a many-core host that can exhaust RAM even for 250 photos.
+    threads = int(profile.get("num_threads", 8))
+    if threads < 1:
+        raise ValueError("COLMAP num_threads must be positive")
+    return threads
+
+
 def clear_colmap_matches(db_path: Path) -> None:
     """Delete all rows from COLMAP's ``matches`` table.
 
@@ -153,6 +162,8 @@ def run_feature_extractor(
         "1" if use_gpu else "0",
         "--SiftExtraction.max_num_features",
         str(max_features),
+        "--SiftExtraction.num_threads",
+        str(_num_threads(profile)),
     ]
 
     last_n, last_m = 0, 0
@@ -201,7 +212,6 @@ def run_matcher(
     """
     matching = profile.get("matching", "exhaustive")
     use_gpu = bool(profile.get("use_gpu", False))
-    num_threads = profile.get("num_threads")
 
     if matching == "sequential":
         cmd: list[str] = [
@@ -222,8 +232,7 @@ def run_matcher(
             "1" if use_gpu else "0",
         ]
 
-    if num_threads is not None:
-        cmd += ["--SiftMatching.num_threads", str(int(num_threads))]
+    cmd += ["--SiftMatching.num_threads", str(_num_threads(profile))]
 
     logger.info("matcher start [%s]: %s", matching, quote_argv(cmd))
     result = runner.run(cmd)
@@ -263,6 +272,8 @@ def run_mapper(
         str(frames_dir),
         "--output_path",
         str(sparse_out_dir),
+        "--Mapper.num_threads",
+        str(_num_threads(profile)),
     ]
     # COLMAP's mapper refuses a non-existent ``--output_path``; retries clear
     # the sparse dir between attempts, so recreate it before every run.
