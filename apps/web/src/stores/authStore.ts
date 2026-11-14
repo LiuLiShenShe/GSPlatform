@@ -10,7 +10,7 @@
  * Axios interceptor handles 401 → redirect.
  */
 import { create } from 'zustand';
-import { httpClient } from '../services/http';
+import { httpClient, toApiError } from '../services/http';
 
 export interface AuthUser {
   userId: string;
@@ -69,9 +69,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       set({ user: res.data, error: null });
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : '登录失败，请重试';
-      set({ error: msg });
+      const failure = toApiError(err);
+      set({
+        error: failure.status === 429
+          ? '登录尝试过于频繁，请稍后重试。'
+          : failure.message,
+      });
       throw err;
     }
   },
@@ -86,9 +89,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       });
       set({ user: res.data, error: null });
     } catch (err: unknown) {
-      const msg =
-        err instanceof Error ? err.message : '注册失败，请重试';
-      set({ error: msg });
+      set({ error: toApiError(err).message });
       throw err;
     }
   },
