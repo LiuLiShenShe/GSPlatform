@@ -240,6 +240,30 @@ describe('免费计算页（ComputePage）', () => {
     expect(await screen.findByText('重建算法：薄物体、植株重建（2DGS）')).toBeInTheDocument();
   });
 
+  it('按服务端档位限制照片数量，切换高档位后复用已上传素材', async () => {
+    mocks.fetchProfiles.mockResolvedValue(PROFILES.map(profile => ({
+      ...profile, maxImages: profile.name === 'high' ? 3 : 2,
+    })));
+    renderApp({ route: '/compute' });
+    await screen.findByText(/最多 3 个文件/);
+    fireEvent.change(document.querySelector('input[type=file]')!, { target: { files:
+      Array.from({ length: 3 }, (_, i) => new File(['x'], `${i}.jpg`, { type: 'image/jpeg' })),
+    } });
+    await screen.findByText(/全部上传完成/);
+    await userEvent.click(screen.getByRole('button', { name: /下一步：参数确认/ }));
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: /提交计算/ }));
+    expect(await screen.findByText(/最多接受 2 张照片/)).toBeInTheDocument();
+    expect(mocks.submitReconstruction).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('combobox', { name: '质量' }));
+    await userEvent.click(screen.getByText('高精度（实验性）', { selector: '.ant-select-item-option-content' }));
+    await userEvent.click(screen.getByRole('button', { name: /提交计算/ }));
+    expect(mocks.submitReconstruction).toHaveBeenCalledWith(expect.objectContaining({
+      profile: 'high', uploadIds: ['up-1', 'up-1', 'up-1'],
+    }));
+    expect(mocks.createUploadSession).toHaveBeenCalledTimes(3);
+  });
+
   it.each([null, { sceneSlug: 'plant', versionId: 'version-1', assetVersion: 'v1',
     editUrl: 'https://invalid.example/model/edit/plant', viewUrl: '/scene/plant' }])(
     '成功任务缺少有效发布结果时保持在任务页', async result => {

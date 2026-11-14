@@ -1184,22 +1184,17 @@ def _stage_publishing(ctx: JobContext) -> None:
     storage = LocalDiskStorage(str(ctx.storage_root))
     svc = PublishService(ctx.session, storage)
 
-    # Copy the staged tree under published/<scene>/.staging, then promote it
-    # atomically into the immutable version dir (same filesystem).  We copy
-    # rather than move: streamed-sog/ is the deliverable of CONVERTING and the
-    # marker source for VERIFYING/PUBLISHING, so it must survive this stage
-    # for a later resume to skip correctly.
-    scene_dir = Path(ctx.storage_root) / "published" / str(scene_id)
-    scene_dir.mkdir(parents=True, exist_ok=True)
-    publish_staging = scene_dir / ".staging"
-    if publish_staging.exists():
-        shutil.rmtree(publish_staging, ignore_errors=True)
-    shutil.copytree(ctx.streamed_dir, publish_staging)
-
+    # Each delivery owns its staging directory, including duplicate deliveries
+    # of one version. Never delete a scene/version container another job uses.
+    # Keep CONVERTING's output intact so a retry can verify its stage marker.
+    staging_root = svc.begin(scene_id, ctx.version_id)
+    storage.mkdir(staging_root)
+    staging_key = f"{staging_root}/delivery-{uuid.uuid4().hex}"
     cr = ctx.convert_result
     try:
+        shutil.copytree(ctx.streamed_dir, storage.root / staging_key)
         svc.promote_staging_to_version(
-            scene_id, ctx.version_id, f"published/{scene_id}/.staging"
+            scene_id, ctx.version_id, staging_key
         )
         svc.commit_version(
             scene_id=scene_id,
@@ -1223,6 +1218,8 @@ def _stage_publishing(ctx: JobContext) -> None:
         raise StageError(
             "PUBLISHING", "PUBLISH_FAILED", f"版本发布失败: {exc}"
         ) from exc
+    finally:
+        storage.delete(staging_key)
 
     ctx.manager.write(_marker(ctx, "PUBLISHING", ctx.version_id))
     logger.info(

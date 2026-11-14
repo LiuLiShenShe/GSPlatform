@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -181,7 +182,69 @@ def test_reconstruction_persists_prompt_and_reuses_pending_submission(
     )
     assert different.status_code == 202, different.text
     assert different.json()["jobId"] != str(job.id)
+    assert different.json()["sceneId"] != first.json()["sceneId"]
     assert len(calls) == 2
+
+    job.status = "SUCCEEDED"
+    db.commit()
+    rerun = client.post("/api/v1/compute/reconstruct", headers=headers, json=payload)
+    assert rerun.status_code == 202, rerun.text
+    assert rerun.json()["sceneId"] != first.json()["sceneId"]
+
+
+@pytest.mark.parametrize("scale", [{"x": 2, "y": 2, "z": 2}, {"x": 2, "y": 3, "z": 4}])
+@pytest.mark.parametrize("binding", ["sourceVersionId", "resultVersionId"])
+def test_metric_calibration_cannot_reapply_an_existing_world_transform(owner, db, scale, binding):
+    from app.db.models.scene_presentation import ScenePresentation
+    from app.services.scene_processing import processing_for_scene, transform_identity
+    from app.services.scene_runtime import SceneRuntimeService
+
+    client, scene, headers, payload, url = completed(owner, db)
+    presentation = ScenePresentation(
+        scene_id=scene.id, world_scale=scale,
+        world_position={"x": 3, "y": 4, "z": 5},
+        world_rotation={"x": 0, "y": 30, "z": 0},
+        world_transform_version_id=uuid.UUID(payload[binding]),
+    )
+    db.add(presentation)
+    db.commit()
+    response = client.post(url, json=payload, headers=headers)
+    assert response.status_code == 200, response.text
+    db.expire_all()
+    assert transform_identity(db, scene) == "identity"
+    evidence = response.json()["evidence"]
+    assert evidence["previousWorldTransform"]["scale"] == scale
+    assert evidence["transformIdentity"] == "identity"
+    retry = client.post(url, json=payload, headers=headers)
+    assert retry.status_code == 200, retry.text
+    assert retry.json()["evidence"]["previousWorldTransform"] == evidence["previousWorldTransform"]
+    runtime = SceneRuntimeService(db)._build_presentation(scene)
+    assert runtime.worldTransform.scale is None or runtime.worldTransform.scale.model_dump() == {
+        "x": 1, "y": 1, "z": 1,
+    }
+    # A metric edge in the exported asset must remain the same physical edge in Viewer.
+    scale_x = runtime.worldTransform.scale.x if runtime.worldTransform.scale else 1
+    assert 0.02 * scale_x == pytest.approx(0.02)
+    processing = processing_for_scene(db, scene)
+    assert processing.calibration.state == "ASSUMED"
+    assert not processing.calibration.physicalWalkAllowed
+    assert not processing.calibration.stale
+    # Later presentation re-authoring cannot silently keep the old calibration valid.
+    presentation = db.get(ScenePresentation, presentation.id)
+    presentation.world_scale = {"x": 2, "y": 2, "z": 2}
+    db.commit()
+    assert processing_for_scene(db, scene).calibration.stale
+
+
+def test_high_profile_accepts_800_upload_ids_but_standard_does_not():
+    ids = [uuid.uuid4() for _ in range(801)]
+    for name, count in (("draft", 80), ("standard", 300), ("high", 800)):
+        base = {"uploadIds": ids[:count], "sceneTitle": "Limits", "profile": name}
+        assert len(CreateReconstructionRequest(**base).uploadIds) == count
+        with pytest.raises(ValidationError):
+            CreateReconstructionRequest(**{**base, "uploadIds": ids[:count+1]})
+    with pytest.raises(ValidationError, match="未知 profile"):
+        CreateReconstructionRequest(uploadIds=ids[:1], sceneTitle="Invalid", profile="missing")
 
 
 def test_first_presentation_creation_is_atomic(owner):
@@ -207,10 +270,24 @@ def test_first_presentation_creation_is_atomic(owner):
         assert futures[0].result(timeout=20) == futures[1].result(timeout=20)
 
 
-def test_first_reconstruction_scene_creation_is_atomic(owner):
+def media_upload(db, owner_id, *, size=100):
+    from app.db.models.upload_session import UploadSession
+
+    upload = UploadSession(
+        owner_id=owner_id, status="UPLOADED", purpose="RECONSTRUCT",
+        storage_key=f"test/{uuid.uuid4()}", mime_type="image/png", upload_format="png",
+        total_size=size, offset=size, expires_at=datetime.now(UTC) + timedelta(days=1),
+        title="Plant", visibility="PRIVATE", category="experiment",
+    )
+    db.add(upload)
+    db.commit()
+    return upload
+
+
+@pytest.mark.parametrize("variant", ["same", "algorithm", "prompt", "uploads"])
+def test_concurrent_reconstruction_submissions_are_deduped_by_request(owner, db, variant):
     from concurrent.futures import ThreadPoolExecutor
     from threading import Barrier
-    from types import SimpleNamespace
 
     from app.core.config import settings
     from app.core.identity import RequestIdentity
@@ -218,23 +295,55 @@ def test_first_reconstruction_scene_creation_is_atomic(owner):
     from app.services.reconstruction_service import ReconstructionService
 
     _, scene, _ = owner
-    upload_id = uuid.uuid4()
-    request = CreateReconstructionRequest(uploadIds=[upload_id], sceneTitle="Concurrent plant")
+    upload = media_upload(db, scene.owner_id)
+    first = CreateReconstructionRequest(uploadIds=[upload.id], sceneTitle="Concurrent plant")
+    changes = {
+        "same": {},
+        "algorithm": {"algorithm": "2dgs"},
+        "prompt": {"segmentation": {"mode": "KEEP_PROMPTED_OBJECT", "prompt": "plant; cube"}},
+        "uploads": {"uploadIds": [media_upload(db, scene.owner_id).id]},
+    }
+    second = CreateReconstructionRequest(**{**first.model_dump(), **changes[variant]})
     identity = RequestIdentity(
         user_id=scene.owner_id, email="test@example.com", display_name="Test"
     )
     barrier = Barrier(2)
+    dispatched = []
 
-    def create():
+    def submit(request):
         with SessionLocal() as session:
             service = ReconstructionService(session, settings)
             barrier.wait(timeout=10)
-            result = service._find_or_create_draft_scene(
-                request, identity, [SimpleNamespace(id=upload_id)]
+            return service.submit_reconstruction(
+                request, identity,
+                send_task=lambda *args, **kwargs: dispatched.append(kwargs["args"]),
             )
-            session.commit()
-            return result.id
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [pool.submit(create) for _ in range(2)]
-        assert futures[0].result(timeout=20) == futures[1].result(timeout=20)
+        futures = [pool.submit(submit, request) for request in (first, second)]
+        left, right = [future.result(timeout=20) for future in futures]
+    if variant == "same":
+        assert left.jobId == right.jobId
+        assert left.sceneId == right.sceneId
+        assert len(dispatched) == 1
+    else:
+        assert left.jobId != right.jobId
+        assert left.sceneId != right.sceneId
+        assert len(dispatched) == 2
+
+
+def test_reconstruction_rejects_profile_byte_overflow_before_allocating_a_run(
+    owner, db, monkeypatch,
+):
+    from workers.reconstruction.profiles import load_profile
+
+    client, scene, headers = owner
+    size = int(load_profile("draft").input_limits()["max_bytes"]) + 1
+    upload = media_upload(db, scene.owner_id, size=size)
+    dispatched = []
+    monkeypatch.setattr("app.api.v1.compute.send_task", lambda *a, **k: dispatched.append(k))
+    response = client.post("/api/v1/compute/reconstruct", headers=headers, json={
+        "uploadIds": [str(upload.id)], "sceneTitle": "Over limit", "profile": "draft",
+    })
+    assert response.status_code == 409, response.text
+    assert not dispatched

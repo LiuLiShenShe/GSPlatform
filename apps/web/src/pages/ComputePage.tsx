@@ -40,7 +40,6 @@ const { Dragger } = Upload;
 const ACCEPTED_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv', 'jpg', 'jpeg', 'png', 'webp'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'avi', 'mkv'];
 const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB
-const MAX_FILE_COUNT = 300;
 const POLL_INTERVAL_MS = 2000;
 const TERMINAL_STATUSES = ['SUCCEEDED', 'FAILED', 'CANCELLED'];
 
@@ -137,6 +136,7 @@ export default function ComputePage() {
   const [quality, setQuality] = useState('standard');
   const [algorithm, setAlgorithm] = useState<ReconstructionAlgorithm>('gsplat');
   const [profiles, setProfiles] = useState<ComputeProfile[]>(FALLBACK_PROFILES);
+  const maxFileCount = Math.max(1, ...profiles.map(profile => profile.maxImages));
   const [capabilityProblems, setCapabilityProblems] = useState<string[]>([]);
   const [sceneTitle, setSceneTitle] = useState(() => `重建场景 ${new Date().toLocaleString()}`);
   const [description, setDescription] = useState('');
@@ -249,7 +249,7 @@ export default function ComputePage() {
   };
 
   const handleChange: UploadProps['onChange'] = ({ fileList: next }) => {
-    const limited = next.slice(0, MAX_FILE_COUNT);
+    const limited = next.slice(0, maxFileCount);
     setFileList(limited);
     // 移除已从列表删除文件的进行中上传器
     const present = new Set(limited.map((f) => f.uid));
@@ -440,6 +440,15 @@ export default function ComputePage() {
       message.error('请填写场景标题。');
       return;
     }
+    const photoCount = fileList.filter(f => !VIDEO_EXTENSIONS.includes(extOf(f.name))).length;
+    if (selectedProfile && photoCount > selectedProfile.maxImages) {
+      message.error(`${PROFILE_LABELS[quality] ?? quality}最多接受 ${selectedProfile.maxImages} 张照片，请减少素材或选择更高质量档。`);
+      return;
+    }
+    if (selectedProfile && fileList.reduce((sum, file) => sum + (file.size ?? 0), 0) > selectedProfile.maxInputBytes) {
+      message.error(`素材总量超过所选质量档的 ${formatBytes(selectedProfile.maxInputBytes)} 上限，请减少素材或选择更高质量档。`);
+      return;
+    }
     if (targetMode === 'KEEP_PROMPTED_OBJECT' && !targetPrompt.trim()) {
       message.error('请输入要保留并重建的目标提示词。');
       return;
@@ -539,7 +548,7 @@ export default function ComputePage() {
             beforeUpload={beforeUpload}
             customRequest={customRequest}
             onChange={handleChange}
-            maxCount={MAX_FILE_COUNT}
+            maxCount={maxFileCount}
             aria-label="上传视频或照片序列"
           >
             <p className="ant-upload-drag-icon">
@@ -548,7 +557,7 @@ export default function ComputePage() {
             <p className="ant-upload-text">拖入视频或照片序列</p>
             <p className="ant-upload-hint">
               支持 {ACCEPTED_EXTENSIONS.map((e) => e.toUpperCase()).join(' / ')}，单个不超过 1GB，
-              最多 {MAX_FILE_COUNT} 个文件。选中后立即开始上传。
+              最多 {maxFileCount} 个文件；提交时按所选质量档校验照片数量。选中后立即开始上传。
             </p>
           </Dragger>
 

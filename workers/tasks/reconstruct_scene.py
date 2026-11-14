@@ -318,12 +318,14 @@ def reconstruct_finish(
             return result
 
         job.status = "SUCCEEDED"
-        from app.db.models.scene import Scene
+        from app.db.models.scene import SceneVersion
 
-        published_scene = session.get(Scene, job.scene_id)
+        published_version = session.query(SceneVersion).filter_by(
+            scene_id=job.scene_id, asset_version=result.get("version_id")
+        ).one()
         job.task_parameters = {
             **(job.task_parameters or {}),
-            "resultVersionId": str(published_scene.current_version_id),
+            "resultVersionId": str(published_version.id),
         }
         job.stage = "SUCCEEDED"
         job.progress = 100

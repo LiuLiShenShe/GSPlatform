@@ -14,7 +14,6 @@ import uuid
 from collections.abc import Callable
 from typing import NoReturn
 
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
@@ -24,6 +23,7 @@ from app.db.models.enums import JobKind, JobStatus, SceneStatus
 from app.db.models.job import Job
 from app.db.models.scene import Scene
 from app.db.models.upload_session import UploadSession
+from app.db.models.user import User
 from app.repositories.uploads import UploadRepository
 from app.schemas.compute import (
     ComputeCapabilitiesOut,
@@ -69,23 +69,22 @@ class ReconstructionService:
         # 1. Verify all uploads exist, are owned, are complete, and have a
         #    compatible purpose (RECONSTRUCT or PUBLISH — legacy compat).
         uploads = self._verify_uploads(req, identity)
+        from workers.reconstruction.profiles import load_profile
 
-        # 2. Create (or reuse, on retry) draft Scene (status=PROCESSING).
-        scene = self._find_or_create_draft_scene(req, identity, uploads)
-
-        parameters = {
-            "uploadIds": [str(uid) for uid in req.uploadIds],
-            "profile": req.profile,
-            "algorithm": req.algorithm,
-            "segmentation": req.segmentation.model_dump(),
-        }
-        # A lost HTTP response must not enqueue the same long GPU work twice.
-        self._session.query(Scene.id).filter(Scene.id == scene.id).with_for_update().one()
+        limits = load_profile(req.profile).input_limits()
+        if sum(upload.total_size for upload in uploads) > int(limits["max_bytes"]):
+            raise ConflictError("素材总量超过所选质量档上限，请选择更高档位或减少素材")
+        # Serialize submission identity before allocating a Scene. Different
+        # algorithms/prompts/reruns are independent works; an in-flight retry
+        # of the same complete request reuses its job even under concurrency.
+        parameters = req.model_dump(mode="json")
+        self._session.query(User.id).filter(User.id == identity.user_id).with_for_update().one()
         active = (
             self._session.query(Job)
+            .join(Scene, Scene.id == Job.scene_id)
             .filter(
-                Job.scene_id == scene.id,
                 Job.owner_id == identity.user_id,
+                Scene.deleted_at.is_(None),
                 Job.kind == "RECONSTRUCT",
                 Job.status.in_(["QUEUED", "RUNNING", "CANCEL_REQUESTED"]),
                 Job.task_parameters == parameters,
@@ -94,7 +93,9 @@ class ReconstructionService:
         )
         if active is not None:
             self._session.commit()
+            scene = self._session.get(Scene, active.scene_id)
             return self._job_to_out(active, scene)
+        scene = self._create_draft_scene(req, identity)
         # 3. Create Job(kind=RECONSTRUCT, status=QUEUED, progress=0).
         job = Job(
             scene_id=scene.id,
@@ -171,7 +172,7 @@ class ReconstructionService:
     def get_capabilities() -> ComputeCapabilitiesOut:
         """Probe the worker host for reconstruction tool availability."""
         try:
-            from workers.reconstruction.capabilities import (  # type: ignore[import-not-found]
+            from workers.reconstruction.capabilities import (
                 check_capabilities,
             )
 
@@ -198,7 +199,7 @@ class ReconstructionService:
     def list_profiles() -> list[ComputeProfileOut]:
         """Return available quality profiles from the workers package."""
         try:
-            from workers.reconstruction.profiles import (  # type: ignore[import-not-found]
+            from workers.reconstruction.profiles import (
                 list_public_profiles,
             )
 
@@ -242,48 +243,24 @@ class ReconstructionService:
             uploads.append(us)
         return uploads
 
-    def _find_or_create_draft_scene(
+    def _create_draft_scene(
         self,
         req: CreateReconstructionRequest,
         identity: RequestIdentity,
-        uploads: list[UploadSession],
     ) -> Scene:
-        """Create a PROCESSING scene for the reconstruction output.
-
-        The slug is deterministic from (owner, first upload) — a retried submit
-        after a failed dispatch reuses the existing scene instead of hitting
-        the unique-slug conflict.
-        """
-        # Derive a slug from the first upload id for uniqueness.
-        first_upload = uploads[0]
-        slug = self._generate_slug(identity.user_id, first_upload.id)
-
-        existing = (
-            self._session.query(Scene)
-            .filter(Scene.slug == slug, Scene.owner_id == identity.user_id)
-            .first()
+        """Allocate a separate work for this run; uploads remain reusable."""
+        scene = Scene(
+            owner_id=identity.user_id,
+            slug=self._generate_slug(identity.user_id, uuid.uuid4()),
+            title=req.sceneTitle,
+            description=req.description,
+            category="experiment",
+            visibility=req.visibility,
+            status=SceneStatus.PROCESSING.value,
         )
-        if existing is not None:
-            return existing
-
-        self._session.execute(
-            insert(Scene)
-            .values(
-                owner_id=identity.user_id,
-                slug=slug,
-                title=req.sceneTitle,
-                description=req.description,
-                category="experiment",
-                visibility=req.visibility,
-                status=SceneStatus.PROCESSING.value,
-            )
-            .on_conflict_do_nothing(index_elements=["slug"])
-        )
-        return (
-            self._session.query(Scene)
-            .filter(Scene.slug == slug, Scene.owner_id == identity.user_id)
-            .one()
-        )
+        self._session.add(scene)
+        self._session.flush()
+        return scene
 
     @staticmethod
     def _generate_slug(owner_id: uuid.UUID, seed: uuid.UUID) -> str:

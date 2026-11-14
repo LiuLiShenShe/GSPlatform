@@ -67,7 +67,7 @@ class CreateReconstructionRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    uploadIds: list[UUID] = Field(min_length=1, max_length=300, alias="uploadIds")
+    uploadIds: list[UUID] = Field(min_length=1, max_length=800, alias="uploadIds")
     profile: str = Field(default="draft", min_length=1, max_length=30)
     algorithm: Literal["gsplat", "2dgs"] = "gsplat"
     sceneTitle: str = Field(min_length=1, max_length=200, alias="sceneTitle")
@@ -77,6 +77,15 @@ class CreateReconstructionRequest(BaseModel):
         default_factory=lambda: get_settings().default_upload_visibility,
         pattern=r"^(PRIVATE|UNLISTED|PUBLIC)$",
     )
+
+    @model_validator(mode="after")
+    def validate_profile_limits(self) -> CreateReconstructionRequest:
+        from workers.reconstruction.profiles import load_profile
+
+        limits = load_profile(self.profile).input_limits()
+        if len(self.uploadIds) > int(limits["max_images"]):
+            raise ValueError(f"所选质量档最多接受 {limits['max_images']} 张照片或素材")
+        return self
 
 
 class ReconstructionJobOut(BaseModel):

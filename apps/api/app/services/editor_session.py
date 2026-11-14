@@ -194,7 +194,7 @@ class EditorSessionService:
         session_id: uuid.UUID,
         body: CalibrationMeasurementRequest,
         identity: RequestIdentity,
-    ) -> dict:
+    ) -> dict[str, object]:
         from app.db.models.scene_processing import SceneProcessingSettings
         from app.services.scene_processing import transform_identity
 
@@ -226,6 +226,42 @@ class EditorSessionService:
         factor = real_meters / body.originalDistance
         if not math.isfinite(factor) or factor <= 0:
             raise ConflictError("缩放倍率非法")
+        from app.db.models.scene_presentation import ScenePresentation
+
+        presentation = self.session.scalar(
+            select(ScenePresentation).where(ScenePresentation.scene_id == scene.id)
+            .with_for_update().execution_options(populate_existing=True)
+        )
+        previous_transform = None
+        if presentation is not None:
+            previous_transform = {
+                "position": presentation.world_position,
+                "rotation": presentation.world_rotation,
+                "scale": presentation.world_scale,
+                "sourceVersionId": str(presentation.world_transform_version_id)
+                if presentation.world_transform_version_id else None,
+            }
+            prior_calibration = (edit.provenance or {}).get("calibration", {})
+            if (
+                presentation.world_transform_version_id == result.id
+                and presentation.world_position is None
+                and presentation.world_rotation is None
+                and presentation.world_scale is None
+                and prior_calibration.get("worldTransformPolicy")
+                == "METRIC_EXPORT_WITH_IDENTITY_PRESENTATION"
+            ):
+                # Retrying Save must retain the original pre-calibration snapshot.
+                previous_transform = prior_calibration.get("previousWorldTransform")
+            # The exported geometry is already metric. Explicitly replace the
+            # old presentation transform so it cannot later be reactivated or
+            # apply a second scale to the metric asset. Preserve its history
+            # inside the calibration evidence instead of silently losing it.
+            presentation.world_position = None
+            presentation.world_rotation = None
+            presentation.world_scale = None
+            presentation.world_transform_version_id = result.id
+            presentation.updated_at = datetime.now(UTC)
+            self.session.flush()
         evidence = {
             **body.model_dump(mode="json"),
             "realLengthMeters": real_meters,
@@ -240,6 +276,8 @@ class EditorSessionService:
             "absoluteErrorMeters": abs(body.remeasuredDistance - real_meters),
             "relativeError": abs(body.remeasuredDistance - real_meters) / real_meters,
             "transformIdentity": transform_identity(self.session, scene),
+            "previousWorldTransform": previous_transform,
+            "worldTransformPolicy": "METRIC_EXPORT_WITH_IDENTITY_PRESENTATION",
             "evidenceTrust": "USER_TRANSCRIBED_OFFICIAL_EDITOR; NO_PUBLIC_MEASUREMENT_ATTESTATION",
         }
         canonical = json.dumps(evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
