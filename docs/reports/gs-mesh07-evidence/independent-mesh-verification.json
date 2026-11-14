@@ -1,0 +1,66 @@
+{
+  "metricReference": {
+    "sourceLength": 0.25,
+    "scaleFactor": 0.08,
+    "exportedLengthMeters": 0.02,
+    "expectedMeters": 0.02,
+    "pass": true
+  },
+  "meshes": [
+    {
+      "name": "2dgs-real",
+      "method": "2DGS_NATIVE_TSDF",
+      "voxelSizeSourceUnits": 0.0072343258158606115,
+      "depthTruncSourceUnits": 7.407949635441266,
+      "meshResolution": 1024,
+      "vertices": 1441520,
+      "faces": 2689010,
+      "scaleFactor": 0.08,
+      "units": "m",
+      "sizeBytes": 108474978,
+      "boundsMeters": [
+        [
+          -0.16881214994567123,
+          -0.09099148220266155,
+          0.2144172967666753
+        ],
+        [
+          0.0934674895409191,
+          0.2497289271635083,
+          0.4372548819204268
+        ]
+      ],
+      "sha256": "ad267caebcba37a155313d8f3f6628d370fc0ccb3d7ff89290231ce62ac8b171",
+      "independentlyVerified": true,
+      "hasColors": true
+    },
+    {
+      "name": "nksr-real",
+      "method": "NKSR",
+      "input": "GSPLAT_EXPECTED_DEPTH_ORIENTED_NORMALS",
+      "inputPoints": 150000,
+      "voxelSizeSourceUnits": 0.09016341716051102,
+      "weightsSha256": "c2edb6437d6485c2ed48a756523849628f0c34e232c601113ff657db8714e955",
+      "vertices": 4199907,
+      "faces": 8303987,
+      "scaleFactor": 0.08,
+      "units": "m",
+      "sizeBytes": 322147416,
+      "boundsMeters": [
+        [
+          -3.007205810546875,
+          -2.2649049377441406,
+          -1.6567738342285157
+        ],
+        [
+          2.276846618652344,
+          2.4380186462402342,
+          2.4692898559570313
+        ]
+      ],
+      "sha256": "a6d5e1cad9e81fb7b9958d6cf89f2cca11140ec3b5af2e2321a4a127a9ebba15",
+      "independentlyVerified": true,
+      "hasColors": true
+    }
+  ]
+}

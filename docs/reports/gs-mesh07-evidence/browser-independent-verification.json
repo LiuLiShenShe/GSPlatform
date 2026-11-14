@@ -1,0 +1,26 @@
+[
+  {
+    "method": "2DGS_NATIVE_TSDF",
+    "vertices": 1351107,
+    "faces": 2537575,
+    "finiteVertices": true,
+    "hasColors": true,
+    "matchesServerBounds": true,
+    "sizeBytes": 101895260,
+    "sha256": "ab81c14b8718470832943134dd6fb148f72411062c6f5453026ace01054a43a0",
+    "units": "m",
+    "scaleFactor": 0.08
+  },
+  {
+    "method": "NKSR",
+    "vertices": 1921020,
+    "faces": 3804906,
+    "finiteVertices": true,
+    "hasColors": true,
+    "matchesServerBounds": true,
+    "sizeBytes": 147436126,
+    "sha256": "25411b02662d6aca1961cb85c08db25d7a16ab6adef25d2e7566b0e021fcd3c9",
+    "units": "m",
+    "scaleFactor": 0.08
+  }
+]

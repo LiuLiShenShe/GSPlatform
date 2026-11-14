@@ -37,6 +37,7 @@ def _get_broker() -> Celery:
             "tasks.reconstruct_cpu_stages": {"queue": "cpu"},
             "tasks.reconstruct_train": {"queue": "gpu"},
             "tasks.reconstruct_finish": {"queue": "cpu"},
+            "tasks.build_mesh": {"queue": "gpu"},
         }
     return _broker
 

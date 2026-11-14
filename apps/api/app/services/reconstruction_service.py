@@ -69,6 +69,13 @@ class ReconstructionService:
         # 1. Verify all uploads exist, are owned, are complete, and have a
         #    compatible purpose (RECONSTRUCT or PUBLISH — legacy compat).
         uploads = self._verify_uploads(req, identity)
+        if req.segmentation.mode != "OFF":
+            from workers.reconstruction.segmentation import runtime_paths
+
+            try:
+                runtime_paths()
+            except ValueError as exc:
+                raise ServiceUnavailableError("提示词分割服务尚未配置，请联系管理员") from exc
         from workers.reconstruction.profiles import load_profile
 
         limits = load_profile(req.profile).input_limits()

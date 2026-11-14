@@ -141,7 +141,16 @@ def check_capabilities(*, with_gpu_probe: bool = True) -> CapabilityReport:
     report.tools["ffprobe"] = _cmd_version("ffprobe", "-version")
     report.tools["colmap"] = _cmd_version("colmap", "-h")
     report.tools["gsplat"] = _gsplat_version()
+    from workers.meshing.runtime import mesh_runtime
     from workers.reconstruction.backends import surfel_runtime
+    from workers.reconstruction.segmentation import runtime_paths
+
+    for name, check in (("sam3", runtime_paths), ("nksr", lambda: mesh_runtime("gsplat"))):
+        try:
+            check()
+            report.tools[name] = "configured"
+        except ValueError:
+            report.tools[name] = None
 
     try:
         surfel_runtime()

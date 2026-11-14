@@ -1,0 +1,265 @@
+
+ RUN  v3.2.7 /fj/GSPlatform/apps/web
+
+ ✓ src/__tests__/initial-camera-policy.test.ts (15 tests) 12ms
+stdout | src/__tests__/compute.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/automatic-calibration.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stdout | src/__tests__/surface-mesh.test.tsx
+SuperSplat Viewer v1.35.0 | Engine v2.22.4 (b5b9839)
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 未选文件时「下一步」按钮不可用
+An update to ForwardRef inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/__tests__/surface-mesh.test.tsx (4 tests) 775ms
+   ✓ queues the current geometry with the automatic 3DGS mesher  403ms
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/automatic-calibration.test.tsx (3 tests) 2026ms
+   ✓ enables automatic submission from dimensions alone and refreshes after publication  1201ms
+   ✓ resumes polling after a page refresh without submitting again  648ms
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 刷新前的 beforeunload 提醒在有未保存输入时触发
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 刷新前的 beforeunload 提醒在有未保存输入时触发
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 目标模式要求提示词，并把保留目标参数交给真实提交接口
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 目标模式要求提示词，并把保留目标参数交给真实提交接口
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 提供两个算法选项，薄物体与植株选择实际提交 2DGS
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 提供两个算法选项，薄物体与植株选择实际提交 2DGS
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 按服务端档位限制照片数量，切换高档位后复用已上传素材
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 按服务端档位限制照片数量，切换高档位后复用已上传素材
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 成功任务缺少有效发布结果时保持在任务页
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 成功任务缺少有效发布结果时保持在任务页
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 成功后用后端给出的真实 slug 和版本进入尺度标定
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/compute.test.tsx (16 tests) 9060ms
+   ✓ 免费计算页（ComputePage） > 未选文件时「下一步」按钮不可用  689ms
+   ✓ 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤  510ms
+   ✓ 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示  526ms
+   ✓ 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）  596ms
+   ✓ 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段  689ms
+   ✓ 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有  866ms
+   ✓ 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续  396ms
+   ✓ 免费计算页（ComputePage） > 目标模式要求提示词，并把保留目标参数交给真实提交接口  1424ms
+   ✓ 免费计算页（ComputePage） > 提供两个算法选项，薄物体与植株选择实际提交 2DGS  811ms
+   ✓ 免费计算页（ComputePage） > 按服务端档位限制照片数量，切换高档位后复用已上传素材  1140ms
+   ✓ 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列  606ms
+
+ Test Files  4 passed (4)
+      Tests  38 passed (38)
+   Start at  20:00:25
+   Duration  15.18s (transform 1.92s, setup 578ms, collect 13.94s, tests 11.87s, environment 2.66s, prepare 355ms)

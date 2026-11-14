@@ -55,7 +55,7 @@ export type WorkspaceSelection =
   | { kind: 'annotation'; id: string }
   | { kind: 'viewpoint'; id: string };
 
-export type ManagementKind = 'editor' | 'calibration' | 'versions' | 'collision';
+export type ManagementKind = 'editor' | 'calibration' | 'versions' | 'collision' | 'mesh';
 
 /** GS-UI-01 Req3/4：右侧属性面板的可折叠分区（场景设置 / 标注管理 / 视角管理）。 */
 export type RightPanelTab = 'scene' | 'annotation' | 'viewpoint';
@@ -175,6 +175,7 @@ export interface AuthoringWorkspaceProps {
   // platform chrome
   onBack: () => void;
   onPreview: () => void;
+  onFrameScene?: () => void;
   onOpenManagement: (kind: ManagementKind) => void;
 }
 
@@ -343,8 +344,11 @@ export function PcuiAuthoringWorkspace(props: AuthoringWorkspaceProps) {
           onClick={() => void props.onSaveCurrentAsInitial()}
         />
         <PcuiButton text="预览" onClick={props.onPreview} />
+        <PcuiButton text="模型取景" enabled={props.viewerReady}
+          onClick={() => props.onFrameScene?.()} />
         <PcuiButton text="Gaussian 编辑" onClick={() => props.onOpenManagement('editor')} />
         <PcuiButton text="尺度标定" onClick={() => props.onOpenManagement('calibration')} />
+        <PcuiButton text="表面网格化" onClick={() => props.onOpenManagement('mesh')} />
         <PcuiButton text="版本历史" onClick={() => props.onOpenManagement('versions')} />
         <PcuiButton text="碰撞" onClick={() => props.onOpenManagement('collision')} />
         <PcuiButton

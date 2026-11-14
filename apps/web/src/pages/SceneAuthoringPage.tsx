@@ -20,6 +20,7 @@ import { GaussianEditorPanel } from '../features/authoring/GaussianEditorPanel';
 import { fetchEditSource, type EditSession } from '../services/editorApi';
 import { VersionPanel } from '../features/authoring/VersionPanel';
 import { CollisionPanel } from '../features/authoring/CollisionPanel';
+import { SurfaceMeshPanel } from '../features/authoring/SurfaceMeshPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
 import { buildExperienceSettings } from '../scene-runtime/experienceAdapter';
 import { resolveSceneRuntimeDescriptor } from '../scene-runtime/descriptorResolver';
@@ -972,12 +973,18 @@ export default function SceneAuthoringPage() {
   // 平台级入口（§3.5 / §4：Editor / 版本 / 碰撞）
   // ------------------------------------------------------------------ //
 
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [management, setManagement] = useState<ManagementKind | null>(() =>
-    searchParams.get('workspace') === 'calibration' ? 'calibration' : null);
+    searchParams.get('workspace') === 'calibration' ? 'calibration'
+      : searchParams.get('workspace') === 'mesh' ? 'mesh' : null);
   const handleOpenManagement = useCallback((kind: ManagementKind) => {
     setManagement(kind);
-  }, []);
+    setSearchParams(params => {
+      const next = new URLSearchParams(params);
+      next.set('workspace', kind);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
   useEffect(() => {
     let disposed = false;
     void fetchEditSource(effectiveSceneId).then(source => {
@@ -1170,6 +1177,7 @@ export default function SceneAuthoringPage() {
       getCurrentPose={getCurrentPose}
       onBack={() => navigate(-1)}
       onPreview={() => navigate(`/scene/${effectiveSceneId}`)}
+      onFrameScene={() => runtimeRef.current?.frameScene()}
       onOpenManagement={handleOpenManagement}
       />
       {/* §3.5 / §4：平台管理入口（不属于官方 Viewer/Editor）。
@@ -1180,12 +1188,19 @@ export default function SceneAuthoringPage() {
             ? 'Gaussian 几何编辑（官方 SuperSplat Editor v3.5.2）'
             : management === 'versions'
               ? '版本历史'
-              : '碰撞与 Walk 安全'
+              : management === 'mesh' ? '表面网格化（真实尺度）' : '碰撞与 Walk 安全'
         }
         placement="right"
         width={480}
         open={management !== null}
-        onClose={() => setManagement(null)}
+        onClose={() => {
+          setManagement(null);
+          setSearchParams(params => {
+            const next = new URLSearchParams(params);
+            next.delete('workspace');
+            return next;
+          }, { replace: true });
+        }}
         destroyOnHidden={false}
       >
         {management === 'editor' && <GaussianEditorPanel sceneId={effectiveSceneId} />}
@@ -1195,6 +1210,7 @@ export default function SceneAuthoringPage() {
           <VersionPanel sceneId={effectiveSceneId} onSwitched={handleVersionSwitched} />
         )}
         {management === 'collision' && <CollisionPanel sceneId={effectiveSceneId} isOwner={true} />}
+        {management === 'mesh' && <SurfaceMeshPanel key={effectiveSceneId} sceneId={effectiveSceneId} />}
       </Drawer>
     </>
   );

@@ -17,6 +17,7 @@ from app.api.v1 import (
     scene_versions,
     scenes,
     shares,
+    surface_mesh,
     uploads,
 )
 
@@ -29,6 +30,7 @@ v1_router.include_router(editor_sessions.router, prefix="/scenes", tags=["Gaussi
 v1_router.include_router(scene_runtime.router, prefix="/scenes", tags=["Scene Runtime"])
 v1_router.include_router(scene_versions.router, prefix="/scenes", tags=["Scene Versions"])
 v1_router.include_router(collision.router, prefix="/scenes", tags=["Collision"])
+v1_router.include_router(surface_mesh.router, prefix="/scenes", tags=["Surface Mesh"])
 v1_router.include_router(me.router, prefix="/me", tags=["My Work"])
 v1_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
 v1_router.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])

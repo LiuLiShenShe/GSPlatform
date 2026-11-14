@@ -41,6 +41,7 @@ class JobKind(enum.StrEnum):
     PUBLISH = "PUBLISH"
     DELETE_ASSETS = "DELETE_ASSETS"
     BUILD_COLLISION = "BUILD_COLLISION"
+    BUILD_MESH = "BUILD_MESH"
 
 
 class JobStatus(enum.StrEnum):

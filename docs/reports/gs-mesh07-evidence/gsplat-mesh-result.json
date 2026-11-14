@@ -1,0 +1,46 @@
+{
+  "currentVersionId": "1bc3e929-d65b-4c1a-935c-7a14763c4b2e",
+  "available": true,
+  "reason": null,
+  "algorithm": "nksr",
+  "job": {
+    "id": "a8614268-9e59-4d67-bf6c-a0baa71d9bd7",
+    "sceneId": "cdba52f2-309c-42e2-890e-4a78a901c84b",
+    "kind": "BUILD_MESH",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "stage": "SUCCEEDED",
+    "errorCode": null,
+    "errorMessage": null,
+    "createdAt": "2026-11-14T12:05:54.793385Z",
+    "updatedAt": "2026-11-14T12:09:01.934308Z",
+    "result": {
+      "faces": 3804906,
+      "input": "GSPLAT_EXPECTED_DEPTH_ORIENTED_NORMALS",
+      "units": "m",
+      "method": "NKSR",
+      "sha256": "25411b02662d6aca1961cb85c08db25d7a16ab6adef25d2e7566b0e021fcd3c9",
+      "vertices": 1921020,
+      "sizeBytes": 147436126,
+      "inputPoints": 150000,
+      "scaleFactor": 0.08,
+      "boundsMeters": [
+        [
+          -0.1591518211364746,
+          -0.08412463188171387,
+          0.21531475067138672
+        ],
+        [
+          0.10692068099975587,
+          0.25304183959960935,
+          0.44770263671875
+        ]
+      ],
+      "weightsSha256": "c2edb6437d6485c2ed48a756523849628f0c34e232c601113ff657db8714e955",
+      "voxelSizeSourceUnits": 0.014901855029165745,
+      "downloadUrl": "/api/v1/scenes/r-232a84c75c9a/mesh/a8614268-9e59-4d67-bf6c-a0baa71d9bd7/download"
+    },
+    "segmentation": null,
+    "algorithm": null
+  }
+}

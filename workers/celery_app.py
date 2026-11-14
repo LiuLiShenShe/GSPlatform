@@ -22,9 +22,8 @@ for p in (str(API_SRC), str(REPO_ROOT), str(WORKERS_PKG)):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from celery import Celery  # noqa: E402
-
-from app.core.config import settings  # noqa: E402
+from app.core.config import settings
+from celery import Celery
 
 celery_app = Celery(
     "gsplatform-workers",
@@ -55,6 +54,7 @@ celery_app.conf.update(
         "tasks.publish_scene": {"queue": "gsplatform"},
         "tasks.cleanup_expired_uploads": {"queue": "gsplatform"},
         "tasks.build_collision": {"queue": "cpu"},
+        "tasks.build_mesh": {"queue": "gpu"},
     },
 )
 
@@ -63,8 +63,9 @@ celery_app.autodiscover_tasks(["tasks"])
 
 # Explicit import fallback: ensures tasks are discovered even when
 # autodiscover resolution fails (e.g. running via -m celery).
-import tasks.publish_scene  # noqa: F401, E402
-import tasks.reconstruct_scene  # noqa: F401, E402
-import tasks.build_collision  # noqa: F401, E402
+import tasks.build_collision
+import tasks.build_mesh
+import tasks.publish_scene
+import tasks.reconstruct_scene  # noqa: F401
 
 __all__ = ["celery_app"]

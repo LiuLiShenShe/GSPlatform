@@ -1,0 +1,271 @@
+{
+  "reconstruction-progress.json": {
+    "samples": 145,
+    "events": [
+      {
+        "at": "2026-11-14T11:39:57.087Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": null,
+        "progress": 0,
+        "status": "QUEUED"
+      },
+      {
+        "at": "2026-11-14T11:39:59.075Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": null,
+        "progress": 0,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:40:01.080Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "PROBING",
+        "progress": 3,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:40:33.075Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "EXTRACTING",
+        "progress": 3,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:40:41.070Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "FEATURES",
+        "progress": 18,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:40:43.073Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "FEATURES",
+        "progress": 27,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:42:29.075Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "MATCHING",
+        "progress": 27,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:42:45.073Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "MAPPING",
+        "progress": 37,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:42:55.072Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "MAPPING",
+        "progress": 48,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:15.092Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 48,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:19.011Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 49,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:21.011Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 50,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:23.011Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 51,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:27.011Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 52,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:29.015Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 53,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:33.002Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 54,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:43:37.009Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "SEGMENTING",
+        "progress": 55,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:44:35.018Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "TRAINING",
+        "progress": 55,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:44:37.020Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "TRAINING",
+        "progress": 56,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:44:39.015Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "TRAINING",
+        "progress": 57,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:44:41.018Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "TRAINING",
+        "progress": 58,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:44:43.016Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "TRAINING",
+        "progress": 59,
+        "status": "RUNNING"
+      },
+      {
+        "at": "2026-11-14T11:44:45.019Z",
+        "id": "dd4e2b5b-1730-4b93-82cb-348758f4c6c5",
+        "stage": "TRAINING",
+        "progress": 60,
+        "status": "RUNNING"
+      }
+    ]
+  },
+  "mesh-progress.json": {
+    "samples": 28,
+    "events": [
+      {
+        "at": "2026-11-14T11:50:09.858Z",
+        "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+        "stage": null,
+        "status": "QUEUED",
+        "progress": 0
+      },
+      {
+        "at": "2026-11-14T11:50:16.854Z",
+        "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+        "stage": "PREPARING",
+        "status": "RUNNING",
+        "progress": 0
+      },
+      {
+        "at": "2026-11-14T11:50:18.879Z",
+        "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+        "stage": "RENDERING",
+        "status": "RUNNING",
+        "progress": 15
+      },
+      {
+        "at": "2026-11-14T11:50:37.098Z",
+        "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+        "stage": "TSDF",
+        "status": "RUNNING",
+        "progress": 60
+      },
+      {
+        "at": "2026-11-14T11:50:39.119Z",
+        "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+        "stage": "SUCCEEDED",
+        "status": "RUNNING",
+        "progress": 99
+      },
+      {
+        "at": "2026-11-14T11:52:01.039Z",
+        "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+        "stage": "SUCCEEDED",
+        "status": "SUCCEEDED",
+        "progress": 100
+      }
+    ]
+  },
+  "nksrWorkerProgress": [
+    "MESHPROGRESS RENDERING 5",
+    "MESHPROGRESS RENDERING 6",
+    "MESHPROGRESS RENDERING 7",
+    "MESHPROGRESS RENDERING 8",
+    "MESHPROGRESS RENDERING 9",
+    "MESHPROGRESS RENDERING 10",
+    "MESHPROGRESS RENDERING 11",
+    "MESHPROGRESS RENDERING 12",
+    "MESHPROGRESS RENDERING 13",
+    "MESHPROGRESS RENDERING 14",
+    "MESHPROGRESS RENDERING 15",
+    "MESHPROGRESS RENDERING 16",
+    "MESHPROGRESS RENDERING 17",
+    "MESHPROGRESS RENDERING 18",
+    "MESHPROGRESS RENDERING 18",
+    "MESHPROGRESS RENDERING 19",
+    "MESHPROGRESS RENDERING 20",
+    "MESHPROGRESS RENDERING 21",
+    "MESHPROGRESS RENDERING 22",
+    "MESHPROGRESS RENDERING 23",
+    "MESHPROGRESS RENDERING 24",
+    "MESHPROGRESS RENDERING 25",
+    "MESHPROGRESS RENDERING 26",
+    "MESHPROGRESS RENDERING 27",
+    "MESHPROGRESS RENDERING 28",
+    "MESHPROGRESS RENDERING 29",
+    "MESHPROGRESS RENDERING 30",
+    "MESHPROGRESS RENDERING 31",
+    "MESHPROGRESS RENDERING 31",
+    "MESHPROGRESS RENDERING 32",
+    "MESHPROGRESS RENDERING 33",
+    "MESHPROGRESS RENDERING 34",
+    "MESHPROGRESS RENDERING 35",
+    "MESHPROGRESS RENDERING 36",
+    "MESHPROGRESS RENDERING 37",
+    "MESHPROGRESS RENDERING 38",
+    "MESHPROGRESS RENDERING 39",
+    "MESHPROGRESS RENDERING 40",
+    "MESHPROGRESS RENDERING 41",
+    "MESHPROGRESS RENDERING 42",
+    "MESHPROGRESS RENDERING 43",
+    "MESHPROGRESS RENDERING 44",
+    "MESHPROGRESS RENDERING 45",
+    "MESHPROGRESS NKSR 50",
+    "MESHPROGRESS EXTRACTING 80",
+    "MESHPROGRESS WRITING 95",
+    "MESHPROGRESS SUCCEEDED 100"
+  ],
+  "nksrGpuQueue": {
+    "worker": "vr00-gpu",
+    "taskName": "tasks.build_mesh",
+    "celeryTaskId": "ee3e05f9-604d-459d-8e0b-4ba762e2c35f",
+    "receivedAt": "2026-11-14T20:05:54.860+08:00",
+    "succeededAt": "2026-11-14T20:09:01.978+08:00"
+  }
+}

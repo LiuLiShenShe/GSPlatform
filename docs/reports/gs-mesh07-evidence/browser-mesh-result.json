@@ -1,0 +1,45 @@
+{
+  "currentVersionId": "c03c852d-3f1d-435e-9bd2-9d6fbbb22bc5",
+  "available": true,
+  "reason": null,
+  "algorithm": "2dgs-tsdf",
+  "job": {
+    "id": "e9a81c48-cf09-44bd-bf2d-a7fab25c9485",
+    "sceneId": "0658c9e6-d07a-4b71-bd3d-11446c3d529b",
+    "kind": "BUILD_MESH",
+    "status": "SUCCEEDED",
+    "progress": 100,
+    "stage": "SUCCEEDED",
+    "errorCode": null,
+    "errorMessage": null,
+    "createdAt": "2026-11-14T11:50:09.745997Z",
+    "updatedAt": "2026-11-14T11:50:40.440686Z",
+    "result": {
+      "faces": 2537575,
+      "units": "m",
+      "method": "2DGS_NATIVE_TSDF",
+      "sha256": "ab81c14b8718470832943134dd6fb148f72411062c6f5453026ace01054a43a0",
+      "vertices": 1351107,
+      "sizeBytes": 101895260,
+      "scaleFactor": 0.08,
+      "boundsMeters": [
+        [
+          -0.1580246543451352,
+          -0.08410350922250481,
+          0.21739202593637022
+        ],
+        [
+          0.10641293237553141,
+          0.2542892144232726,
+          0.44307325252062685
+        ]
+      ],
+      "meshResolution": 1024,
+      "voxelSizeSourceUnits": 0.007248837355281431,
+      "depthTruncSourceUnits": 7.4228094518081855,
+      "downloadUrl": "/api/v1/scenes/r-e08fb149c979/mesh/e9a81c48-cf09-44bd-bf2d-a7fab25c9485/download"
+    },
+    "segmentation": null,
+    "algorithm": null
+  }
+}

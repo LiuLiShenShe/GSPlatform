@@ -23,7 +23,7 @@ def _checkpoint_hash(path: str, size: int, modified_ns: int) -> str:
     return file_sha256(Path(path))
 
 
-def runtime_identity() -> dict:
+def runtime_paths() -> dict:
     """Configuration comes from the operator, never from a reconstruction request."""
     names = {
         "python": "GS_SAM3_PYTHON",
@@ -36,6 +36,11 @@ def runtime_identity() -> dict:
         if not value or not Path(value).exists():
             raise ValueError(f"SAM3 环境未配置：{variable}")
         paths[key] = str(Path(value).absolute())
+    return paths
+
+
+def runtime_identity() -> dict:
+    paths = runtime_paths()
     source = Path(paths["source"])
     version = subprocess.run(
         ["git", "-C", str(source), "rev-parse", "HEAD"],
