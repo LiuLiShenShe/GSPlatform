@@ -17,6 +17,7 @@ import { Drawer, Modal } from 'antd';
 import { PcuiAuthoringWorkspace, type ManagementKind, type WorkspaceSelection } from '../features/authoring/pcui/AuthoringWorkspace';
 import { useSceneAuthoring } from '../features/authoring/useSceneAuthoring';
 import { GaussianEditorPanel } from '../features/authoring/GaussianEditorPanel';
+import { fetchEditSource, type EditSession } from '../services/editorApi';
 import { VersionPanel } from '../features/authoring/VersionPanel';
 import { CollisionPanel } from '../features/authoring/CollisionPanel';
 import { SuperSplatRuntime } from '../scene-runtime/SuperSplatRuntime';
@@ -977,6 +978,13 @@ export default function SceneAuthoringPage() {
   const handleOpenManagement = useCallback((kind: ManagementKind) => {
     setManagement(kind);
   }, []);
+  useEffect(() => {
+    let disposed = false;
+    void fetchEditSource(effectiveSceneId).then(source => {
+      if (!disposed && source.calibrationAvailable) setManagement('calibration');
+    }).catch(() => { /* 既有页面错误处理负责场景访问失败。 */ });
+    return () => { disposed = true; };
+  }, [effectiveSceneId]);
 
   /**
    * GS-NEXT-11 §6：切换历史版本成功后必须重新读取真实状态，并明确提示
@@ -984,11 +992,14 @@ export default function SceneAuthoringPage() {
    * 运行时按保守策略停用它们。
    */
   const handleVersionSwitched = useCallback(
-    (result: { currentVersionId: string; spatialStale: boolean }) => {
+    (result: { currentVersionId: string; spatialStale: boolean }, restorePose?: CameraPose) => {
       // GS-DESKTOP-04 follow-up §四.7：版本已切换 → 在途的旧版本保存请求失效。
       // 它后续不得再改同步状态 / 触发重建（旧视角不属于新版本）。
       saveGenerationRef.current += 1;
       lastSavedPayloadRef.current = null;
+      suppressRebuildRestoreRef.current = true;
+      rebuildRestorePoseRef.current = null;
+      cameraRestorePoseRef.current = restorePose ?? null;
       setVersionRevision((n) => n + 1);
       void authoring.refreshPresentation();
       void listAnnotations(effectiveSceneId)
@@ -1002,6 +1013,19 @@ export default function SceneAuthoringPage() {
     },
     [authoring, effectiveSceneId],
   );
+
+  const handleCalibrationCompleted = useCallback((edit: EditSession) => {
+    if (!edit.resultVersionId || !edit.automaticCalibration) return;
+    // Reopening a completed job must not scale a camera already viewing the result.
+    if (activeDescriptor?.content.url && !activeDescriptor.content.url.includes(`/versions/${edit.sourceAssetVersion}/`)) return;
+    const pose = runtimeRef.current?.getCameraPose();
+    const factor = edit.automaticCalibration.scaleFactor;
+    const scaled = pose ? { ...pose,
+      position: pose.position.map(n => n * factor) as [number, number, number],
+      target: pose.target.map(n => n * factor) as [number, number, number],
+    } : undefined;
+    handleVersionSwitched({ currentVersionId: edit.resultVersionId, spatialStale: false }, scaled);
+  }, [activeDescriptor, handleVersionSwitched]);
 
   const [selection, setSelection] = useState<WorkspaceSelection>({
     kind: 'scene',
@@ -1165,7 +1189,8 @@ export default function SceneAuthoringPage() {
         destroyOnHidden={false}
       >
         {management === 'editor' && <GaussianEditorPanel sceneId={effectiveSceneId} />}
-        {management === 'calibration' && <GaussianEditorPanel sceneId={effectiveSceneId} calibration />}
+        {management === 'calibration' && <GaussianEditorPanel sceneId={effectiveSceneId} calibration
+          onCalibrated={handleCalibrationCompleted} />}
         {management === 'versions' && (
           <VersionPanel sceneId={effectiveSceneId} onSwitched={handleVersionSwitched} />
         )}

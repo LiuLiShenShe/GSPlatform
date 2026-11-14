@@ -399,6 +399,10 @@ class PublishService:
             raise EditSessionError("编辑会话已过期或取消")
         if scene.current_version_id != edit.source_version_id:
             raise EditBaseVersionChanged("编辑基准版本已变化；合法结果保持私有隔离保存")
+        if not (edit.provenance or {}).get("automaticCalibration"):
+            from app.services.calibration_order import mark_authoring_started
+
+            mark_authoring_started(self._session, scene)
         return edit
 
     def _complete_edit_publication(

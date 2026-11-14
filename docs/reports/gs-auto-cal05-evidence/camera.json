@@ -1,0 +1,108 @@
+{
+  "before": {
+    "position": [
+      3.416539430618286,
+      0.5042781233787537,
+      7.055294990539551
+    ],
+    "target": [
+      0.4638100332683983,
+      -0.9720865752961902,
+      4.102565593189663
+    ],
+    "fov": 85
+  },
+  "after": {
+    "pose": {
+      "position": [
+        0.2700660228729248,
+        0.0636950209736824,
+        0.5576974749565125
+      ],
+      "target": [
+        0.032645895498582767,
+        -0.05504744001818064,
+        0.32003798342538
+      ],
+      "fov": 85
+    },
+    "calls": [
+      {
+        "at": 1794651080150,
+        "pose": {
+          "position": [
+            0.2733231544494629,
+            0.040342249870300294,
+            0.5644235992431641
+          ],
+          "target": [
+            0.03710480266147186,
+            -0.07776692602369523,
+            0.32820524745517304
+          ],
+          "fov": 85
+        }
+      }
+    ],
+    "state": {
+      "loaded": true,
+      "performanceMode": true,
+      "gamingControls": false,
+      "showAnnotations": true,
+      "progress": 100,
+      "inputMode": "desktop",
+      "cameraMode": "orbit",
+      "hasAnimation": true,
+      "animationDuration": 20,
+      "animationTime": 0,
+      "animationPaused": false,
+      "hasAR": false,
+      "hasVR": false,
+      "canStartAR": false,
+      "canStartVR": false,
+      "xrMode": null,
+      "hasCollision": false,
+      "hasCollisionOverlay": false,
+      "walkAllowed": false,
+      "collisionOverlayEnabled": false,
+      "isFullscreen": false,
+      "controlsHidden": false,
+      "selectedAnnotation": 0,
+      "inputEnabled": true
+    }
+  },
+  "session": {
+    "id": "09a08f38-ed39-4da3-818c-197ef4cc57d6",
+    "sceneId": "2dd2334d-7048-42ce-b31f-2059bb02a1ee",
+    "sceneSlug": "autocal05-3615f9",
+    "sceneTitle": "自动尺度标定 · 植株与方块",
+    "sourceVersionId": "2693b131-4ea8-4ea1-9e0d-c029995117ff",
+    "sourceAssetVersion": "8e2fbdd1109d",
+    "sourceKind": "FULL_RESOLUTION_SOURCE",
+    "sourceCounts": [
+      43714
+    ],
+    "selectedLod": null,
+    "editorUpstreamCommit": "f2a1b4975b4766e0ee0c95e63c2737dc2ecb6e5b",
+    "editorBuildIdentity": "e994c6c327c5e4d3898d25c0ff649ecf3d1cd16efc625faecb9a904a7db188ab",
+    "status": "QUEUED",
+    "createdAt": "2026-11-14T10:11:08.578996Z",
+    "expiresAt": "2026-11-14T14:11:08.578996Z",
+    "editorUrl": "/gaussian-editor/?load=%2Fapi%2Fv1%2Fscenes%2Fautocal05-3615f9%2Fedit-sessions%2F09a08f38-ed39-4da3-818c-197ef4cc57d6%2Fsource%2Fversions%2F8e2fbdd1109d%2Fscene.sog",
+    "sourceUrl": "/api/v1/scenes/autocal05-3615f9/edit-sessions/09a08f38-ed39-4da3-818c-197ef4cc57d6/source/versions/8e2fbdd1109d/scene.sog",
+    "uploadId": "b9e8f129-3aac-44e6-88bc-e239c4321271",
+    "resultVersionId": null,
+    "resultCounts": null,
+    "errorCode": null,
+    "progress": 0,
+    "stage": null,
+    "automaticCalibration": {
+      "expectedCurrentVersion": "2693b131-4ea8-4ea1-9e0d-c029995117ff",
+      "referenceName": "标定方块",
+      "originalDistance": 0.25,
+      "realLength": 20,
+      "unit": "mm",
+      "scaleFactor": 0.08
+    }
+  }
+}

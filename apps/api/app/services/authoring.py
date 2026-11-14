@@ -207,6 +207,9 @@ class AuthoringService:
         if scene is None:
             raise NotFoundError(f"场景 {slug_or_id} 不存在")
         _validate_owner(scene, owner_id)
+        from app.services.calibration_order import mark_authoring_started
+
+        mark_authoring_started(self._session, scene)
         return scene
 
     def _resolve_pres_for_edit(

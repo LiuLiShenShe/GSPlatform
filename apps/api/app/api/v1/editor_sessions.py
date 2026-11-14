@@ -11,6 +11,7 @@ from app.core.errors import NotFoundError
 from app.core.identity import RequestIdentity, get_current_user, require_csrf
 from app.db.session import get_db_session
 from app.schemas.editor_session import (
+    AutomaticCalibrationRequest,
     CalibrationMeasurementRequest,
     CreateEditSessionRequest,
     EditExportRequest,
@@ -25,6 +26,16 @@ router = APIRouter()
 
 def service(db: Session = Depends(get_db_session)) -> EditorSessionService:
     return EditorSessionService(db, get_settings())
+
+
+@router.post("/{slug}/calibrate", response_model=EditSessionOut, status_code=202)
+def calibrate_scene(
+    slug: str,
+    body: AutomaticCalibrationRequest,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: EditorSessionService = Depends(service),
+) -> EditSessionOut:
+    return svc.calibrate(slug, body, identity)
 
 
 @router.post("/{slug}/edit-sessions", response_model=EditSessionOut, status_code=201)

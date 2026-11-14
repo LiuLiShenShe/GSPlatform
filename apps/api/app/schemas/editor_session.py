@@ -1,7 +1,7 @@
 """Session DTOs contain controlled same-origin URLs, never access credentials."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,6 +31,16 @@ class CreateEditSessionRequest(BaseModel):
     acknowledgeBrowserMemory: bool = False
 
 
+class AutomaticCalibrationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    expectedCurrentVersion: UUID
+    referenceName: str = Field(min_length=1, max_length=200)
+    originalDistance: float = Field(gt=0, allow_inf_nan=False)
+    realLength: float = Field(gt=0, allow_inf_nan=False)
+    unit: Literal["mm", "cm", "m"]
+
+
 class EditSessionOut(BaseModel):
     id: UUID
     sceneId: UUID
@@ -54,6 +64,7 @@ class EditSessionOut(BaseModel):
     errorCode: str | None = None
     progress: int = 0
     stage: str | None = None
+    automaticCalibration: dict[str, Any] | None = None
 
 
 class EditExportRequest(BaseModel):
@@ -78,3 +89,5 @@ class EditSourceOut(BaseModel):
     editorEnabled: bool
     maxGaussians: int
     spatialState: str | None
+    calibrationAvailable: bool = True
+    calibrationBlockedReason: str | None = None

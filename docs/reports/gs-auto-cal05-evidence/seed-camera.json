@@ -1,0 +1,9 @@
+{
+  "sceneId": "2dd2334d-7048-42ce-b31f-2059bb02a1ee",
+  "sceneSlug": "autocal05-3615f9",
+  "sourceVersionId": "2693b131-4ea8-4ea1-9e0d-c029995117ff",
+  "sourceAssetVersion": "8e2fbdd1109d",
+  "sourceGaussianCount": 43714,
+  "sourceSogSha256": "d1c12fac337f97c24fd46e2eb201916592ed4a992744175bdb0538276cb76422",
+  "method": "Reuse existing real 2DGS geometry; no training or physical measurement claimed"
+}

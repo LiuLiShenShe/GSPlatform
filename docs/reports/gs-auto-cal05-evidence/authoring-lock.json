@@ -1,0 +1,18 @@
+{
+  "source": {
+    "sceneId": "9c3c9935-3f40-4541-96a3-391774392e9e",
+    "sceneTitle": "自动尺度标定 · 植株与方块",
+    "currentVersionId": "becb96bb-5ca9-4d64-b72d-acca4ec74c75",
+    "assetVersion": "8e2fbdd1109d",
+    "format": "sog",
+    "counts": [
+      43714
+    ],
+    "editorEnabled": true,
+    "maxGaussians": 5000000,
+    "spatialState": null,
+    "calibrationAvailable": false,
+    "calibrationBlockedReason": "已保存其他编辑操作，尺度标定已锁定，避免破坏视角和标注。请在未编辑的重建结果上先完成标定。"
+  },
+  "errors": []
+}

@@ -391,6 +391,10 @@ class SceneVersionService:
         previous = self._session.get(SceneVersion, current_id) if current_id else None
         previous_av = previous.asset_version if previous is not None else None
 
+        from app.services.calibration_order import mark_authoring_started
+
+        mark_authoring_started(self._session, scene)
+
         # 2) Filesystem first: point the origin alias at the target and make
         # sure the authorized endpoint can serve it *before* the DB moves.
         bridged = bridge_scene_origin(scene, target.asset_version)

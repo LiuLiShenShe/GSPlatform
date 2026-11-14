@@ -81,6 +81,10 @@ class Scene(Base):
     archived_from_status: Mapped[str | None] = mapped_column(
         String(20), nullable=True
     )
+    # One-way gate: first saved edit or completed calibration closes admission.
+    calibration_locked_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     owner: Mapped[User] = relationship(foreign_keys=[owner_id], lazy="joined")
     current_version: Mapped[SceneVersion | None] = relationship(

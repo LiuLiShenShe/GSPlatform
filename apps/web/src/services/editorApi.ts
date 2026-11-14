@@ -11,6 +11,8 @@ export interface EditSource {
   editorEnabled: boolean;
   maxGaussians: number;
   spatialState: string | null;
+  calibrationAvailable?: boolean;
+  calibrationBlockedReason?: string | null;
 }
 
 export interface EditSession {
@@ -33,6 +35,15 @@ export interface EditSession {
   errorCode: string | null;
   stage: string | null;
   progress: number;
+  automaticCalibration?: { referenceName: string; originalDistance: number; realLength: number;
+    unit: 'mm' | 'cm' | 'm'; scaleFactor: number } | null;
+}
+
+export async function calibrateScene(slug: string, measurement: {
+  expectedCurrentVersion: string; referenceName: string; originalDistance: number;
+  realLength: number; unit: 'mm' | 'cm' | 'm';
+}): Promise<EditSession> {
+  return (await httpClient.post(`${scenePath(slug)}/calibrate`, measurement)).data;
 }
 
 const scenePath = (slug: string) => `/scenes/${encodeURIComponent(slug)}`;

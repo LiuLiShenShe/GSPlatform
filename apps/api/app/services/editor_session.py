@@ -22,6 +22,7 @@ from app.db.models.scene import Scene, SceneVersion
 from app.db.models.scene_edit_session import SceneEditSession
 from app.db.models.upload_session import UploadSession
 from app.schemas.editor_session import (
+    AutomaticCalibrationRequest,
     CalibrationMeasurementRequest,
     CreateEditSessionRequest,
     EditExportRequest,
@@ -76,12 +77,14 @@ class EditorSessionService:
 
     def source_info(self, slug: str, identity: RequestIdentity) -> EditSourceOut:
         from app.db.models.scene_spatial_state import SceneSpatialState
+        from app.services.calibration_order import calibration_blocked_reason
 
         scene = self.owner_scene(slug, identity)
         version = self.session.get(SceneVersion, scene.current_version_id)
         spatial = self.session.get(SceneSpatialState, scene.id)
         manifest = (version.manifest or {}) if version else {}
         counts = (manifest.get("content") or manifest.get("stream") or {}).get("counts", [])
+        blocked = calibration_blocked_reason(self.session, scene)
         return EditSourceOut(
             sceneId=scene.id,
             sceneTitle=scene.title,
@@ -92,6 +95,8 @@ class EditorSessionService:
             editorEnabled=self.settings.editor_enabled,
             maxGaussians=self.settings.editor_max_gaussians,
             spatialState=spatial.state if spatial else None,
+            calibrationAvailable=blocked is None,
+            calibrationBlockedReason=blocked,
         )
 
     def create(
@@ -188,6 +193,123 @@ class EditorSessionService:
         scene, edit = self.owned(slug, session_id, identity)
         return self.out(scene, edit)
 
+    def calibrate(
+        self,
+        slug: str,
+        body: AutomaticCalibrationRequest,
+        identity: RequestIdentity,
+    ) -> EditSessionOut:
+        from app.repositories.uploads import UploadRepository
+        from app.services.celery_client import send_task
+        from app.services.upload_service import UploadService
+        from app.storage import LocalDiskStorage
+
+        scene = self.owner_scene(slug, identity)
+        self.session.execute(select(Scene.id).where(Scene.id == scene.id).with_for_update())
+        self.session.refresh(scene)
+        if scene.current_version_id != body.expectedCurrentVersion:
+            raise EditBaseVersionChanged("当前版本已变化，请刷新后重新测量")
+        version = self.session.get(SceneVersion, scene.current_version_id)
+        if version is None or version.format not in ("ply", "sog", "streamed-sog"):
+            raise ConflictError("此版本没有可标定的 Gaussian 来源")
+        factor = (
+            body.realLength * {"mm": 0.001, "cm": 0.01, "m": 1}[body.unit] / body.originalDistance
+        )
+        if not math.isfinite(factor) or not 1e-9 <= factor <= 1e9:
+            raise ConflictError("缩放倍率超出支持范围（1e-9 至 1e9），请检查单位与测量值")
+        request = {**body.model_dump(mode="json"), "scaleFactor": factor}
+        prior = self.session.scalars(
+            select(SceneEditSession).where(
+                SceneEditSession.scene_id == scene.id,
+                SceneEditSession.source_version_id == version.id,
+                SceneEditSession.status.not_in(["FAILED", "CANCELLED", "EXPIRED", "COMPLETED"]),
+                SceneEditSession.expires_at > datetime.now(UTC),
+            )
+        ).all()
+        for item in prior:
+            if (item.provenance or {}).get("automaticCalibration") == request:
+                return self.out(scene, item)
+            if (item.provenance or {}).get("automaticCalibration"):
+                raise ConflictError("此版本正在标定，请等待完成或取消后重试")
+            if item.upload_id:
+                raise ConflictError("此版本已有编辑结果正在提交，请在未编辑的重建结果上先完成标定")
+        from app.services.calibration_order import calibration_blocked_reason
+
+        blocked = calibration_blocked_reason(self.session, scene)
+        if blocked:
+            raise ConflictError(blocked)
+        counts = (
+            (version.manifest or {}).get("content") or (version.manifest or {}).get("stream") or {}
+        ).get("counts")
+        counts = counts or [scene.splat_count or 0]
+        if not counts or type(counts[0]) is not int or counts[0] <= 0:
+            raise ConflictError("源 Gaussian 数量缺少可信记录")
+        streamed = version.format == "streamed-sog"
+        entry = "lod-meta.json" if streamed else f"scene.{version.format}"
+        SceneAssetService(self.settings).resolve(
+            scene,
+            f"versions/{version.asset_version}/{entry}",
+            access_scope=SceneAssetAccessScope.OWNER,
+        )
+        now = datetime.now(UTC)
+        edit = SceneEditSession(
+            scene_id=scene.id,
+            owner_id=identity.user_id,
+            source_version_id=version.id,
+            source_asset_version=version.asset_version,
+            source_counts=counts,
+            source_entry=entry,
+            selected_lod=0 if streamed else None,
+            source_kind="SELECTED_STREAMED_LOD" if streamed else "FULL_RESOLUTION_SOURCE",
+            editor_upstream_commit=EDITOR_COMMIT,
+            editor_build_identity=self.build_identity(),
+            status="QUEUED",
+            created_at=now,
+            expires_at=now + timedelta(hours=self.settings.editor_session_hours),
+            provenance={"automaticCalibration": request},
+        )
+        self.session.add(edit)
+        self.session.flush()
+        uid = uuid.uuid4()
+        # A server-generated input, filled by the fenced worker before validation.
+        upload = UploadSession(
+            id=uid,
+            owner_id=identity.user_id,
+            scene_id=scene.id,
+            status="QUEUED",
+            storage_key=f"staging/{uid}/calibrated.ply",
+            upload_format="ply",
+            mime_type="application/octet-stream",
+            total_size=1,
+            offset=0,
+            expires_at=edit.expires_at,
+            title=scene.title,
+            description=scene.description,
+            visibility=scene.visibility,
+            category=scene.category,
+        )
+        self.session.add(upload)
+        self.session.flush()
+        edit.upload_id = uid
+        job = UploadRepository(self.session).create_publish_job(
+            scene_id=scene.id, owner_id=identity.user_id
+        )
+        edit.job_id = job.id
+        uploads = UploadService(
+            self.session,
+            LocalDiskStorage(self.settings.storage_root),
+            self.settings,
+            send_task=send_task,
+        )
+        try:
+            uploads._dispatch_publish(upload, scene, job)
+        except ServiceUnavailableError:
+            edit.status = "FAILED"
+            edit.error_code = "TASK_DISPATCH_FAILED"
+            self.session.commit()
+            raise
+        return self.out(scene, edit)
+
     def complete_calibration(
         self,
         slug: str,
@@ -229,8 +351,10 @@ class EditorSessionService:
         from app.db.models.scene_presentation import ScenePresentation
 
         presentation = self.session.scalar(
-            select(ScenePresentation).where(ScenePresentation.scene_id == scene.id)
-            .with_for_update().execution_options(populate_existing=True)
+            select(ScenePresentation)
+            .where(ScenePresentation.scene_id == scene.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         previous_transform = None
         if presentation is not None:
@@ -239,7 +363,8 @@ class EditorSessionService:
                 "rotation": presentation.world_rotation,
                 "scale": presentation.world_scale,
                 "sourceVersionId": str(presentation.world_transform_version_id)
-                if presentation.world_transform_version_id else None,
+                if presentation.world_transform_version_id
+                else None,
             }
             prior_calibration = (edit.provenance or {}).get("calibration", {})
             if (
@@ -446,9 +571,16 @@ class EditorSessionService:
             uploadId=edit.upload_id,
             resultVersionId=edit.result_version_id,
             resultCounts=(
-                (result.manifest or {}).get("stream", {}).get("counts") if result else None
+                (
+                    (result.manifest or {}).get("content")
+                    or (result.manifest or {}).get("stream")
+                    or {}
+                ).get("counts")
+                if result
+                else None
             ),
             errorCode=edit.error_code,
             progress=int(job.progress) if job else 0,
             stage=job.stage if job else None,
+            automaticCalibration=(edit.provenance or {}).get("automaticCalibration"),
         )

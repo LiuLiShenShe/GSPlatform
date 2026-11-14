@@ -130,6 +130,38 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
                     or edit.expires_at <= datetime.now(timezone.utc)
                     or edit.status in ("CANCELLED", "EXPIRED", "COMPLETED")):
                 raise ValueError("编辑会话不再允许发布")
+        automatic = (edit.provenance or {}).get("automaticCalibration") if edit else None
+        if automatic:
+            from workers.pipeline.calibrate_scene import scale_gaussians
+            from app.services.editor_session import EditBaseVersionChanged
+
+            scene = session.get(Scene, sid)
+            if scene is None or scene.current_version_id != edit.source_version_id:
+                raise EditBaseVersionChanged("标定基准版本已变化，请重新测量")
+            job.stage = "SCALING"
+            job.progress = 2
+            session.commit()
+            source = (Path(settings.storage_root) / "published" / str(sid)
+                      / "versions" / edit.source_asset_version / edit.source_entry)
+            key = f"staging/{uid}/calibration-{jid}-{claim.generation}/scaled.ply"
+            source_path = Path(settings.storage_root) / key
+            verification = scale_gaussians(source, source_path,
+                factor=automatic["scaleFactor"], expected_count=edit.source_counts[0],
+                streamed=edit.selected_lod is not None)
+            from sqlalchemy import select
+
+            owned_job = session.scalars(select(Job).where(Job.id == jid).with_for_update()
+                .execution_options(populate_existing=True)).one()
+            if (heartbeat.lost or owned_job.execution_generation != claim.generation
+                    or owned_job.status != "RUNNING"):
+                raise RuntimeError("Calibration execution lease lost")
+            us.storage_key = key
+            us.total_size = source_path.stat().st_size
+            us.offset = us.total_size
+            us.declared_sha256 = storage.sha256(key)
+            edit.result_sha256 = us.declared_sha256
+            edit.provenance = {**edit.provenance, "automaticVerification": verification}
+            session.commit()
         # ── 1. VALIDATING ─────────────────────────────────────────────────────
         job.stage = "VALIDATING"
         job.progress = 5
@@ -210,6 +242,8 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         if edit is not None:
             export_count = ((cr.manifest or {}).get("content") or
                             (cr.manifest or {}).get("stream") or {}).get("counts", [0])[0]
+            if automatic and export_count != edit.source_counts[0]:
+                raise ValueError("自动标定发布必须保留全部 Gaussian")
             if not 0 < export_count <= edit.source_counts[edit.selected_lod or 0]:
                 raise ValueError("导出 Gaussian 数量超过会话声明的来源 LOD")
 
@@ -281,7 +315,7 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
         if version_staging != scene_dir / "versions" / ver:
             publish_svc.promote_staging_to_version(sid, ver, staging_key)
 
-        publish_svc.commit_version(
+        published = publish_svc.commit_version(
             scene_id=sid,
             version_id=ver,
             manifest=cr.manifest or {},
@@ -293,6 +327,10 @@ def publish_scene(self, upload_id: str, scene_id: str, job_id: str) -> dict:
             source_sha256=cr.source_sha256,
             edit_session_id=edit.id if edit else None,
         )
+        if automatic:
+            from app.services.automatic_calibration import finish_calibration
+
+            finish_calibration(session, scene, published, edit)
         job.progress = 100
         job.stage = "SUCCEEDED"
         job.status = "SUCCEEDED"

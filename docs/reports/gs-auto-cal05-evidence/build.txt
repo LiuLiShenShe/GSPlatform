@@ -1,0 +1,22 @@
+
+> @gsplatform/web@0.1.0 build /fj/GSPlatform/apps/web
+> tsc -b && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/fj/GSPlatform/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/framework/parsers/draco-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/fj/GSPlatform/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/scene/gsplat/gsplat-sort-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+[plugin rolldown:vite-resolve] Module "node:worker_threads" has been externalized for browser compatibility, imported by "/fj/GSPlatform/node_modules/.pnpm/playcanvas@2.22.4/node_modules/playcanvas/build/playcanvas/src/scene/gsplat-unified/gsplat-unified-sort-worker.js". See https://vite.dev/guide/troubleshooting.html#module-externalized-for-browser-compatibility for more details.
+✓ 4563 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.46 kB │ gzip:     0.30 kB
+dist/assets/index-6Q6OBoZG.css     55.14 kB │ gzip:     9.13 kB
+dist/assets/index-ZCb4ltB7.js   4,458.81 kB │ gzip: 1,257.24 kB │ map: 15,324.66 kB
+
+✓ built in 4.22s
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
