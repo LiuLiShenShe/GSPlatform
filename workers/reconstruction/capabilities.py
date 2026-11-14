@@ -141,6 +141,13 @@ def check_capabilities(*, with_gpu_probe: bool = True) -> CapabilityReport:
     report.tools["ffprobe"] = _cmd_version("ffprobe", "-version")
     report.tools["colmap"] = _cmd_version("colmap", "-h")
     report.tools["gsplat"] = _gsplat_version()
+    from workers.reconstruction.backends import surfel_runtime
+
+    try:
+        surfel_runtime()
+        report.tools["2dgs"] = "configured"
+    except ValueError:
+        report.tools["2dgs"] = None
     report.tools["splat-transform"] = _splat_transform_version()
 
     if report.tools["ffmpeg"] is None:

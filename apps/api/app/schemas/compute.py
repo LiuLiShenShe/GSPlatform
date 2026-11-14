@@ -63,12 +63,13 @@ class SegmentationSettings(BaseModel):
 
 
 class CreateReconstructionRequest(BaseModel):
-    """Submit a new 3DGS reconstruction from already-uploaded media."""
+    """Submit a reconstruction using the explicitly selected Gaussian backend."""
 
     model_config = ConfigDict(extra="forbid")
 
     uploadIds: list[UUID] = Field(min_length=1, max_length=300, alias="uploadIds")
     profile: str = Field(default="draft", min_length=1, max_length=30)
+    algorithm: Literal["gsplat", "2dgs"] = "gsplat"
     sceneTitle: str = Field(min_length=1, max_length=200, alias="sceneTitle")
     description: str | None = Field(default=None, max_length=5000)
     segmentation: SegmentationSettings = Field(default_factory=SegmentationSettings)

@@ -25,6 +25,7 @@ class JobService:
             raise NotFoundError("任务不存在或无权访问")
         result = self._to_out(job)
         if job.kind == "RECONSTRUCT":
+            result.algorithm = (job.task_parameters or {}).get("algorithm", "gsplat")
             result.segmentation = (job.task_parameters or {}).get("segmentation", {"mode": "OFF"})
             if job.status == "SUCCEEDED":
                 from app.core.config import get_settings

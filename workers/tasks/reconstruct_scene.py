@@ -113,6 +113,7 @@ def _run_stage_range(
         on_error=on_error,
         session=session,
         segmentation=parameters.get("segmentation", {"mode": "OFF"}),
+        algorithm=parameters.get("algorithm", "gsplat"),
     )
 
 

@@ -636,6 +636,7 @@ def main(argv: list[str] | None = None) -> int:
 
         print(f"TRAINING_DONE splats={n_out} loss={final_loss:.6f}", flush=True)
         statistics = {
+            "algorithm": "gsplat",
             "trainerVersion": 3,
             "iterations": total,
             "completedIterations": last_step + 1,

@@ -32,7 +32,7 @@ import {
   fetchSegmentationPreview,
   submitReconstruction,
 } from '../features/compute/computeApi';
-import type { ComputeJob, ComputeProfile, SegmentationPreview } from '../features/compute/computeApi';
+import type { ComputeJob, ComputeProfile, ReconstructionAlgorithm, SegmentationPreview } from '../features/compute/computeApi';
 import { toApiError } from '../services/http';
 
 const { Dragger } = Upload;
@@ -69,9 +69,14 @@ const STATUS_META: Record<string, { badge: NonNullable<BadgeProps['status']>; te
 };
 
 const PROFILE_LABELS: Record<string, string> = {
-  draft: '草稿（快速）',
+  draft: '草稿（快速预览）',
   standard: '标准（均衡）',
   high: '高精度（实验性）',
+};
+
+const ALGORITHM_LABELS: Record<ReconstructionAlgorithm, string> = {
+  gsplat: '通用重建（gsplat / 3DGS）',
+  '2dgs': '薄物体、植株重建（2DGS）',
 };
 
 /** 后端不可达时的兜底档位（与 workers/reconstruction/profiles 一致）。 */
@@ -129,7 +134,8 @@ export default function ComputePage() {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploadStates, setUploadStates] = useState<Record<string, FileUploadState>>({});
   const [rejectedCount, setRejectedCount] = useState(0);
-  const [quality, setQuality] = useState('draft');
+  const [quality, setQuality] = useState('standard');
+  const [algorithm, setAlgorithm] = useState<ReconstructionAlgorithm>('gsplat');
   const [profiles, setProfiles] = useState<ComputeProfile[]>(FALLBACK_PROFILES);
   const [capabilityProblems, setCapabilityProblems] = useState<string[]>([]);
   const [sceneTitle, setSceneTitle] = useState(() => `重建场景 ${new Date().toLocaleString()}`);
@@ -145,6 +151,10 @@ export default function ComputePage() {
   const enteredEdit = useRef<string | null>(null);
 
   useEffect(() => { if (jobId) setStep(2); }, [jobId]);
+
+  useEffect(() => {
+    if (job) setAlgorithm(job.algorithm ?? 'gsplat');
+  }, [job?.id, job?.algorithm]);
 
   useEffect(() => {
     if (job?.status !== 'SUCCEEDED' || !job.result || enteredEdit.current === job.id) return;
@@ -439,6 +449,7 @@ export default function ComputePage() {
       const resp = await submitReconstruction({
         uploadIds,
         profile: quality,
+        algorithm,
         sceneTitle: sceneTitle.trim(),
         description: description.trim() ? description.trim() : null,
         visibility,
@@ -451,6 +462,7 @@ export default function ComputePage() {
         id: resp.jobId,
         sceneId: resp.sceneId ?? '',
         kind: 'RECONSTRUCT',
+        algorithm,
         status: resp.status,
         stage: resp.stage,
         progress: resp.progress,
@@ -640,6 +652,18 @@ export default function ComputePage() {
             <Typography.Text>已选照片 {fileList.filter(f => !VIDEO_EXTENSIONS.includes(extOf(f.name))).length} 张
               {hasVideo ? '（含视频，将提取照片）' : ''}</Typography.Text>
             <label>
+              <Typography.Text>重建算法</Typography.Text>
+              <Select<ReconstructionAlgorithm> aria-label="重建算法" value={algorithm}
+                onChange={setAlgorithm} style={{ width: '100%' }} options={[
+                  { value: 'gsplat', label: ALGORITHM_LABELS.gsplat },
+                  { value: '2dgs', label: ALGORITHM_LABELS['2dgs'] },
+                ]} />
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+                通用重建使用 gsplat / 3DGS，适合常规物体、室内外场景；薄物体、植株重建使用 2DGS，适合叶片等薄表面。
+                两种算法均支持提示词分割，完成后可用方块等标定物的已知尺寸，对整个模型等比例缩放，恢复真实尺度。
+              </Typography.Text>
+            </label>
+            <label>
               <Typography.Text>重建目标</Typography.Text>
               <Select aria-label="重建模式" value={targetMode} onChange={setTargetMode}
                 style={{ width: '100%' }} options={[
@@ -778,6 +802,7 @@ export default function ComputePage() {
                 />
                 {stageLabel && <Typography.Text strong>{stageLabel}</Typography.Text>}
               </Space>
+              <Typography.Text>重建算法：{ALGORITHM_LABELS[job.algorithm ?? 'gsplat']}</Typography.Text>
 
               {isTraining && !terminal && (
                 <Space>

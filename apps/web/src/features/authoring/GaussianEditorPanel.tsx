@@ -191,18 +191,20 @@ export function GaussianEditorPanel({ sceneId, calibration = false }: { sceneId:
   return <Card title={calibration ? '尺度标定' : '高级 Gaussian 编辑'} style={{ marginBottom: 12 }}>
     <Space orientation="vertical" style={{ width: '100%' }}>
       {calibration && <>
-        <Typography.Paragraph>打开模型 → 在底部选择 Measure → 在标定物上点击两个端点 → 记录原距离 → 将该字段改为真实距离（米）→ 导出 PLY → 回到这里提交 → 发布后重新测量并保存记录。</Typography.Paragraph>
-        <Typography.Text>Measure 会围绕两点中点对整个模型等比例缩放。请把标定物包含在重建目标内，并检查原始测量点确实位于物体表面。</Typography.Text>
-        <Input aria-label="标定物名称" placeholder="标定物名称" value={draft.referenceName}
+        <Typography.Paragraph>用标定物的已知尺寸恢复整个模型的真实尺度：例如已知方块的一条边长，在重建模型上测量同一条边，再让植株、方块和其他重建内容一起等比例缩放。</Typography.Paragraph>
+        <Typography.Paragraph>整体缩放倍率 = 实际长度（换算为米）÷ 模型中测得的长度。例：方块实际边长 20 mm，模型测得 0.25，则倍率为 0.02 ÷ 0.25 = 0.08；缩放后该边对应 0.02 m。</Typography.Paragraph>
+        <Typography.Paragraph>打开模型 → 在底部选择 Measure → 点击方块同一条边的两个表面端点 → 记录原距离 → 把 Measure 距离框改为该边实际长度（米）→ 导出 PLY → 回到这里提交 → 发布后重新测量并保存记录。</Typography.Paragraph>
+        <Typography.Text>Measure 会围绕两点中点对整个重建模型等比例缩放。下方填写已知尺寸和原距离以计算倍率，请在官方 Editor 中完成缩放，再提交缩放后的模型。提示词重建时请同时保留主体和标定物。</Typography.Text>
+        <Input aria-label="标定物名称" placeholder="例如：20 mm 方块的一条边" value={draft.referenceName}
           onChange={event => updateMeasurement({ referenceName: event.target.value })} />
-        <label>官方测得的原始距离（场景单位）<InputNumber aria-label="原始测量距离" min={0.000001}
+        <label>模型中同一条边的测量长度（场景单位）<InputNumber aria-label="原始测量距离" min={0.000001}
           value={draft.originalDistance} onChange={value => updateMeasurement({ originalDistance: value })} /></label>
-        <label>真实长度<InputNumber aria-label="标定物真实长度" min={0.000001}
+        <label>该边已知的实际长度<InputNumber aria-label="标定物真实长度" min={0.000001}
           value={draft.realLength} onChange={value => updateMeasurement({ realLength: value })} /></label>
         <Select aria-label="标定长度单位" value={draft.unit} onChange={unit => updateMeasurement({ unit })}
           options={['mm', 'cm', 'm'].map(unit => ({ value: unit, label: unit }))} />
         {realMeters > 0 && <Typography.Text>在官方 Measure 距离框中输入 {realMeters} 米
-          {draft.originalDistance ? `；统一缩放倍率 ${(realMeters / draft.originalDistance).toPrecision(7)}` : ''}。</Typography.Text>}
+          {draft.originalDistance ? `；整个模型等比例缩放倍率 ${(realMeters / draft.originalDistance).toPrecision(7)}` : ''}。</Typography.Text>}
       </>}
       <Alert type="info" title="仅官方 Editor 执行 Gaussian 编辑。File → Export → PLY（不要启用 Compress PLY），保存后返回上传。仅编辑不会修改原场景。" />
       <Alert type="warning" title="不要使用 Editor 的 Publish / superspl.at；独立部署策略阻断第三方网络上传。私有数据只应导出到本机并上传回 GSPlatform。" />

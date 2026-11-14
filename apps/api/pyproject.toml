@@ -56,6 +56,7 @@ dev = [
     "ruff>=0.5,<1.0",
     "mypy>=1.10,<2.0",
     "pytest>=8.2,<9.0",
+    "plyfile==1.1.3",  # native 2DGS PLY export compatibility tests
 ]
 # GPU reconstruction runtime — the verified contract, identical to
 # deploy/requirements-reconstruction.txt (torch 2.14.0+cu126 / gsplat 1.5.3).

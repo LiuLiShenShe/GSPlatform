@@ -76,6 +76,7 @@ class ReconstructionService:
         parameters = {
             "uploadIds": [str(uid) for uid in req.uploadIds],
             "profile": req.profile,
+            "algorithm": req.algorithm,
             "segmentation": req.segmentation.model_dump(),
         }
         # A lost HTTP response must not enqueue the same long GPU work twice.

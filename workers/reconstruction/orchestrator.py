@@ -180,6 +180,7 @@ class JobContext:
     session: Any  # SQLAlchemy session — required only for PUBLISHING
     segmentation: dict = field(default_factory=lambda: {"mode": "OFF"})
     segmentation_model: dict | None = None
+    algorithm: str = "gsplat"
 
     # derived dirs
     input_dir: Path = field(init=False)
@@ -290,6 +291,12 @@ def _hash_for_stage(ctx: JobContext, stage: str) -> tuple[str, str]:
             profile=name, **_section_params(ctx, "colmap")
         )
     if stage == "TRAINING":
+        from workers.reconstruction.backends import backend_identity
+
+        try:
+            backend = backend_identity(ctx.algorithm)
+        except ValueError as exc:
+            raise StageError("TRAINING", "2DGS_UNAVAILABLE", str(exc)) from exc
         ih = _tree_hash(ctx.colmap_dir / "sparse") + "|" + _tree_hash(ctx.frames_dir)
         if ctx.segmentation.get("mode") != "OFF":
             ih += "|" + _tree_hash(ctx.job_dir / "segmentation")
@@ -297,6 +304,7 @@ def _hash_for_stage(ctx: JobContext, stage: str) -> tuple[str, str]:
             profile=name,
             segmentation=ctx.segmentation,
             trainerVersion=3,
+            backend=backend,
             **_section_params(ctx, "gsplat"),
         )
     if stage == "SEGMENTING":
@@ -958,7 +966,19 @@ def _stage_segmenting(ctx: JobContext) -> None:
 
 
 def _stage_training(ctx: JobContext) -> None:
-    """Invoke the gsplat training subprocess and stream real iteration progress."""
+    """Invoke the selected trainer and stream real iteration progress."""
+    from workers.reconstruction.backends import surfel_runtime, validate_algorithm
+
+    validate_algorithm(ctx.algorithm)
+    python = sys.executable
+    module = "workers.reconstruction.train_gsplat_script"
+    if ctx.algorithm == "2dgs":
+        try:
+            _, runtime_python = surfel_runtime()
+        except ValueError as exc:
+            raise StageError("TRAINING", "2DGS_UNAVAILABLE", str(exc)) from exc
+        python = str(runtime_python)
+        module = "workers.reconstruction.train_2dgs_script"
     gsplat_sec = ctx.profile.gsplat()
     iterations = int(gsplat_sec.get("iterations", 1200))
     ctx.output_ply = ctx.job_dir / "gsplat" / "final.ply"
@@ -984,6 +1004,7 @@ def _stage_training(ctx: JobContext) -> None:
 
     # params.json for resume + a safe invocation summary
     params = {
+        "algorithm": ctx.algorithm,
         "colmap_dir": str(sparse_dir),
         "images_dir": str(ctx.frames_dir),
         "output": str(ctx.output_ply),
@@ -1002,9 +1023,9 @@ def _stage_training(ctx: JobContext) -> None:
     )
 
     train_argv = [
-        sys.executable,
+        python,
         "-m",
-        "workers.reconstruction.train_gsplat_script",
+        module,
         "--colmap-dir",
         str(sparse_dir),
         "--images-dir",
@@ -1245,6 +1266,7 @@ def run_pipeline(
     on_error: ErrorCallback | None = None,
     session: Any = None,
     segmentation: dict | None = None,
+    algorithm: str = "gsplat",
 ) -> dict:
     """Run the reconstruction pipeline for *job_id* over ``stage_range``.
 
@@ -1260,6 +1282,9 @@ def run_pipeline(
     matches the current input + parameter hashes. It never raises or calls
     ``sys.exit`` — every path returns a dict.
     """
+    from workers.reconstruction.backends import validate_algorithm
+
+    validate_algorithm(algorithm)
     cancel_check = is_cancelled or (lambda: False)
     job_dir = Path(storage_root) / "jobs" / job_id / f"attempt-{attempt}"
     profile = load_profile(profile_name)
@@ -1280,6 +1305,7 @@ def run_pipeline(
         on_error=on_error,
         session=session,
         segmentation=segmentation or {"mode": "OFF"},
+        algorithm=algorithm,
     )
     ctx.tool_versions = _tool_versions()
 

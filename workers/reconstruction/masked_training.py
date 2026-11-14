@@ -10,7 +10,10 @@ from PIL import Image
 from torch.nn import functional
 
 
-def aligned_target(path: Path, camera, downscale: int, mask_path: Path | None = None):
+def aligned_target(
+    path: Path, camera, downscale: int, mask_path: Path | None = None,
+    *, center_principal_point: bool = False,
+):
     """Undistort RGB and mask through the SAME COLMAP projection, then downscale.
 
     A pinhole rasterizer cannot compare against radially distorted source pixels.
@@ -40,8 +43,11 @@ def aligned_target(path: Path, camera, downscale: int, mask_path: Path | None = 
     intrinsic = torch.tensor(
         [[fx * sx, 0, cx * sx], [0, fy * sy, cy * sy], [0, 0, 1]], dtype=torch.float32
     )
+    if center_principal_point:
+        intrinsic[0, 2], intrinsic[1, 2] = width / 2, height / 2
     v, u = torch.meshgrid(torch.arange(height), torch.arange(width), indexing="ij")
-    x, y = (u / sx - cx) / fx, (v / sy - cy) / fy
+    x = (u - intrinsic[0, 2]) / intrinsic[0, 0]
+    y = (v - intrinsic[1, 2]) / intrinsic[1, 1]
     r2 = x * x + y * y
     model, params = camera.model, camera.params
     if model in {"SIMPLE_PINHOLE", "PINHOLE"}:

@@ -17,6 +17,10 @@ from tests.test_editor_sessions import create_edit, owner  # noqa: F401
 
 def test_legacy_and_prompt_contract():
     base = dict(uploadIds=[uuid.uuid4()], sceneTitle="plant")
+    assert CreateReconstructionRequest(**base).algorithm == "gsplat"
+    assert CreateReconstructionRequest(**base, algorithm="2dgs").algorithm == "2dgs"
+    with pytest.raises(ValidationError):
+        CreateReconstructionRequest(**base, algorithm="arbitrary-training-command")
     assert CreateReconstructionRequest(**base).segmentation.mode == "OFF"
     for settings in (
         {"mode": "KEEP_PROMPTED_OBJECT"},
@@ -109,7 +113,10 @@ def test_calibration_rejects_wrong_version_and_mismatched_endpoints(owner, db):
     assert client.post(url, json=payload, headers=headers).status_code == 409
 
 
-def test_reconstruction_persists_prompt_and_reuses_pending_submission(owner, db, monkeypatch):
+@pytest.mark.parametrize("algorithm", ["gsplat", "2dgs"])
+def test_reconstruction_persists_prompt_and_reuses_pending_submission(
+    owner, db, monkeypatch, algorithm
+):
     from io import BytesIO
 
     from PIL import Image
@@ -150,6 +157,7 @@ def test_reconstruction_persists_prompt_and_reuses_pending_submission(owner, db,
     payload = {
         "uploadIds": [uid],
         "sceneTitle": "Plant",
+        "algorithm": algorithm,
         "profile": "draft",
         "segmentation": {"mode": "KEEP_PROMPTED_OBJECT", "prompt": "potted plant; blue cube"},
     }
@@ -162,6 +170,18 @@ def test_reconstruction_persists_prompt_and_reuses_pending_submission(owner, db,
     job = db.get(Job, uuid.UUID(first.json()["jobId"]))
     assert job.task_parameters["segmentation"] == payload["segmentation"]
     assert job.task_parameters["uploadIds"] == [uid]
+    assert job.task_parameters["algorithm"] == algorithm
+    detail = client.get(f"/api/v1/jobs/{job.id}", headers=headers)
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["algorithm"] == algorithm
+    # The same uploads with a different algorithm are a different GPU job.
+    alternate = "2dgs" if algorithm == "gsplat" else "gsplat"
+    different = client.post(
+        "/api/v1/compute/reconstruct", headers=headers, json={**payload, "algorithm": alternate}
+    )
+    assert different.status_code == 202, different.text
+    assert different.json()["jobId"] != str(job.id)
+    assert len(calls) == 2
 
 
 def test_first_presentation_creation_is_atomic(owner):

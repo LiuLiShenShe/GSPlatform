@@ -33,7 +33,7 @@ vi.mock('../features/upload/ResumableUploader', () => ({
 
 const PROFILES = [
   { name: 'draft', version: 1, maxInputBytes: 1_048_576_000, maxImages: 80, maxVideoSeconds: 300, iterations: 1200, stages: ['PROBING', 'EXTRACTING'] },
-  { name: 'standard', version: 1, maxInputBytes: 4_294_967_296, maxImages: 300, maxVideoSeconds: 1200, iterations: 8000, stages: ['PROBING', 'EXTRACTING'] },
+  { name: 'standard', version: 2, maxInputBytes: 4_294_967_296, maxImages: 300, maxVideoSeconds: 1200, iterations: 30000, stages: ['PROBING', 'EXTRACTING'] },
   { name: 'high', version: 1, maxInputBytes: 8_589_934_592, maxImages: 800, maxVideoSeconds: 2400, iterations: 30_000, stages: ['PROBING', 'EXTRACTING'] },
 ];
 
@@ -150,7 +150,8 @@ describe('免费计算页（ComputePage）', () => {
     expect(mocks.submitReconstruction).toHaveBeenCalledWith(
       expect.objectContaining({
         uploadIds: ['up-1'],
-        profile: 'draft',
+        profile: 'standard',
+        algorithm: 'gsplat',
         sceneTitle: 'test',
         visibility: 'PUBLIC',
       }),
@@ -215,6 +216,28 @@ describe('免费计算页（ComputePage）', () => {
     expect(mocks.submitReconstruction).toHaveBeenCalledWith(expect.objectContaining({
       segmentation: { mode: 'KEEP_PROMPTED_OBJECT', prompt: 'potted plant; blue cube' },
     }));
+  });
+
+  it('提供两个算法选项，薄物体与植株选择实际提交 2DGS', async () => {
+    mocks.fetchJob.mockResolvedValue({ ...JOB_RUNNING, algorithm: '2dgs' });
+    renderApp({ route: '/compute' });
+    await addVideoFile();
+    await userEvent.click(screen.getByRole('button', { name: /下一步：参数确认/ }));
+    expect(screen.getByText(/通用重建使用 gsplat/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('combobox', { name: '重建算法' }));
+    expect(screen.getByText('通用重建（gsplat / 3DGS）', { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
+    await userEvent.click(screen.getByText('薄物体、植株重建（2DGS）', { selector: '.ant-select-item-option-content' }));
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: /提交计算/ }));
+    expect(mocks.submitReconstruction).toHaveBeenCalledWith(expect.objectContaining({ algorithm: '2dgs' }));
+    expect(await screen.findByText('重建算法：薄物体、植株重建（2DGS）')).toBeInTheDocument();
+  });
+
+  it('刷新恢复的任务显示后端保存的算法', async () => {
+    localStorage.setItem('gs-reconstruction-job', 'job-1');
+    mocks.fetchJob.mockResolvedValue({ ...JOB_RUNNING, algorithm: '2dgs' });
+    renderApp({ route: '/compute' });
+    expect(await screen.findByText('重建算法：薄物体、植株重建（2DGS）')).toBeInTheDocument();
   });
 
   it.each([null, { sceneSlug: 'plant', versionId: 'version-1', assetVersion: 'v1',

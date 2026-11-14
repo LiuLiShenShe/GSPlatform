@@ -20,6 +20,7 @@ export interface ComputeCapabilities {
 }
 
 export type ProfileName = 'draft' | 'standard' | 'high';
+export type ReconstructionAlgorithm = 'gsplat' | '2dgs';
 
 export interface ComputeProfile {
   name: ProfileName;
@@ -34,6 +35,7 @@ export interface ComputeProfile {
 }
 
 export interface ReconstructRequest {
+  algorithm?: ReconstructionAlgorithm;
   uploadIds: string[];
   profile: string;
   sceneTitle: string;
@@ -55,6 +57,7 @@ export interface ReconstructResponse {
 }
 
 export interface ComputeJob {
+  algorithm?: ReconstructionAlgorithm | null;
   id: string;
   sceneId: string;
   kind: string;

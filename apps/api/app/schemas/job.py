@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -22,5 +23,6 @@ class JobOut(BaseModel):
     updatedAt: datetime = Field(alias="updatedAt")
     result: dict | None = None
     segmentation: dict | None = None
+    algorithm: Literal["gsplat", "2dgs"] | None = None
 
     model_config = {"populate_by_name": True}
