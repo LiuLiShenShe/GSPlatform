@@ -1,0 +1,53 @@
+{
+  "status": 200,
+  "request": {
+    "initialCameraPosition": {
+      "x": 0.25,
+      "y": -2.8,
+      "z": 3.5
+    },
+    "initialCameraTarget": {
+      "x": 0.1825,
+      "y": -2.8265,
+      "z": 3.982
+    },
+    "initialCameraFov": 75
+  },
+  "response": {
+    "worldPosition": null,
+    "worldRotation": null,
+    "worldScale": null,
+    "initialCameraPosition": {
+      "x": 0.25,
+      "y": -2.8,
+      "z": 3.5
+    },
+    "initialCameraTarget": {
+      "x": 0.1825,
+      "y": -2.8265,
+      "z": 3.982
+    },
+    "initialCameraFov": 75,
+    "backgroundType": "color",
+    "backgroundColor": null,
+    "backgroundAssetId": null,
+    "backgroundMetadata": null,
+    "coverAssetId": null,
+    "coverUrl": null,
+    "backgroundAudioAssetId": null,
+    "backgroundAudioVolume": 0.5,
+    "backgroundAudioLoop": true,
+    "backgroundAudioEnabled": false,
+    "tonemapping": "aces",
+    "highPrecisionRendering": false,
+    "postEffects": null,
+    "collisionMode": null,
+    "collisionAssetId": null,
+    "collisionGravity": 9.81,
+    "collisionSlopeLimitDegrees": 45,
+    "collisionStepOffset": 0.3,
+    "collisionPlayerHeight": 1.8,
+    "collisionEnabled": false
+  },
+  "reason": "New geometry invalidates old spatial camera binding; explicitly author a new initial camera for final Viewer inspection."
+}

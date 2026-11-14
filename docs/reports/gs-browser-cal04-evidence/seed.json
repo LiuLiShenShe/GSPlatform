@@ -1,0 +1,16 @@
+{
+  "algorithm": "2dgs",
+  "trainingIterations": 1200,
+  "sceneId": "de1a2eaf-941b-43f7-a7cc-ad16bbf71bcb",
+  "sceneSlug": "browsercal04-2dgs-b737b3",
+  "sourceVersionId": "2c794fe7-0542-4d24-94d2-b457ea17846a",
+  "sourceAssetVersion": "8e2fbdd1109d",
+  "sourceSogSha256": "d1c12fac337f97c24fd46e2eb201916592ed4a992744175bdb0538276cb76422",
+  "sourceCount": 43714,
+  "initialWorldScale": {
+    "x": 2,
+    "y": 2,
+    "z": 2
+  },
+  "fixtureMethod": "Clone existing real 2DGS SOG into a private isolated acceptance scene via PublishService; no new training claimed"
+}

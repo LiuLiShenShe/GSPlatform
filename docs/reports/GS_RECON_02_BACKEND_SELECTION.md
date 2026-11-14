@@ -52,6 +52,7 @@ SOG SHA-256：`d1c12fac337f97c24fd46e2eb201916592ed4a992744175bdb0538276cb76422`
 - 2DGS 训练使用真实 surfel 算法。共享 SOG/Editor 仍是三维高斯渲染器，发布时采用薄椭球近似：法向尺度为较小切向尺度的 1/1000，并设数值下界；原生双尺度 PLY 保留，世界坐标不变。
 - 沿用本地 2DGS 参数，`lambda_normal=0.05`，`lambda_dist=0.0`；未宣称启用了原论文所有几何约束。
 - 本轮没有重做浏览器内 2DGS 官方 Edit 标定、导出、回传的完整人工拾取往返。已有标定接口、编辑路由测试通过，尺度功能沿用前轮已验证的公共流程。
+- 后续已按用户要求补做独立浏览器标定：20 mm 参考边复测为 19.8267 mm，见 [GS-BROWSER-CAL-04](GS_BROWSER_CAL_04_ACCEPTANCE.md)。复用的仍是本报告 1,200 次训练产物，未补做 30,000 次质量对照。
 - 没有据此次较小预算的验证判定 2DGS 优于 3DGS；两项适用说明遵循本次产品要求。
 
 使用说明与部署参数见 `docs/reconstruction-backends.md`、`deploy/env/production.env.example`。开发依赖新增 `plyfile==1.1.3`，锁文件同步；2DGS 运行时仍使用其独立已有环境。

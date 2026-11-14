@@ -1,0 +1,66 @@
+{
+  "renderer": "webgpu",
+  "gsplats": 43714,
+  "loaded": true,
+  "progress": 100,
+  "cameraMode": "orbit",
+  "performanceMode": true,
+  "showAnnotations": true,
+  "contentUrl": "/api/v1/scenes/browsercal04-2dgs-b737b3/assets/versions/13b54c9dd0d4/scene.sog",
+  "format": "sog",
+  "isManifestFallback": false,
+  "error": null,
+  "walkAllowed": false,
+  "effectiveWalkAllowed": false,
+  "collisionStale": false,
+  "hasCollision": false,
+  "collisionFormat": null,
+  "sceneScale": {
+    "status": "too-small",
+    "horizontalExtent": 0.197,
+    "verticalExtent": 0.256
+  },
+  "camera": {
+    "position": [
+      0.25,
+      -2.8,
+      3.5
+    ],
+    "target": [
+      0.1825,
+      -2.8265,
+      3.9823
+    ],
+    "fov": 75
+  },
+  "worldTransform": {
+    "position": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "rotation": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "scale": {
+      "x": 1,
+      "y": 1,
+      "z": 1
+    },
+    "isIdentity": true,
+    "boundsAfter": {
+      "min": [
+        0.084,
+        -2.954,
+        3.896
+      ],
+      "max": [
+        0.281,
+        -2.699,
+        4.068
+      ]
+    }
+  }
+}

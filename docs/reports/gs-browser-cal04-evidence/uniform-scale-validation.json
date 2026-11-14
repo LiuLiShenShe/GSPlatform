@@ -1,0 +1,18 @@
+{
+  "sourceCount": 43714,
+  "resultCount": 43714,
+  "expectedFactor": 0.061135715345390286,
+  "affineSingularValues": [
+    0.06113571699557673,
+    0.06113571636764814,
+    0.06113571608811716
+  ],
+  "maxPositionResidual": 2.3919262215343906e-07,
+  "logScaleMaxError": [
+    3.834879853670259e-07,
+    3.834879853670259e-07,
+    5.701863310392241e-07
+  ],
+  "opacityUnchanged": true,
+  "maxRotationDifference": 0.0
+}

@@ -1,0 +1,20 @@
+{
+  "sourceVersionId": "2c794fe7-0542-4d24-94d2-b457ea17846a",
+  "resultVersionId": "ffcd0086-d6e8-4d55-b4bb-11297a62975a",
+  "resultAssetVersion": "13b54c9dd0d4",
+  "versionCount": 2,
+  "sourceSogUnchanged": true,
+  "resultSogSha256": "13515e9cb276863a6f895ad25417c55aa5b9bfb6a949aa403f166d2dae7dd43b",
+  "resultSogMatchesManifest": true,
+  "exportSha256": "59b8fc0bafaa67df04d6e644916e31b5845b4f7eaaafdfdafc338e5a150449ff",
+  "resultSourceSha256": "59b8fc0bafaa67df04d6e644916e31b5845b4f7eaaafdfdafc338e5a150449ff",
+  "exportHashMatchesEdit": true,
+  "worldPosition": null,
+  "worldRotation": null,
+  "worldScale": null,
+  "worldTransformVersionId": "ffcd0086-d6e8-4d55-b4bb-11297a62975a",
+  "cameraVersionId": "ffcd0086-d6e8-4d55-b4bb-11297a62975a",
+  "editSessionId": "c50fe20a-2c69-4e3b-aa1e-b119b949b36c",
+  "editStatus": "COMPLETED",
+  "gaussianCount": 43714
+}

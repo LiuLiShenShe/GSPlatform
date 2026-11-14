@@ -1,0 +1,40 @@
+{
+  "state": "ASSUMED",
+  "physicalWalkAllowed": false,
+  "evidence": {
+    "sourceVersionId": "2c794fe7-0542-4d24-94d2-b457ea17846a",
+    "resultVersionId": "ffcd0086-d6e8-4d55-b4bb-11297a62975a",
+    "referenceName": "蓝色方块同一条可见边（实际 20 mm）",
+    "originalDistance": 0.327141015476938,
+    "realLength": 20,
+    "unit": "mm",
+    "remeasuredDistance": 0.019826661947133506,
+    "provenance": "真实 2DGS 产物，官方 Editor 两次表面鼠标拾取；输入 0.02 m 后整体缩放并导出 PLY，上传发布新版本；独立会话初始无测量点，仅导入相机，重新点击同一可见边两端复测。复测值 0.019826661947133506 m。",
+    "endpoints": null,
+    "realLengthMeters": 0.02,
+    "scaleFactor": 0.061135715345390286,
+    "geometryScaleAppliedBy": "OFFICIAL_SUPERSPLAT_MEASURE",
+    "exportSha256": "59b8fc0bafaa67df04d6e644916e31b5845b4f7eaaafdfdafc338e5a150449ff",
+    "editorCommit": "f2a1b4975b4766e0ee0c95e63c2737dc2ecb6e5b",
+    "editorBuildIdentity": "e994c6c327c5e4d3898d25c0ff649ecf3d1cd16efc625faecb9a904a7db188ab",
+    "editSessionId": "c50fe20a-2c69-4e3b-aa1e-b119b949b36c",
+    "recordedBy": "3adfd9ae-41fd-4e44-a662-e81cf0dba517",
+    "recordedAt": "2026-11-14T07:37:39.876567+00:00",
+    "absoluteErrorMeters": 0.00017333805286649448,
+    "relativeError": 0.008666902643324724,
+    "transformIdentity": "identity",
+    "previousWorldTransform": {
+      "scale": {
+        "x": 2,
+        "y": 2,
+        "z": 2
+      },
+      "position": null,
+      "rotation": null,
+      "sourceVersionId": "2c794fe7-0542-4d24-94d2-b457ea17846a"
+    },
+    "worldTransformPolicy": "METRIC_EXPORT_WITH_IDENTITY_PRESENTATION",
+    "evidenceTrust": "USER_TRANSCRIBED_OFFICIAL_EDITOR; NO_PUBLIC_MEASUREMENT_ATTESTATION",
+    "evidenceSha256": "99e579d084d72a9703c62ade8e32c5e90303709b2093cd1d5bcb61b292c89ef5"
+  }
+}
