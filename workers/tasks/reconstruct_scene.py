@@ -28,6 +28,7 @@ from app.db.session import SessionLocal
 from app.services.celery_client import send_task
 
 from workers.celery_app import celery_app
+from workers.reconstruction.profiles import AVAILABLE_PROFILES, load_profile
 
 logger = logging.getLogger("gsplatform.workers.reconstruct")
 
@@ -36,6 +37,14 @@ _STORAGE_ROOT = Path(settings.storage_root)
 CPU_STAGES_RANGE = ("PROBING", "MAPPING")
 GPU_STAGE_RANGE = ("SEGMENTING", "TRAINING")
 FINISH_STAGES_RANGE = ("CONVERTING", "SUCCEEDED")
+
+# Queue deadlines must outlive the subprocess budgets. The old one/two-hour
+# limits killed valid high-profile work (8h CPU / 6h training) prematurely.
+_PROFILE_RESOURCES = [load_profile(name).resource() for name in AVAILABLE_PROFILES]
+_CPU_SOFT_LIMIT = max(int(r["cpu_time_s"]) for r in _PROFILE_RESOURCES) + 600
+# The GPU task also segments every input before training; reserve one hour for
+# that stage in addition to the trainer's own timeout and cleanup allowance.
+_GPU_SOFT_LIMIT = max(int(r["gpu_time_s"]) for r in _PROFILE_RESOURCES) + 3600 + 600
 
 
 # ── helpers ────────────────────────────────────────────────────────────────── #
@@ -127,8 +136,8 @@ def _run_stage_range(
     default_retry_delay=30,
     acks_late=True,
     queue="cpu",
-    time_limit=3600,
-    soft_time_limit=3300,
+    time_limit=_CPU_SOFT_LIMIT + 300,
+    soft_time_limit=_CPU_SOFT_LIMIT,
 )
 def reconstruct_cpu_stages(
     self,
@@ -203,8 +212,8 @@ def reconstruct_cpu_stages(
     default_retry_delay=30,
     acks_late=True,
     queue="gpu",
-    time_limit=7200,
-    soft_time_limit=6900,
+    time_limit=_GPU_SOFT_LIMIT + 300,
+    soft_time_limit=_GPU_SOFT_LIMIT,
 )
 def reconstruct_train(
     self,
@@ -275,8 +284,8 @@ def reconstruct_train(
     default_retry_delay=30,
     acks_late=True,
     queue="cpu",
-    time_limit=3600,
-    soft_time_limit=3300,
+    time_limit=_CPU_SOFT_LIMIT + 300,
+    soft_time_limit=_CPU_SOFT_LIMIT,
 )
 def reconstruct_finish(
     self,
