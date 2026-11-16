@@ -1,0 +1,44 @@
+{
+  "building": {
+    "id": "e2f54542-40a1-494f-b260-ad8fd28156e6",
+    "owner": "e0c5c9d5-534f-4e8e-a460-15e4143bc861",
+    "version": "01c63c7c-8eb5-498e-bcc0-77215e92ca12",
+    "slug": "u-06924576399e",
+    "sha256": "df735f57c853a77c5b5a758a6c19c5b7e76654581e9f8aba13521f7088fa75ab",
+    "unchanged": true
+  },
+  "originalAccountMeshes": [
+    {
+      "id": "88fbd571-69de-5d89-89f9-fec55b4d66b8",
+      "title": "gsplat \u00b7 \u5168\u91cf 30,000 \u6b21 \u00b7 Mesh",
+      "units": "scene",
+      "sourceVersionId": "75d6784c-ce7b-4a5a-b6b9-2b98308240f4",
+      "sha256": "467f0eefbe945ecf6233851acd2b7702c28439141a36018bc3a9e2e5bb4e4015",
+      "faces": 573486
+    },
+    {
+      "id": "f5b98fef-cc93-56e8-b5b8-7defe0d5ecb4",
+      "title": "2dgs \u00b7 \u5168\u91cf 30,000 \u6b21 \u00b7 Mesh",
+      "units": "scene",
+      "sourceVersionId": "7604de30-2e59-4ea8-8cf0-d6193771753b",
+      "sha256": "5b8494b610947569504a01c1534b5deb7524c326af024ff5a3548ab7691f8783",
+      "faces": 2675832
+    }
+  ],
+  "cleanedWorkflow": {
+    "jobId": "fcd7bb1b-117c-4b37-ab95-7a096d29bc8f",
+    "meshId": "50c7d4f7-c7fe-49c9-a14b-a89e05288320",
+    "sourceVersionId": "091e24ba-9965-4b4b-bdc8-5de4f5282d50",
+    "originalGaussians": 38469,
+    "confirmedGaussians": 38422,
+    "removedGaussians": 47,
+    "faces": 2790659,
+    "sha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7"
+  },
+  "sameEnvironment": {
+    "api": "127.0.0.1:18001",
+    "entry": 5174,
+    "storageRoot": "/home/test/.local/state/gsplatform-vr00-20261011/storage",
+    "sceneOriginRoot": "/home/test/.local/state/gsplatform-vr00-20261011/scene-origin"
+  }
+}

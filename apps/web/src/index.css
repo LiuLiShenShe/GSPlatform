@@ -1983,7 +1983,7 @@ a {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.gs-mesh-card__cover {
+.gs-mesh-card .ant-card-cover > a.gs-mesh-card__cover {
   display: flex;
   flex-direction: column;
   align-items: center;

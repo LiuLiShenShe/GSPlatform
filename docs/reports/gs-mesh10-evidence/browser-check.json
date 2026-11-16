@@ -1,0 +1,36 @@
+{
+  "browser": "145.0.7632.116",
+  "base": "http://127.0.0.1:5174",
+  "pageErrors": [],
+  "cancelledRequests": [
+    {
+      "error": "net::ERR_ABORTED",
+      "kind": "official editor source request"
+    }
+  ],
+  "emptyAction": "/works",
+  "mobileOverflow": false,
+  "models": [
+    {
+      "id": "50c7d4f7-c7fe-49c9-a14b-a89e05288320",
+      "sourceVersionId": "091e24ba-9965-4b4b-bdc8-5de4f5282d50",
+      "isCurrentSource": true,
+      "faces": 2790659,
+      "sha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7"
+    },
+    {
+      "id": "a6de84a4-416f-4007-9734-5bf2bfb32408",
+      "sourceVersionId": "1bc3e929-d65b-4c1a-935c-7a14763c4b2e",
+      "isCurrentSource": true,
+      "faces": 3804906,
+      "sha256": "25411b02662d6aca1961cb85c08db25d7a16ab6adef25d2e7566b0e021fcd3c9"
+    },
+    {
+      "id": "71f3c24d-e296-403d-828d-2a2936f8766e",
+      "sourceVersionId": "c03c852d-3f1d-435e-9bd2-9d6fbbb22bc5",
+      "isCurrentSource": false,
+      "faces": 2537575,
+      "sha256": "ab81c14b8718470832943134dd6fb148f72411062c6f5453026ace01054a43a0"
+    }
+  ]
+}

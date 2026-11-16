@@ -1,0 +1,35 @@
+{
+  "reconstructionJobId": "b6630a28-65bd-42b4-b9d8-ca7070268ac3",
+  "allSourcePhotos": 250,
+  "decodablePhotos": 247,
+  "trainingViews": 246,
+  "iterations": 30000,
+  "originalGaussians": 375688,
+  "confirmedGaussians": 371931,
+  "elapsedSeconds": 208.24729294795543,
+  "published": false,
+  "mesh": {
+    "method": "2DGS_NATIVE_TSDF",
+    "voxelSizeSourceUnits": 0.005579259188563421,
+    "depthTruncSourceUnits": 5.7131614090889435,
+    "meshResolution": 1024,
+    "vertices": 1459003,
+    "faces": 2786491,
+    "scaleFactor": 0.08,
+    "units": "m",
+    "sizeBytes": 110633864,
+    "boundsMeters": [
+      [
+        -0.1232939756186783,
+        -0.06990142795705566,
+        0.13011192562175541
+      ],
+      [
+        0.08827368304150776,
+        0.20464722703650629,
+        0.3126616849270941
+      ]
+    ],
+    "sha256": "22626e82810e2f74ecea492074851237ebb35e55cfe5e24f867f9caabae44ad5"
+  }
+}

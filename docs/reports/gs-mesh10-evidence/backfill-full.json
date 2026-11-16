@@ -1,0 +1,20 @@
+[
+  {
+    "id": "88fbd571-69de-5d89-89f9-fec55b4d66b8",
+    "ownerId": "e0c5c9d5-534f-4e8e-a460-15e4143bc861",
+    "sourceVersionId": "75d6784c-ce7b-4a5a-b6b9-2b98308240f4",
+    "algorithm": "gsplat",
+    "units": "scene",
+    "sha256": "467f0eefbe945ecf6233851acd2b7702c28439141a36018bc3a9e2e5bb4e4015",
+    "faces": 573486
+  },
+  {
+    "id": "f5b98fef-cc93-56e8-b5b8-7defe0d5ecb4",
+    "ownerId": "e0c5c9d5-534f-4e8e-a460-15e4143bc861",
+    "sourceVersionId": "7604de30-2e59-4ea8-8cf0-d6193771753b",
+    "algorithm": "2dgs",
+    "units": "scene",
+    "sha256": "5b8494b610947569504a01c1534b5deb7524c326af024ff5a3548ab7691f8783",
+    "faces": 2675832
+  }
+]

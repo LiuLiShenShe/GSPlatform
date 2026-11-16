@@ -1,0 +1,36 @@
+{
+  "reconstructionJobId": "1dd697e2-5894-4c2f-a082-e2a168eb000c",
+  "allSourcePhotos": 250,
+  "decodablePhotos": 247,
+  "trainingViews": 242,
+  "iterations": 30000,
+  "originalGaussians": 600103,
+  "confirmedGaussians": 594101,
+  "elapsedSeconds": 328.66384493303485,
+  "published": false,
+  "mesh": {
+    "method": "NKSR",
+    "input": "GSPLAT_EXPECTED_DEPTH_ORIENTED_NORMALS",
+    "inputPoints": 150000,
+    "voxelSizeSourceUnits": 0.040471047163009644,
+    "weightsSha256": "c2edb6437d6485c2ed48a756523849628f0c34e232c601113ff657db8714e955",
+    "vertices": 359832,
+    "faces": 705214,
+    "scaleFactor": 0.08,
+    "units": "m",
+    "sizeBytes": 27519540,
+    "boundsMeters": [
+      [
+        -1.281233367919922,
+        -0.06392023086547852,
+        -0.19921695709228515
+      ],
+      [
+        0.06342884540557861,
+        0.9551167297363281,
+        0.4894639205932617
+      ]
+    ],
+    "sha256": "fda7468f329879cfab1a1a2b7195ce2cce620ad02a6ee7a9f9bbb28c5f1f6f60"
+  }
+}
