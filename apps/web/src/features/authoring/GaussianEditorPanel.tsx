@@ -195,6 +195,7 @@ function ManualGaussianEditorPanel({ sceneId }: { sceneId: string }) {
         {!!inProcessing && <><Typography.Text>发布阶段：{session.stage ?? session.status}</Typography.Text><Progress percent={session.progress} /></>}
         {!terminal.has(session.status) && <Button danger onClick={() => { void cancel(); }} disabled={busy}>取消编辑会话</Button>}
         {session.status === 'COMPLETED' && <Alert type="success" title={`新 SceneVersion 已发布：${session.resultVersionId}。实际发布 Gaussian：${session.resultCounts?.[0]?.toLocaleString() ?? '读取当前版本数量'}。历史版本保持不变，Collision 需手动评估。`} />}
+        {session.status === 'COMPLETED' && <Button type="primary" href={`/model/edit/${encodeURIComponent(sceneId)}?workspace=mesh`}>确认此版本并生成 Mesh</Button>}
       </>}
       <Button href={`/scene/${encodeURIComponent(sceneId)}`}>{session?.status === 'COMPLETED' ? '在正式 Viewer 查看新版本' : '返回场景'}</Button>
     </Space>

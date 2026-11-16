@@ -253,6 +253,8 @@ export function WorkCard({ work, onChanged }: WorkCardProps) {
                   场景编辑
                 </Button>
               </Tooltip>
+              {work.sceneId && <Button size="small" disabled={acting}
+                onClick={() => navigate(`/model/edit/${work.sceneId}?workspace=mesh`)}>生成 Mesh</Button>}
               <Tooltip title="查看处理任务（Phase 08 已接入服务端任务查询）">
                 <Button
                   size="small"

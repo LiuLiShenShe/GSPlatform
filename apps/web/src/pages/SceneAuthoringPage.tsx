@@ -976,7 +976,8 @@ export default function SceneAuthoringPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [management, setManagement] = useState<ManagementKind | null>(() =>
     searchParams.get('workspace') === 'calibration' ? 'calibration'
-      : searchParams.get('workspace') === 'mesh' ? 'mesh' : null);
+      : searchParams.get('workspace') === 'mesh' ? 'mesh'
+        : searchParams.get('workspace') === 'editor' ? 'editor' : null);
   const handleOpenManagement = useCallback((kind: ManagementKind) => {
     setManagement(kind);
     setSearchParams(params => {

@@ -4,6 +4,8 @@ import ViewerLayout from '../layouts/ViewerLayout';
 import HomePage from '../pages/HomePage';
 import MyWorksPage from '../pages/MyWorksPage';
 import FavoritesPage from '../pages/FavoritesPage';
+import MeshModelsPage from '../pages/MeshModelsPage';
+import MeshModelPage from '../pages/MeshModelPage';
 import ComputePage from '../pages/ComputePage';
 import UploadPage from '../pages/UploadPage';
 import SceneViewerPage from '../pages/SceneViewerPage';
@@ -33,6 +35,8 @@ export const appRouter = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: 'works', element: <MyWorksPage /> },
       { path: 'favorites', element: <FavoritesPage /> },
+      { path: 'meshes', element: <MeshModelsPage /> },
+      { path: 'meshes/:modelId', element: <MeshModelPage /> },
       { path: 'compute', element: <ComputePage /> },
       { path: 'upload', element: <UploadPage /> },
       { path: 'health-ui', element: <HealthUI /> },

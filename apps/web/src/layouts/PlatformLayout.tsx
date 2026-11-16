@@ -2,6 +2,7 @@ import { Drawer, Menu } from 'antd';
 import {
   AppstoreOutlined,
   CloudOutlined,
+  DeploymentUnitOutlined,
   HistoryOutlined,
   HomeOutlined,
   QuestionCircleOutlined,
@@ -43,6 +44,11 @@ const SECONDARY_MENU = [
     key: '/favorites',
     icon: <StarOutlined aria-hidden />,
     label: '收藏',
+  },
+  {
+    key: '/meshes',
+    icon: <DeploymentUnitOutlined aria-hidden />,
+    label: 'Mesh 模型',
   },
   {
     key: '/recent',

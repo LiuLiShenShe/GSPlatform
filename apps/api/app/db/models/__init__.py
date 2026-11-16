@@ -17,6 +17,7 @@ from app.db.models.enums import (
 )
 from app.db.models.favorite import Favorite
 from app.db.models.job import Job
+from app.db.models.mesh_model import MeshModel
 from app.db.models.scene import Scene, SceneVersion
 from app.db.models.scene_annotation import SceneAnnotation
 from app.db.models.scene_edit_session import SceneEditSession
@@ -39,6 +40,7 @@ __all__ = [
     "Job",
     "JobKind",
     "JobStatus",
+    "MeshModel",
     "Scene",
     "SceneAnnotation",
     "SceneCategory",

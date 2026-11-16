@@ -8,7 +8,7 @@ export interface MeshState {
   job?: {
     id: string; status: string; stage: string | null; progress: number;
     errorMessage?: string | null;
-    result?: { vertices: number; faces: number; units: string; downloadUrl: string } | null;
+    result?: { vertices: number; faces: number; units: string; downloadUrl: string; meshModelId?: string; previewUrl?: string } | null;
   } | null;
 }
 

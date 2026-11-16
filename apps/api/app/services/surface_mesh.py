@@ -17,6 +17,7 @@ from app.core.errors import ConflictError, ForbiddenError, NotFoundError, Servic
 from app.core.identity import RequestIdentity
 from app.db.models.job import Job
 from app.db.models.scene import Scene
+from app.db.models.scene_edit_session import SceneEditSession
 from app.db.models.scene_processing import SceneProcessingSettings
 from app.schemas.surface_mesh import CreateSurfaceMeshRequest, SurfaceMeshOut
 from app.services.jobs import JobService
@@ -43,13 +44,35 @@ class SurfaceMeshService:
         return scene
 
     def source(self, scene: Scene) -> dict[str, Any]:
-        """Only unchanged reconstruction geometry and its automatic scale are eligible."""
+        """Trace saved edits back to the metric version and its camera reconstruction."""
         row = self.db.get(SceneProcessingSettings, scene.id)
         evidence = (row.calibration_evidence or {}) if row else {}
         if not evidence.get("geometryScaleAppliedBy"):
             raise ConflictError("请先完成尺度标定，再生成具有真实尺度的网格。")
-        if evidence.get("resultVersionId") != str(scene.current_version_id):
-            raise ConflictError("当前高斯几何已变化，原重建深度不再对应；不能生成或下载旧网格。")
+        metric_version = evidence.get("resultVersionId")
+        cursor = scene.current_version_id
+        visited = set()
+        while str(cursor) != metric_version:
+            if cursor is None or cursor in visited or len(visited) >= 256:
+                raise ConflictError(
+                    "当前版本无法追溯到已标定的重建，请使用该作品已保存的清理版本。"
+                )
+            visited.add(cursor)
+            edit = self.db.scalar(
+                select(SceneEditSession)
+                .where(
+                    SceneEditSession.scene_id == scene.id,
+                    SceneEditSession.owner_id == scene.owner_id,
+                    SceneEditSession.status == "COMPLETED",
+                    SceneEditSession.result_version_id == cursor,
+                    SceneEditSession.source_version_id != cursor,
+                )
+                .order_by(SceneEditSession.completed_at.desc())
+                .limit(1)
+            )
+            if edit is None:
+                raise ConflictError("当前高斯几何已变化，且缺少已保存的编辑来源；不能借用旧网格。")
+            cursor = edit.source_version_id
         source_id = evidence.get("sourceVersionId")
         job = self.db.scalar(
             select(Job)
@@ -78,7 +101,7 @@ class SurfaceMeshService:
         )
         if not (directory / "gsplat/final.ply").is_file():
             raise ConflictError("原始训练资料已不可用，请重新上传照片重建。")
-        return {
+        source = {
             "sourceVersionId": str(scene.current_version_id),
             "reconstructionJobId": str(job.id),
             "reconstructionAttempt": job.attempt,
@@ -86,6 +109,48 @@ class SurfaceMeshService:
             "scaleFactor": factor,
             "mesherVersion": 1,
         }
+        if visited:
+            from app.db.models.scene import SceneVersion
+
+            version = self.db.get(SceneVersion, scene.current_version_id)
+            if not version or version.format not in ("sog", "ply", "streamed-sog"):
+                raise ConflictError("当前清理版本没有可读取的高斯几何")
+            entry = (
+                "scene.ply"
+                if version.format == "ply"
+                else "scene.sog"
+                if version.format == "sog"
+                else "lod-meta.json"
+            )
+            source.update(
+                editedGeometry=True,
+                sourceAssetVersion=version.asset_version,
+                geometryEntry=entry,
+                geometryFormat=version.format,
+                mesherVersion=2,
+            )
+        pending = self.db.scalar(
+            select(SceneEditSession.id)
+            .where(
+                SceneEditSession.scene_id == scene.id,
+                SceneEditSession.owner_id == scene.owner_id,
+                SceneEditSession.status.in_(
+                    [
+                        "UPLOADING",
+                        "UPLOADED",
+                        "QUEUED",
+                        "VALIDATING",
+                        "CONVERTING",
+                        "VERIFYING",
+                        "PUBLISHING",
+                    ]
+                ),
+            )
+            .limit(1)
+        )
+        if pending:
+            raise ConflictError("高斯编辑结果正在上传或发布，请保存完成后再确认生成 Mesh。")
+        return source
 
     def status(self, slug: str, identity: RequestIdentity) -> SurfaceMeshOut:
         scene = self.owner_scene(slug, identity)
@@ -117,6 +182,13 @@ class SurfaceMeshService:
                     **result,
                     "downloadUrl": f"/api/v1/scenes/{scene.slug}/mesh/{job.id}/download",
                 }
+                from app.db.models.mesh_model import MeshModel
+
+                model = self.db.scalar(select(MeshModel).where(MeshModel.job_id == job.id))
+                if model:
+                    output.job.result.update(
+                        meshModelId=str(model.id), previewUrl=f"/meshes/{model.id}"
+                    )
         return output
 
     def submit(

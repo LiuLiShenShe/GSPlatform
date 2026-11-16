@@ -12,6 +12,8 @@ it('queues the current geometry with the automatic 3DGS mesher', async () => {
   vi.mocked(api.createMesh).mockResolvedValue({ ...ready, job: { id: 'm1', status: 'QUEUED', stage: null, progress: 0 } });
   renderWithRouter(<SurfaceMeshPanel sceneId="plant" />);
   await screen.findByText('当前方法：3DGS → NKSR');
+  expect(screen.getByRole('button', { name: '生成表面网格' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: '确认当前已保存的高斯版本可以生成 Mesh' }));
   fireEvent.click(screen.getByRole('button', { name: '生成表面网格' }));
   await screen.findByText('等待 GPU 队列');
   expect(api.createMesh).toHaveBeenCalledWith('plant', 'metric-v1');
@@ -45,4 +47,5 @@ it('downloads the completed metric mesh through the authenticated API', async ()
   fireEvent.click(await screen.findByRole('button', { name: '下载彩色 PLY 网格' }));
   await waitFor(() => expect(api.downloadMesh).toHaveBeenCalledWith('plant', 'm3'));
   expect(screen.getByText(/123 个顶点/)).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '查看 Mesh 模型' })).toHaveAttribute('href', '/meshes');
 });

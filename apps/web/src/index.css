@@ -1983,3 +1983,17 @@ a {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.gs-mesh-card__cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: 180px;
+  color: var(--gs-accent, #699bff);
+  background: linear-gradient(135deg, #202b40, #17212e);
+}
+
+.gs-mesh-card__cover .anticon { font-size: 58px; }
+.gs-mesh-preview { width: 100%; height: min(68vh, 800px); min-height: 320px; overflow: hidden; border-radius: 8px; background: #202630; }
+.gs-mesh-preview canvas { display: block; }

@@ -15,7 +15,7 @@ import torch
 from workers.meshing.runtime import mesh_runtime
 
 
-def extract_2dgs(source):
+def extract_2dgs(source, gaussian_ply=None):
     _, repo = mesh_runtime("2dgs")
     sys.path.insert(0, str(repo))
     from arguments import ModelParams, PipelineParams
@@ -47,6 +47,27 @@ def extract_2dgs(source):
         load_iteration=int(settings["iterations"]),
         shuffle=False,
     )
+    if gaussian_ply:
+        # Editor-compatible exports add only a thin third scale to native XY
+        # surfels. Keep the saved edits and restore the native two-scale format.
+        from plyfile import PlyData, PlyElement
+
+        saved = PlyData.read(gaussian_ply)["vertex"].data
+        names = [n for n in saved.dtype.names if n != "scale_2"]
+        native = np.empty(
+            len(saved), dtype=[(n, saved.dtype.fields[n][0]) for n in names]
+        )
+        for name in names:
+            native[name] = saved[name]
+        rest_count = sum(n.startswith("f_rest_") for n in names)
+        gaussians.max_sh_degree = int(np.sqrt(rest_count / 3 + 1) - 1)
+        native_path = gaussian_ply.with_name("confirmed-native-2dgs.ply")
+        PlyData([PlyElement.describe(native, "vertex")]).write(native_path)
+        gaussians.load_ply(str(native_path))
+        # Edits can change positions as well as remove Gaussians. Re-render the
+        # saved geometry; original silhouette masks must not clip those edits.
+        for camera in scene.getTrainCameras():
+            camera.gt_alpha_mask = None
     extractor = GaussianExtractor(
         gaussians, render, pipeline.extract(args), bg_color=[0, 0, 0]
     )
@@ -166,12 +187,13 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--algorithm", choices=("gsplat", "2dgs"), required=True)
     parser.add_argument("--scale", type=float, required=True)
+    parser.add_argument("--gaussian-ply", type=Path)
     args = parser.parse_args()
     if not np.isfinite(args.scale) or args.scale <= 0:
         raise ValueError("无效的标定倍率")
     torch.set_num_threads(4)
     mesh, metadata = (
-        extract_2dgs(args.source)
+        extract_2dgs(args.source, args.gaussian_ply)
         if args.algorithm == "2dgs"
         else extract_nksr(args.output / "observations.npz")
     )

@@ -11,6 +11,7 @@ from app.api.v1 import (
     favorites,
     jobs,
     me,
+    mesh_models,
     scene_presentation,
     scene_processing,
     scene_runtime,
@@ -32,6 +33,7 @@ v1_router.include_router(scene_versions.router, prefix="/scenes", tags=["Scene V
 v1_router.include_router(collision.router, prefix="/scenes", tags=["Collision"])
 v1_router.include_router(surface_mesh.router, prefix="/scenes", tags=["Surface Mesh"])
 v1_router.include_router(me.router, prefix="/me", tags=["My Work"])
+v1_router.include_router(mesh_models.router, prefix="/mesh-models", tags=["Mesh Models"])
 v1_router.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
 v1_router.include_router(uploads.router, prefix="/uploads", tags=["Uploads"])
 v1_router.include_router(compute.router, prefix="/compute", tags=["Compute"])

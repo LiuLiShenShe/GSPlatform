@@ -16,6 +16,33 @@ from workers.reconstruction.train_gsplat_script import (
 )
 
 
+def parameters_from_ply(path):
+    from workers.pipeline.gaussian_quality import read_gaussian_ply
+
+    data = read_gaussian_ply(path)
+
+    def fields(names):
+        return torch.from_numpy(np.column_stack([data[n] for n in names]).copy())
+
+    rest = sorted(
+        (n for n in data.dtype.names if n.startswith("f_rest_")),
+        key=lambda n: int(n[7:]),
+    )
+    params = {
+        "means": fields(["x", "y", "z"]),
+        "scales": fields([f"scale_{i}" for i in range(3)]),
+        "quats": fields([f"rot_{i}" for i in range(4)]),
+        "opacities": fields(["opacity"]).squeeze(-1),
+        "sh0": fields([f"f_dc_{i}" for i in range(3)])[:, None],
+        "shN": fields(rest).reshape(len(data), 3, -1).transpose(1, 2)
+        if rest
+        else torch.zeros((len(data), 0, 3)),
+    }
+    if not all(torch.isfinite(p).all() for p in params.values()):
+        raise ValueError("Confirmed geometry has invalid Gaussian attributes")
+    return params
+
+
 def depth_observations(depth, rgb, valid, intrinsic, viewmat):
     """Depth finite differences, with normals facing their observing camera."""
     height, width = depth.shape
@@ -60,6 +87,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--gaussian-ply", type=Path)
     args = parser.parse_args()
     root = args.source
     settings = json.loads((root / "gsplat/params.json").read_text())
@@ -71,7 +99,15 @@ def main():
     # The existing trainer numbers steps from zero (30,000 steps ends at 29,999).
     if int(saved["step"]) + 1 != int(settings["iterations"]):
         raise ValueError("最终 3DGS 检查点迭代数不匹配")
-    params = {k: v.cuda() for k, v in saved["params"].items()}
+    params = {
+        k: v.cuda()
+        for k, v in (
+            parameters_from_ply(args.gaussian_ply)
+            if args.gaussian_ply
+            else saved["params"]
+        ).items()
+    }
+    sh_degree = int(np.sqrt(params["shN"].shape[1] + 1) - 1)
     model = read_sparse_model(root / "colmap/sparse/0")
     # Keep per-view work bounded; identical camera distortion/mask alignment as training.
     largest = max(max(c.width, c.height) for c in model.cameras.values())
@@ -87,7 +123,10 @@ def main():
             raise ValueError("原重建照片不可用")
         mask = root / "segmentation/masks" / (view["name"] + ".png")
         target, foreground, valid, intrinsic = aligned_target(
-            image, view["camera"], downscale, mask if mask.is_file() else None
+            image,
+            view["camera"],
+            downscale,
+            mask if mask.is_file() and not args.gaussian_ply else None,
         )
         height, width = target.shape[:2]
         rendered, alpha, _ = rasterization(
@@ -96,7 +135,7 @@ def main():
             scales=params["scales"].exp(),
             opacities=params["opacities"].sigmoid(),
             colors=torch.cat((params["sh0"], params["shN"]), dim=1),
-            sh_degree=int(settings.get("sh_degree", 0)),
+            sh_degree=sh_degree,
             viewmats=view["viewmat"][None],
             Ks=intrinsic.cuda()[None],
             width=width,

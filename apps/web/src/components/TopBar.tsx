@@ -41,6 +41,7 @@ export function TopBar({ onOpenMobileNav }: TopBarProps) {
           label: '我的收藏',
           onClick: () => navigate('/favorites'),
         },
+        { key: 'meshes', label: 'Mesh 模型', onClick: () => navigate('/meshes') },
         { type: 'divider' as const },
         {
           key: 'logout',

@@ -119,6 +119,33 @@ def run_mesh_job(job_id, session_factory, settings):
             on_progress=progress,
         )
         commands = []
+        geometry_args = []
+        if parameters.get("editedGeometry"):
+            version_root = (
+                Path(settings.storage_root) / "published" / str(scene_id) / "versions"
+            ).resolve()
+            entry = (
+                version_root
+                / parameters["sourceAssetVersion"]
+                / parameters["geometryEntry"]
+            ).resolve()
+            if not entry.is_relative_to(version_root) or not entry.is_file():
+                raise ConflictError("当前编辑几何文件不可用")
+            geometry = attempt_output / "confirmed-geometry.ply"
+            commands.append(
+                [
+                    sys.executable,
+                    "-m",
+                    "workers.meshing.confirmed_geometry",
+                    "--input",
+                    str(entry),
+                    "--output",
+                    str(geometry),
+                    "--scale",
+                    str(parameters["scaleFactor"]),
+                ]
+            )
+            geometry_args = ["--gaussian-ply", str(geometry)]
         if parameters["algorithm"] == "gsplat":
             commands.append(
                 [
@@ -129,6 +156,7 @@ def run_mesh_job(job_id, session_factory, settings):
                     str(source),
                     "--output",
                     str(attempt_output / "observations.npz"),
+                    *geometry_args,
                 ]
             )
         commands.append(
@@ -142,6 +170,7 @@ def run_mesh_job(job_id, session_factory, settings):
                 str(attempt_output),
                 "--algorithm",
                 parameters["algorithm"],
+                *geometry_args,
                 "--scale",
                 str(parameters["scaleFactor"]),
             ]
@@ -176,6 +205,9 @@ def run_mesh_job(job_id, session_factory, settings):
             # Only the fenced execution may make its complete output downloadable.
             os.replace(attempt_output / "mesh.ply", output / "mesh.ply")
             os.replace(attempt_output / "result.json", output / "result.json")
+            from app.services.mesh_models import register_mesh
+
+            register_mesh(db, settings, scene, row, metadata)
             row.task_parameters = {**parameters, "result": metadata}
             row.status, row.stage, row.progress = "SUCCEEDED", "SUCCEEDED", 100
             row.finished_at, row.lease_expires_at = datetime.now(UTC), None
