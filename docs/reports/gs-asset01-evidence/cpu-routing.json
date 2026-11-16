@@ -1,0 +1,5 @@
+{
+  "registered": "tasks.convert_mesh_asset",
+  "workerQueue": "cpu",
+  "producerQueue": "cpu"
+}

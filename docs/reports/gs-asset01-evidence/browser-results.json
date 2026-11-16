@@ -1,0 +1,23 @@
+{
+  "sourceCommit": "991cbe9",
+  "base": "http://127.0.0.1:5174",
+  "browser": "145.0.7632.116",
+  "completedAt": "2026-11-16T03:59:47.256Z",
+  "errors": [],
+  "failedRequests": [
+    {
+      "url": "http://127.0.0.1:5174/api/v1/mesh-models/71f3c24d-e296-403d-828d-2a2936f8766e/file",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5174/api/v1/mesh-models/71f3c24d-e296-403d-828d-2a2936f8766e/file",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    }
+  ],
+  "idempotentVariantId": "9083f48a-98eb-4bb1-9001-7965bc5c1afd",
+  "idempotentStatus": "READY"
+}

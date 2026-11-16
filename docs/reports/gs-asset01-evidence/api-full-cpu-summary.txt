@@ -1,0 +1,9 @@
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED apps/api/tests/test_fix061.py::TestReconstructionRuntimeFile::test_verify_script_runs_on_real_venv
+ERROR apps/api/tests/test_fix0621.py::TestReleasePreflightCwd::test_from_release_root_passes
+ERROR apps/api/tests/test_fix0621.py::TestReleasePreflightCwd::test_from_release_apps_api_passes_pythonpath_unset
+ERROR apps/api/tests/test_fix0621.py::TestReleasePreflightCwd::test_from_tmp_passes_pythonpath_unset
+ERROR apps/api/tests/test_fix0621.py::TestReleasePreflightCwd::test_deploy_real_cwd_simulation_passes
+1 failed, 675 passed, 23 warnings, 4 errors in 229.53s (0:03:49)

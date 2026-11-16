@@ -1,0 +1,700 @@
+{
+  "originalMeshes": [
+    {
+      "id": "71f3c24d-e296-403d-828d-2a2936f8766e",
+      "sha256": "ab81c14b8718470832943134dd6fb148f72411062c6f5453026ace01054a43a0",
+      "sourceVersionId": "c03c852d-3f1d-435e-9bd2-9d6fbbb22bc5",
+      "units": "m",
+      "vertices": 1351107,
+      "faces": 2537575,
+      "plyPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/meshes/0658c9e6-d07a-4b71-bd3d-11446c3d529b/e9a81c48-cf09-44bd-bf2d-a7fab25c9485/mesh.ply",
+      "unchanged": true
+    },
+    {
+      "id": "a6de84a4-416f-4007-9734-5bf2bfb32408",
+      "sha256": "25411b02662d6aca1961cb85c08db25d7a16ab6adef25d2e7566b0e021fcd3c9",
+      "sourceVersionId": "1bc3e929-d65b-4c1a-935c-7a14763c4b2e",
+      "units": "m",
+      "vertices": 1921020,
+      "faces": 3804906,
+      "plyPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/meshes/cdba52f2-309c-42e2-890e-4a78a901c84b/a8614268-9e59-4d67-bf6c-a0baa71d9bd7/mesh.ply",
+      "unchanged": true
+    },
+    {
+      "id": "88fbd571-69de-5d89-89f9-fec55b4d66b8",
+      "sha256": "467f0eefbe945ecf6233851acd2b7702c28439141a36018bc3a9e2e5bb4e4015",
+      "sourceVersionId": "75d6784c-ce7b-4a5a-b6b9-2b98308240f4",
+      "units": "scene",
+      "vertices": 293906,
+      "faces": 573486,
+      "plyPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/meshes/7efc9b5d-1f8f-46ec-be18-3013d15404cd/accepted-88fbd571-69de-5d89-89f9-fec55b4d66b8/mesh.ply",
+      "unchanged": true
+    },
+    {
+      "id": "f5b98fef-cc93-56e8-b5b8-7defe0d5ecb4",
+      "sha256": "5b8494b610947569504a01c1534b5deb7524c326af024ff5a3548ab7691f8783",
+      "sourceVersionId": "7604de30-2e59-4ea8-8cf0-d6193771753b",
+      "units": "scene",
+      "vertices": 1401157,
+      "faces": 2675832,
+      "plyPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/meshes/31ed6046-d42f-49c3-a841-389b89443408/accepted-f5b98fef-cc93-56e8-b5b8-7defe0d5ecb4/mesh.ply",
+      "unchanged": true
+    },
+    {
+      "id": "50c7d4f7-c7fe-49c9-a14b-a89e05288320",
+      "sha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7",
+      "sourceVersionId": "091e24ba-9965-4b4b-bdc8-5de4f5282d50",
+      "units": "m",
+      "vertices": 1482521,
+      "faces": 2790659,
+      "plyPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/meshes/0658c9e6-d07a-4b71-bd3d-11446c3d529b/fcd7bb1b-117c-4b37-ab95-7a096d29bc8f/mesh.ply",
+      "unchanged": true
+    }
+  ],
+  "variants": [
+    {
+      "id": "9083f48a-98eb-4bb1-9001-7965bc5c1afd",
+      "meshModelId": "50c7d4f7-c7fe-49c9-a14b-a89e05288320",
+      "status": "READY",
+      "generation": 1,
+      "glbPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/mesh-assets/50c7d4f7-c7fe-49c9-a14b-a89e05288320/9083f48a-98eb-4bb1-9001-7965bc5c1afd/generation-1/mesh.glb",
+      "sha256": "8ca6746f6abfb963107639cc3e884e6fb09983cd3d7420379a9857383c869176",
+      "sizeBytes": 86860204,
+      "sourcePlySha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7",
+      "orientationEvidence": {
+        "method": "OWNER_AXIS_CONFIRMATION",
+        "upAxis": "-Y",
+        "confirmedAt": "2026-11-16T03:45:28.821544+00:00",
+        "confirmedBy": "e3884f6b-80bb-4018-852f-1ba19d3bb38d"
+      },
+      "metadata": {
+        "faces": 2790659,
+        "units": "m",
+        "sha256": "8ca6746f6abfb963107639cc3e884e6fb09983cd3d7420379a9857383c869176",
+        "rotation": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "vertices": 1482521,
+        "sizeBytes": 86860204,
+        "validator": {
+          "info": {
+            "maxUVs": 0,
+            "version": "2.0",
+            "hasSkins": false,
+            "generator": "https://github.com/mikedh/trimesh",
+            "resources": [
+              {
+                "pointer": "/buffers/0",
+                "storage": "glb",
+                "mimeType": "application/gltf-buffer",
+                "byteLength": 86858664
+              }
+            ],
+            "hasTextures": false,
+            "drawCallCount": 1,
+            "materialCount": 1,
+            "maxAttributes": 3,
+            "maxInfluences": 0,
+            "animationCount": 0,
+            "hasDefaultScene": true,
+            "hasMorphTargets": false,
+            "totalVertexCount": 1482521,
+            "totalTriangleCount": 2790659
+          },
+          "issues": {
+            "messages": [
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/POSITION",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/NORMAL",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/COLOR_0",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/indices",
+                "severity": 3
+              }
+            ],
+            "numHints": 4,
+            "numInfos": 0,
+            "numErrors": 0,
+            "truncated": false,
+            "numWarnings": 0
+          },
+          "mimeType": "model/gltf-binary",
+          "validatedAt": "2026-11-16T03:45:43.522Z",
+          "validatorVersion": "2.0.0-dev.3.10"
+        },
+        "colorSpace": "sRGB PLY -> linear float32 COLOR_0",
+        "assetBounds": [
+          [
+            -0.1352376490831375,
+            0.0,
+            -0.12332170456647873
+          ],
+          [
+            0.1352376490831375,
+            0.34562456607818604,
+            0.12332170456647873
+          ]
+        ],
+        "pivotPolicy": "BOTTOM_CENTER",
+        "scaleApplied": 1,
+        "sourceBounds": [
+          [
+            -0.1615040962756703,
+            -0.08611618778074341,
+            0.217140639200278
+          ],
+          [
+            0.10897119818469835,
+            0.2595083773190752,
+            0.4637840450440933
+          ]
+        ],
+        "vertexColors": true,
+        "normalMaxError": 2.98023038469708e-08,
+        "sourcePlySha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7",
+        "converterVersion": "trimesh-4.11.4-linear-color-v1",
+        "coordinateSystem": "RIGHT_HANDED_Y_UP",
+        "dimensionsMeters": [
+          0.270475298166275,
+          0.34562456607818604,
+          0.24664340913295746
+        ],
+        "matrixConvention": "row-major; column vectors; already baked",
+        "transformVersion": "RH_YUP_BOTTOM_CENTER_V1",
+        "sourceToAssetMatrix": [
+          [
+            -1.0,
+            0.0,
+            0.0,
+            -0.02626644904548598
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0,
+            0.2595083773190752
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -0.3404623421221857
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "pivotInRotatedSource": [
+          0.02626644904548598,
+          -0.2595083773190752,
+          0.3404623421221857
+        ],
+        "positionMaxErrorMeters": 1.4901079092854985e-08,
+        "pairDistanceMaxErrorMeters": 2.9109922355827168e-08,
+        "undefinedSourceNormalsFilled": 0
+      }
+    },
+    {
+      "id": "8d38fd4d-5c01-4066-8adb-651bb4e0a10a",
+      "meshModelId": "71f3c24d-e296-403d-828d-2a2936f8766e",
+      "status": "READY",
+      "generation": 1,
+      "glbPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/mesh-assets/71f3c24d-e296-403d-828d-2a2936f8766e/8d38fd4d-5c01-4066-8adb-651bb4e0a10a/generation-1/mesh.glb",
+      "sha256": "04c75fea9670a320ab983eb5e78b5d88b9adc8c46599ff0f250ac8909e57e46c",
+      "sizeBytes": 79092292,
+      "sourcePlySha256": "ab81c14b8718470832943134dd6fb148f72411062c6f5453026ace01054a43a0",
+      "orientationEvidence": {
+        "method": "OWNER_AXIS_CONFIRMATION",
+        "upAxis": "-Y",
+        "confirmedAt": "2026-11-16T03:48:13.323816+00:00",
+        "confirmedBy": "e3884f6b-80bb-4018-852f-1ba19d3bb38d"
+      },
+      "metadata": {
+        "faces": 2537575,
+        "units": "m",
+        "sha256": "04c75fea9670a320ab983eb5e78b5d88b9adc8c46599ff0f250ac8909e57e46c",
+        "rotation": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "vertices": 1351107,
+        "sizeBytes": 79092292,
+        "validator": {
+          "info": {
+            "maxUVs": 0,
+            "version": "2.0",
+            "hasSkins": false,
+            "generator": "https://github.com/mikedh/trimesh",
+            "resources": [
+              {
+                "pointer": "/buffers/0",
+                "storage": "glb",
+                "mimeType": "application/gltf-buffer",
+                "byteLength": 79090752
+              }
+            ],
+            "hasTextures": false,
+            "drawCallCount": 1,
+            "materialCount": 1,
+            "maxAttributes": 3,
+            "maxInfluences": 0,
+            "animationCount": 0,
+            "hasDefaultScene": true,
+            "hasMorphTargets": false,
+            "totalVertexCount": 1351107,
+            "totalTriangleCount": 2537575
+          },
+          "issues": {
+            "messages": [
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/POSITION",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/NORMAL",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/COLOR_0",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/indices",
+                "severity": 3
+              }
+            ],
+            "numHints": 4,
+            "numInfos": 0,
+            "numErrors": 0,
+            "truncated": false,
+            "numWarnings": 0
+          },
+          "mimeType": "model/gltf-binary",
+          "validatedAt": "2026-11-16T03:48:28.193Z",
+          "validatorVersion": "2.0.0-dev.3.10"
+        },
+        "colorSpace": "sRGB PLY -> linear float32 COLOR_0",
+        "assetBounds": [
+          [
+            -0.13221879303455353,
+            0.0,
+            -0.11284061521291733
+          ],
+          [
+            0.13221879303455353,
+            0.3383927345275879,
+            0.11284061521291733
+          ]
+        ],
+        "pivotPolicy": "BOTTOM_CENTER",
+        "scaleApplied": 1,
+        "sourceBounds": [
+          [
+            -0.1580246543451352,
+            -0.08410350922250481,
+            0.21739202593637022
+          ],
+          [
+            0.10641293237553141,
+            0.2542892144232726,
+            0.44307325252062685
+          ]
+        ],
+        "vertexColors": true,
+        "normalMaxError": 2.9802307066617573e-08,
+        "sourcePlySha256": "ab81c14b8718470832943134dd6fb148f72411062c6f5453026ace01054a43a0",
+        "converterVersion": "trimesh-4.11.4-linear-color-v1",
+        "coordinateSystem": "RIGHT_HANDED_Y_UP",
+        "dimensionsMeters": [
+          0.26443758606910706,
+          0.3383927345275879,
+          0.22568123042583466
+        ],
+        "matrixConvention": "row-major; column vectors; already baked",
+        "transformVersion": "RH_YUP_BOTTOM_CENTER_V1",
+        "sourceToAssetMatrix": [
+          [
+            -1.0,
+            0.0,
+            0.0,
+            -0.0258058609848019
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0,
+            0.2542892144232726
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -0.33023263922849855
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "pivotInRotatedSource": [
+          0.0258058609848019,
+          -0.2542892144232726,
+          0.33023263922849855
+        ],
+        "positionMaxErrorMeters": 1.4901155309665626e-08,
+        "pairDistanceMaxErrorMeters": 2.8997332373323966e-08,
+        "undefinedSourceNormalsFilled": 1
+      }
+    },
+    {
+      "id": "3fc29449-2492-4f68-90a1-62cd046c91f4",
+      "meshModelId": "a6de84a4-416f-4007-9734-5bf2bfb32408",
+      "status": "READY",
+      "generation": 1,
+      "glbPath": "/home/test/.local/state/gsplatform-vr00-20261011/storage/mesh-assets/a6de84a4-416f-4007-9734-5bf2bfb32408/3fc29449-2492-4f68-90a1-62cd046c91f4/generation-1/mesh.glb",
+      "sha256": "795044ea7823ebfc7f5f93215ccbd7bb548111c28bab3c52e10552779f3d8695",
+      "sizeBytes": 114817120,
+      "sourcePlySha256": "25411b02662d6aca1961cb85c08db25d7a16ab6adef25d2e7566b0e021fcd3c9",
+      "orientationEvidence": {
+        "method": "OWNER_AXIS_CONFIRMATION",
+        "upAxis": "-Y",
+        "confirmedAt": "2026-11-16T03:46:12.631455+00:00",
+        "confirmedBy": "e3884f6b-80bb-4018-852f-1ba19d3bb38d"
+      },
+      "metadata": {
+        "faces": 3804906,
+        "units": "m",
+        "sha256": "795044ea7823ebfc7f5f93215ccbd7bb548111c28bab3c52e10552779f3d8695",
+        "rotation": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "vertices": 1921020,
+        "sizeBytes": 114817120,
+        "validator": {
+          "info": {
+            "maxUVs": 0,
+            "version": "2.0",
+            "hasSkins": false,
+            "generator": "https://github.com/mikedh/trimesh",
+            "resources": [
+              {
+                "pointer": "/buffers/0",
+                "storage": "glb",
+                "mimeType": "application/gltf-buffer",
+                "byteLength": 114815592
+              }
+            ],
+            "hasTextures": false,
+            "drawCallCount": 1,
+            "materialCount": 1,
+            "maxAttributes": 3,
+            "maxInfluences": 0,
+            "animationCount": 0,
+            "hasDefaultScene": true,
+            "hasMorphTargets": false,
+            "totalVertexCount": 1921020,
+            "totalTriangleCount": 3804906
+          },
+          "issues": {
+            "messages": [
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/POSITION",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/NORMAL",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/attributes/COLOR_0",
+                "severity": 3
+              },
+              {
+                "code": "BUFFER_VIEW_TARGET_MISSING",
+                "message": "bufferView.target should be set for vertex or index data.",
+                "pointer": "/meshes/0/primitives/0/indices",
+                "severity": 3
+              }
+            ],
+            "numHints": 4,
+            "numInfos": 0,
+            "numErrors": 0,
+            "truncated": false,
+            "numWarnings": 0
+          },
+          "mimeType": "model/gltf-binary",
+          "validatedAt": "2026-11-16T03:46:34.163Z",
+          "validatorVersion": "2.0.0-dev.3.10"
+        },
+        "colorSpace": "sRGB PLY -> linear float32 COLOR_0",
+        "assetBounds": [
+          [
+            -0.13303625583648682,
+            0.0,
+            -0.11619394272565842
+          ],
+          [
+            0.13303625583648682,
+            0.3371664583683014,
+            0.11619394272565842
+          ]
+        ],
+        "pivotPolicy": "BOTTOM_CENTER",
+        "scaleApplied": 1,
+        "sourceBounds": [
+          [
+            -0.1591518211364746,
+            -0.08412463188171387,
+            0.21531475067138672
+          ],
+          [
+            0.10692068099975587,
+            0.25304183959960935,
+            0.44770263671875
+          ]
+        ],
+        "vertexColors": true,
+        "normalMaxError": 2.9802319390093146e-08,
+        "sourcePlySha256": "25411b02662d6aca1961cb85c08db25d7a16ab6adef25d2e7566b0e021fcd3c9",
+        "converterVersion": "trimesh-4.11.4-linear-color-v1",
+        "coordinateSystem": "RIGHT_HANDED_Y_UP",
+        "dimensionsMeters": [
+          0.26607251167297363,
+          0.3371664583683014,
+          0.23238788545131683
+        ],
+        "matrixConvention": "row-major; column vectors; already baked",
+        "transformVersion": "RH_YUP_BOTTOM_CENTER_V1",
+        "sourceToAssetMatrix": [
+          [
+            -1.0,
+            0.0,
+            0.0,
+            -0.02611557006835937
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0,
+            0.25304183959960935
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            -0.33150869369506836
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "pivotInRotatedSource": [
+          0.02611557006835937,
+          -0.25304183959960935,
+          0.33150869369506836
+        ],
+        "positionMaxErrorMeters": 1.4901161193847656e-08,
+        "pairDistanceMaxErrorMeters": 2.9206275939386295e-08,
+        "undefinedSourceNormalsFilled": 1990
+      }
+    }
+  ],
+  "crossViewer": {
+    "tsdf": {
+      "platform": {
+        "testid": "mesh-preview",
+        "vertices": "1482521",
+        "faces": "2790659",
+        "bounds": "[[-0.1352376490831375,0,-0.12332170456647873],[0.1352376490831375,0.34562456607818604,0.12332170456647873]]",
+        "dimensions": "[0.270475298166275,0.34562456607818604,0.24664340913295746]",
+        "format": "glb",
+        "objectMatrix": "[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]"
+      },
+      "independent": {
+        "file": "downloaded-tsdf.glb",
+        "bounds": [
+          [
+            -0.1352376490831375,
+            0,
+            -0.12332170456647873
+          ],
+          [
+            0.1352376490831375,
+            0.34562456607818604,
+            0.12332170456647873
+          ]
+        ],
+        "dimensions": [
+          0.270475298166275,
+          0.34562456607818604,
+          0.24664340913295746
+        ],
+        "vertices": 1482521,
+        "faces": 2790659,
+        "rootMatrix": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "groundY": 0
+      },
+      "downloadSha256": "8ca6746f6abfb963107639cc3e884e6fb09983cd3d7420379a9857383c869176",
+      "exactMatch": true,
+      "downloadMatchesStoredGlb": true
+    },
+    "nksr": {
+      "platform": {
+        "testid": "mesh-preview",
+        "vertices": "1921020",
+        "faces": "3804906",
+        "bounds": "[[-0.13303625583648682,0,-0.11619394272565842],[0.13303625583648682,0.3371664583683014,0.11619394272565842]]",
+        "dimensions": "[0.26607251167297363,0.3371664583683014,0.23238788545131683]",
+        "format": "glb",
+        "objectMatrix": "[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]"
+      },
+      "independent": {
+        "file": "downloaded-nksr.glb",
+        "bounds": [
+          [
+            -0.13303625583648682,
+            0,
+            -0.11619394272565842
+          ],
+          [
+            0.13303625583648682,
+            0.3371664583683014,
+            0.11619394272565842
+          ]
+        ],
+        "dimensions": [
+          0.26607251167297363,
+          0.3371664583683014,
+          0.23238788545131683
+        ],
+        "vertices": 1921020,
+        "faces": 3804906,
+        "rootMatrix": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "groundY": 0
+      },
+      "downloadSha256": "795044ea7823ebfc7f5f93215ccbd7bb548111c28bab3c52e10552779f3d8695",
+      "exactMatch": true,
+      "downloadMatchesStoredGlb": true
+    }
+  },
+  "building": {
+    "id": "e2f54542-40a1-494f-b260-ad8fd28156e6",
+    "version": "01c63c7c-8eb5-498e-bcc0-77215e92ca12",
+    "slug": "u-06924576399e",
+    "lodMetaSha256": "df735f57c853a77c5b5a758a6c19c5b7e76654581e9f8aba13521f7088fa75ab",
+    "unchanged": true
+  }
+}

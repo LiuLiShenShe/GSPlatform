@@ -1,11 +1,11 @@
 """Numerical, topology, color and format tests against real exporter/validator."""
 
-import json
 import numpy as np
 import pytest
 from plyfile import PlyData, PlyElement
-from workers.meshing.standard_asset import convert, digest, read_glb
+
 from workers.meshing.asset_coordinates import ORIENTATIONS, rotation_matrix
+from workers.meshing.standard_asset import convert, digest, read_glb
 
 
 def make_mesh(tmp_path):

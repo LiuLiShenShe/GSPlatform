@@ -1,0 +1,196 @@
+{
+  "retryable": false,
+  "id": "9083f48a-98eb-4bb1-9001-7965bc5c1afd",
+  "status": "READY",
+  "format": "glb",
+  "sourcePlySha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7",
+  "sha256": "8ca6746f6abfb963107639cc3e884e6fb09983cd3d7420379a9857383c869176",
+  "sizeBytes": 86860204,
+  "converterVersion": "trimesh-4.11.4-linear-color-v1",
+  "transformVersion": "RH_YUP_BOTTOM_CENTER_V1",
+  "orientationEvidence": {
+    "method": "OWNER_AXIS_CONFIRMATION",
+    "upAxis": "-Y",
+    "confirmedAt": "2026-11-16T03:45:28.821544+00:00",
+    "confirmedBy": "e3884f6b-80bb-4018-852f-1ba19d3bb38d"
+  },
+  "rotation": [
+    [
+      -1,
+      0,
+      0
+    ],
+    [
+      0,
+      -1,
+      0
+    ],
+    [
+      0,
+      0,
+      1
+    ]
+  ],
+  "errorCode": null,
+  "createdAt": "2026-11-16T03:45:28.809150+00:00",
+  "metadata": {
+    "faces": 2790659,
+    "units": "m",
+    "sha256": "8ca6746f6abfb963107639cc3e884e6fb09983cd3d7420379a9857383c869176",
+    "rotation": [
+      [
+        -1,
+        0,
+        0
+      ],
+      [
+        0,
+        -1,
+        0
+      ],
+      [
+        0,
+        0,
+        1
+      ]
+    ],
+    "vertices": 1482521,
+    "sizeBytes": 86860204,
+    "validator": {
+      "info": {
+        "maxUVs": 0,
+        "version": "2.0",
+        "hasSkins": false,
+        "generator": "https://github.com/mikedh/trimesh",
+        "resources": [
+          {
+            "pointer": "/buffers/0",
+            "storage": "glb",
+            "mimeType": "application/gltf-buffer",
+            "byteLength": 86858664
+          }
+        ],
+        "hasTextures": false,
+        "drawCallCount": 1,
+        "materialCount": 1,
+        "maxAttributes": 3,
+        "maxInfluences": 0,
+        "animationCount": 0,
+        "hasDefaultScene": true,
+        "hasMorphTargets": false,
+        "totalVertexCount": 1482521,
+        "totalTriangleCount": 2790659
+      },
+      "issues": {
+        "messages": [
+          {
+            "code": "BUFFER_VIEW_TARGET_MISSING",
+            "message": "bufferView.target should be set for vertex or index data.",
+            "pointer": "/meshes/0/primitives/0/attributes/POSITION",
+            "severity": 3
+          },
+          {
+            "code": "BUFFER_VIEW_TARGET_MISSING",
+            "message": "bufferView.target should be set for vertex or index data.",
+            "pointer": "/meshes/0/primitives/0/attributes/NORMAL",
+            "severity": 3
+          },
+          {
+            "code": "BUFFER_VIEW_TARGET_MISSING",
+            "message": "bufferView.target should be set for vertex or index data.",
+            "pointer": "/meshes/0/primitives/0/attributes/COLOR_0",
+            "severity": 3
+          },
+          {
+            "code": "BUFFER_VIEW_TARGET_MISSING",
+            "message": "bufferView.target should be set for vertex or index data.",
+            "pointer": "/meshes/0/primitives/0/indices",
+            "severity": 3
+          }
+        ],
+        "numHints": 4,
+        "numInfos": 0,
+        "numErrors": 0,
+        "truncated": false,
+        "numWarnings": 0
+      },
+      "mimeType": "model/gltf-binary",
+      "validatedAt": "2026-11-16T03:45:43.522Z",
+      "validatorVersion": "2.0.0-dev.3.10"
+    },
+    "colorSpace": "sRGB PLY -> linear float32 COLOR_0",
+    "assetBounds": [
+      [
+        -0.1352376490831375,
+        0,
+        -0.12332170456647873
+      ],
+      [
+        0.1352376490831375,
+        0.34562456607818604,
+        0.12332170456647873
+      ]
+    ],
+    "pivotPolicy": "BOTTOM_CENTER",
+    "scaleApplied": 1,
+    "sourceBounds": [
+      [
+        -0.1615040962756703,
+        -0.08611618778074341,
+        0.217140639200278
+      ],
+      [
+        0.10897119818469835,
+        0.2595083773190752,
+        0.4637840450440933
+      ]
+    ],
+    "vertexColors": true,
+    "normalMaxError": 2.98023038469708e-8,
+    "sourcePlySha256": "5bfa15640883af0c2e2be7d0b7341974ed3cd00893a0d0122c4671ca54c618b7",
+    "converterVersion": "trimesh-4.11.4-linear-color-v1",
+    "coordinateSystem": "RIGHT_HANDED_Y_UP",
+    "dimensionsMeters": [
+      0.270475298166275,
+      0.34562456607818604,
+      0.24664340913295746
+    ],
+    "matrixConvention": "row-major; column vectors; already baked",
+    "transformVersion": "RH_YUP_BOTTOM_CENTER_V1",
+    "sourceToAssetMatrix": [
+      [
+        -1,
+        0,
+        0,
+        -0.02626644904548598
+      ],
+      [
+        0,
+        -1,
+        0,
+        0.2595083773190752
+      ],
+      [
+        0,
+        0,
+        1,
+        -0.3404623421221857
+      ],
+      [
+        0,
+        0,
+        0,
+        1
+      ]
+    ],
+    "pivotInRotatedSource": [
+      0.02626644904548598,
+      -0.2595083773190752,
+      0.3404623421221857
+    ],
+    "positionMaxErrorMeters": 1.4901079092854985e-8,
+    "pairDistanceMaxErrorMeters": 2.9109922355827168e-8,
+    "undefinedSourceNormalsFilled": 0
+  },
+  "downloadUrl": "/api/v1/mesh-models/50c7d4f7-c7fe-49c9-a14b-a89e05288320/files/glb?variantId=9083f48a-98eb-4bb1-9001-7965bc5c1afd"
+}

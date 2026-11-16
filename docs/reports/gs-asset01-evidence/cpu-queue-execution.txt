@@ -1,0 +1,6 @@
+[2026-11-16 11:45:28,863: INFO/MainProcess] Task tasks.convert_mesh_asset[b6470be5-19c3-449d-95e8-eef06baf8fb1] received
+[2026-11-16 11:45:44,324: INFO/ForkPoolWorker-1] Task tasks.convert_mesh_asset[b6470be5-19c3-449d-95e8-eef06baf8fb1] succeeded in 15.459297577966936s: None
+[2026-11-16 11:46:12,651: INFO/MainProcess] Task tasks.convert_mesh_asset[40326032-b4ef-4acb-acc1-deafa571b7e9] received
+[2026-11-16 11:46:35,151: INFO/ForkPoolWorker-1] Task tasks.convert_mesh_asset[40326032-b4ef-4acb-acc1-deafa571b7e9] succeeded in 22.498513951082714s: None
+[2026-11-16 11:48:13,405: INFO/MainProcess] Task tasks.convert_mesh_asset[12b37eb4-d90a-4437-a4ed-d3189d276c4f] received
+[2026-11-16 11:48:29,243: INFO/ForkPoolWorker-1] Task tasks.convert_mesh_asset[12b37eb4-d90a-4437-a4ed-d3189d276c4f] succeeded in 15.837560651940294s: None

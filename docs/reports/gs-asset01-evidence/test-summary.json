@@ -1,0 +1,32 @@
+{
+  "apiUniqueTestsCoveredAndPassed": 680,
+  "apiInitialCpuOnly": {
+    "passed": 675,
+    "failed": 1,
+    "errors": 4,
+    "reason": "CUDA_VISIBLE_DEVICES empty: five required CUDA runtime/preflight checks need a visible GPU"
+  },
+  "gpu0Recheck": {
+    "passed": 6,
+    "recheckedGpuDependent": 5,
+    "repeatedStaticContract": 1,
+    "cudaVisibleDevices": "0",
+    "elapsedSeconds": 903.33
+  },
+  "meshApiWorkerSubset": 33,
+  "converterWorkerTests": 11,
+  "vitest": {
+    "files": 50,
+    "tests": 524
+  },
+  "typecheck": "PASS",
+  "oxlint": "PASS",
+  "productionBuild": "PASS",
+  "ruffChangedPython": "PASS",
+  "realGlbsValidated": 3,
+  "validatorErrorsPerGlb": 0,
+  "validatorWarningsPerGlb": 0,
+  "validatorHintsPerGlb": 4,
+  "realBrowserPageErrors": 0,
+  "gpu1Used": false
+}

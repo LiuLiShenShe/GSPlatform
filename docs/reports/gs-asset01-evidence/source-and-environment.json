@@ -1,0 +1,9 @@
+{
+  "baselineMain": "7aeb0bea2742159af69a6b3bafafd8eb182f2e10",
+  "functionalCommit": "cc8c82f1986bd032c9ea9e9147b4850c92abc11d",
+  "testedSourceHead": "991cbe9659d76ae5f23aaf384d880055153c4392",
+  "fetchedOriginMainBeforeFinalCommit": "7aeb0bea2742159af69a6b3bafafd8eb182f2e10",
+  "runtimeStateDirectory": "/home/test/.local/state/gsplatform-vr00-20261011",
+  "entryPort": 5174,
+  "apiPort": 18001
+}

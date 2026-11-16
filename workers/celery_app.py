@@ -64,7 +64,7 @@ celery_app.conf.update(
         "tasks.cleanup_expired_uploads": {"queue": "gsplatform"},
         "tasks.build_collision": {"queue": "cpu"},
         "tasks.build_mesh": {"queue": "gpu"},
-            "tasks.convert_mesh_asset": {"queue": "cpu"},
+        "tasks.convert_mesh_asset": {"queue": "cpu"},
     },
 )
 
@@ -75,9 +75,8 @@ celery_app.autodiscover_tasks(["tasks"])
 # autodiscover resolution fails (e.g. running via -m celery).
 import tasks.build_collision
 import tasks.build_mesh
+import tasks.convert_mesh_asset
 import tasks.publish_scene
 import tasks.reconstruct_scene  # noqa: F401
 
 __all__ = ["celery_app"]
-
-import tasks.convert_mesh_asset  # noqa: F401,E402

@@ -1,0 +1,16 @@
+[
+  {
+    "meshModelId": "88fbd571-69de-5d89-89f9-fec55b4d66b8",
+    "units": "scene",
+    "sourceSha256": "467f0eefbe945ecf6233851acd2b7702c28439141a36018bc3a9e2e5bb4e4015",
+    "eligible": false,
+    "reason": "\u539f\u59cb Mesh \u7684\u5355\u4f4d\u4e3a scene\uff0c\u7f3a\u5c11\u7c73\u5236\u8bc1\u636e\u3002\u4fdd\u7559\u539f\u6587\u4ef6\u548c\u5355\u4f4d\uff0c\u672c\u6b21\u4e0d\u7f29\u653e\u6216\u5192\u5145\u7c73\u5236\u3002"
+  },
+  {
+    "meshModelId": "f5b98fef-cc93-56e8-b5b8-7defe0d5ecb4",
+    "units": "scene",
+    "sourceSha256": "5b8494b610947569504a01c1534b5deb7524c326af024ff5a3548ab7691f8783",
+    "eligible": false,
+    "reason": "\u539f\u59cb Mesh \u7684\u5355\u4f4d\u4e3a scene\uff0c\u7f3a\u5c11\u7c73\u5236\u8bc1\u636e\u3002\u4fdd\u7559\u539f\u6587\u4ef6\u548c\u5355\u4f4d\uff0c\u672c\u6b21\u4e0d\u7f29\u653e\u6216\u5192\u5145\u7c73\u5236\u3002"
+  }
+]

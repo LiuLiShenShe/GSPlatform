@@ -1,0 +1,34 @@
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ComputePage inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/__tests__/compute.test.tsx > 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列
+Warning: [antd: Alert] `message` is deprecated. Please use `title` instead.
+
+ ✓ src/__tests__/compute.test.tsx (16 tests) 8762ms
+   ✓ 免费计算页（ComputePage） > 未选文件时「下一步」按钮不可用  800ms
+   ✓ 免费计算页（ComputePage） > 添加有效文件后真实上传完成，可进入参数确认步骤  608ms
+   ✓ 免费计算页（ComputePage） > 权利确认未勾选时提交按钮不可用并提示  542ms
+   ✓ 免费计算页（ComputePage） > 勾选权利后提交按钮可用（原「后端未接入」占位行为已移除）  561ms
+   ✓ 免费计算页（ComputePage） > 提交后进入排队与计算步骤并轮询展示真实阶段  622ms
+   ✓ 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有  807ms
+   ✓ 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续  397ms
+   ✓ 免费计算页（ComputePage） > 目标模式要求提示词，并把保留目标参数交给真实提交接口  1319ms
+   ✓ 免费计算页（ComputePage） > 提供两个算法选项，薄物体与植株选择实际提交 2DGS  773ms
+   ✓ 免费计算页（ComputePage） > 按服务端档位限制照片数量，切换高档位后复用已上传素材  1041ms
+   ✓ 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列  533ms
+
+ Test Files  50 passed (50)
+      Tests  524 passed (524)
+   Start at  11:41:35
+   Duration  15.64s (transform 13.77s, setup 12.11s, collect 116.03s, tests 55.22s, environment 62.11s, prepare 7.28s)
