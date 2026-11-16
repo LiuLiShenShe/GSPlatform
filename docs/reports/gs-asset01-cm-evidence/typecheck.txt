@@ -1,0 +1,2 @@
+> @gsplatform/web@0.1.0 typecheck /fj/GSPlatform/apps/web
+> tsc -b --noEmit

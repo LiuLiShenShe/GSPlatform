@@ -1,0 +1,2 @@
+> @gsplatform/web@0.1.0 lint /fj/GSPlatform/apps/web
+> oxlint src

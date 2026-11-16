@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-8.4.2, pluggy-1.7.0
+rootdir: /fj/GSPlatform
+plugins: jaxtyping-0.3.11, anyio-4.15.1
+collected 12 items
+
+workers/tests/test_standard_mesh_assets.py ............                  [100%]
+
+============================== 12 passed in 1.24s ==============================

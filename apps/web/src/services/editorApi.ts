@@ -36,7 +36,7 @@ export interface EditSession {
   stage: string | null;
   progress: number;
   automaticCalibration?: { referenceName: string; originalDistance: number; realLength: number;
-    unit: 'mm' | 'cm' | 'm'; scaleFactor: number } | null;
+    unit: 'mm' | 'cm' | 'm'; scaleFactor: number; geometryUnits?: 'cm' | 'm' } | null;
 }
 
 export async function calibrateScene(slug: string, measurement: {

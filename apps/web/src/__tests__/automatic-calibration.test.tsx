@@ -7,7 +7,7 @@ import * as api from '../services/editorApi';
 vi.mock('../services/editorApi', () => ({calibrateScene: vi.fn(), fetchEditSource: vi.fn(), fetchEditSession: vi.fn()}));
 const source: api.EditSource = {sceneId:'s',sceneTitle:'Plant',currentVersionId:'v1',assetVersion:'asset1',
   format:'sog',counts:[43714],editorEnabled:true,maxGaussians:5000000,spatialState:null,calibrationAvailable:true};
-const pending = {id:'e1',status:'QUEUED',progress:0,automaticCalibration:{scaleFactor:.08}} as api.EditSession;
+const pending = {id:'e1',status:'QUEUED',progress:0,automaticCalibration:{scaleFactor:80,geometryUnits:'cm'}} as api.EditSession;
 beforeEach(() => {vi.clearAllMocks();localStorage.clear();vi.mocked(api.fetchEditSource).mockResolvedValue(source);});
 
 it('enables automatic submission from dimensions alone and refreshes after publication', async () => {
@@ -21,11 +21,11 @@ it('enables automatic submission from dimensions alone and refreshes after publi
   fireEvent.change(screen.getByLabelText('原始测量距离'),{target:{value:'.25'}});
   fireEvent.change(screen.getByLabelText('标定物真实长度'),{target:{value:'20'}});
   expect(button).toBeEnabled();
-  expect(screen.getByText(/缩放倍率：8.000000；标定后 PLY 和 Mesh 单位为厘米/)).toBeInTheDocument();
+  expect(screen.getByText(/缩放倍率：80.00000；标定后 PLY 和 Mesh 单位为厘米/)).toBeInTheDocument();
   expect(document.querySelector('input[type=file]')).toBeNull();
   fireEvent.click(button);
   await waitFor(()=>expect(api.calibrateScene).toHaveBeenCalledWith('s',{
-    expectedCurrentVersion:'v1',referenceName:'标定方块',originalDistance:.25,realLength:20,unit:'mm'}));
+    expectedCurrentVersion:'v1',referenceName:'标定方块',originalDistance:.25,realLength:20,unit:'cm'}));
   expect(button).toBeDisabled();
   await screen.findByText(/尺度标定已完成，新版本已发布/);
   expect(refresh).toHaveBeenCalledTimes(1);

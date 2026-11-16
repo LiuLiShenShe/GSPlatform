@@ -1,0 +1,11 @@
+✓ 免费计算页（ComputePage） > 重建输出默认公开，素材仍私有；明确选择私有后保持私有  836ms
+   ✓ 免费计算页（ComputePage） > 能力探测受限时展示警告但仍允许继续  384ms
+   ✓ 免费计算页（ComputePage） > 目标模式要求提示词，并把保留目标参数交给真实提交接口  1163ms
+   ✓ 免费计算页（ComputePage） > 提供两个算法选项，薄物体与植株选择实际提交 2DGS  693ms
+   ✓ 免费计算页（ComputePage） > 按服务端档位限制照片数量，切换高档位后复用已上传素材  953ms
+   ✓ 免费计算页（ComputePage） > 批量照片上传最多同时创建三个会话，并在完成后继续队列  507ms
+
+ Test Files  50 passed (50)
+      Tests  525 passed (525)
+   Start at  16:07:34
+   Duration  16.42s (transform 11.75s, setup 14.41s, collect 125.90s, tests 62.22s, environment 77.31s, prepare 8.19s)

@@ -13,7 +13,7 @@ export function AutomaticCalibrationPanel({ sceneId, onCompleted }: {
   const [referenceName, setReferenceName] = useState('标定方块');
   const [distance, setDistance] = useState<number | null>(null);
   const [length, setLength] = useState<number | null>(null);
-  const [unit, setUnit] = useState<'mm' | 'cm' | 'm'>('mm');
+  const [unit, setUnit] = useState<'mm' | 'cm' | 'm'>('cm');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const completed = useRef<string | null>(null);
@@ -83,7 +83,7 @@ export function AutomaticCalibrationPanel({ sceneId, onCompleted }: {
   return <Card title="第 1 步：尺度标定">
     <Space orientation="vertical" style={{ width: '100%' }}>
       <Typography.Paragraph>先用已知尺寸的标定物恢复整个模型的真实尺度，再保存视角、标注和其他编辑。标定完成或保存其他编辑后，此入口会锁定，防止重复缩放。</Typography.Paragraph>
-      <Typography.Paragraph>输入方块同一条边在模型中的测量长度和实际长度，点击下方按钮。系统会自动缩放整个模型、发布并加载新版本，无需手动导出或上传文件。</Typography.Paragraph>
+      <Typography.Paragraph>输入方块同一条边在模型中的测量长度和实际长度，点击下方按钮。系统会自动缩放整个模型、发布并加载新版本，无需手动导出或上传文件。新标定的 PLY 和生成的 Mesh 统一使用厘米（cm）；导出 GLB 时换算为米，实际尺寸不变。</Typography.Paragraph>
       <Typography.Paragraph>测量入口：关闭此面板，打开「Gaussian 编辑」，在官方编辑器底部选择 Measure，点击同一条边的两个端点，读取距离后回到此处填写。测量时保持模型原尺寸即可。</Typography.Paragraph>
       {source && <Typography.Text>{source.sceneTitle} · {source.counts[0]?.toLocaleString()} Gaussian</Typography.Text>}
       <Input aria-label="标定物名称" value={referenceName} disabled={running || blocked}

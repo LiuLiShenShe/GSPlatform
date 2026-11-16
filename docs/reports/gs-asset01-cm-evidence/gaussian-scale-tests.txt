@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.15, pytest-8.4.2, pluggy-1.7.0
+rootdir: /fj/GSPlatform
+plugins: jaxtyping-0.3.11, anyio-4.15.1
+collected 2 items
+
+workers/tests/test_automatic_calibration.py ..                           [100%]
+
+============================== 2 passed in 3.90s ===============================

@@ -1,5 +1,7 @@
 # GS-ASSET-01 标准 Mesh 资产验收
 
+> 单位规则后续已按用户要求更新：新标定 Gaussian PLY / Mesh 使用厘米（cm），GLB 导出按 0.01 换算为米；已有明确米制记录的历史文件保持原样。详见 [厘米单位修正](GS_ASSET_01_UNITS_CM.md)。下文是原 2026-11-16 验收记录。
+
 2026-11-16，项目 `/fj/GSPlatform`。执行前 `git fetch origin main`，实际 main 与参考基线均为 `7aeb0bea2742159af69a6b3bafafd8eb182f2e10`，开始时工作区干净。功能提交：`cc8c82f1986bd032c9ea9e9147b4850c92abc11d`；本轮全套测试的代码 HEAD：`991cbe9659d76ae5f23aaf384d880055153c4392`。后续证据提交仅补充测试导入整理、任务注册位置与配置排版和本报告；最终提交号见本报告所在 Git 提交。
 
 已在原 `http://localhost:5174` 上部署 API、CPU worker 和前端，沿用 API `127.0.0.1:18001`、原数据库、原账号和 `/home/test/.local/state/gsplatform-vr00-20261011` 的存储、队列、场景资源。迁移为新增关联表，没有替换环境或另建 Mesh 模型库。运行服务的功能版本为 `cc8c82f`。

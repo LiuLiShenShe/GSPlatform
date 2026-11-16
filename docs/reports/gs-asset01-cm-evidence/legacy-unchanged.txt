@@ -1,0 +1,1 @@
+{"originalMeshesUnchanged": 5, "readyFullGeometryGlbs": 3, "buildingUnchanged": true, "historicalPlyDownloadUnchanged": true}

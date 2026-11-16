@@ -1,0 +1,22 @@
+{
+  "sourceCommit": "2d71bd3bb44a59afb817a1d3d30b027359210367",
+  "rule": "NEW_CALIBRATED_PLY_AND_MESH_CM; GLB_M",
+  "cmToMeters": 0.01,
+  "reapplyCalibration": false,
+  "unitApiWorkerTestsPassed": 52,
+  "converterTestsIncludedIn52": 12,
+  "officialGaussianScaleTestsPassed": 2,
+  "vitestTestsPassed": 525,
+  "vitestFilesPassed": 50,
+  "broaderApi": {
+    "cpuPassed": 679,
+    "retentionFreshIsolatedRecheckPassed": 1,
+    "gpuChecksDeselected": 5
+  },
+  "typecheck": "PASS",
+  "oxlint": "PASS",
+  "productionBuild": "PASS",
+  "ruff": "PASS",
+  "gpu1UsedByThisTask": false,
+  "liveMigration": "e6a701000006"
+}

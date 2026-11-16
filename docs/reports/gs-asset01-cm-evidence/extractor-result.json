@@ -1,0 +1,20 @@
+{
+  "vertices": 3,
+  "faces": 1,
+  "scaleFactor": 80,
+  "units": "cm",
+  "sizeBytes": 482,
+  "boundsMeters": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      0.2,
+      0.2,
+      0.0
+    ]
+  ],
+  "sha256": "173e34f9a2043d05e61922efcd8d309f3fc30d248462000ce8e68f0edc222f8e"
+}

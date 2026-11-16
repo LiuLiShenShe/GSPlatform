@@ -1,0 +1,63 @@
+{
+  "base": "http://127.0.0.1:5174",
+  "browser": "145.0.7632.116",
+  "sourceCommit": "2d71bd3",
+  "defaultCalibrationUnit": "cm",
+  "originalMeterAssetUnchanged": true,
+  "cmConvertedGlb": {
+    "file": "mesh.glb",
+    "bounds": [
+      [
+        -0.1352376490831375,
+        0,
+        -0.12332170456647873
+      ],
+      [
+        0.1352376490831375,
+        0.34562456607818604,
+        0.12332170456647873
+      ]
+    ],
+    "dimensions": [
+      0.270475298166275,
+      0.34562456607818604,
+      0.24664340913295746
+    ],
+    "vertices": 1482521,
+    "faces": 2790659,
+    "rootMatrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "groundY": 0
+  },
+  "errors": [],
+  "failedRequests": [
+    {
+      "url": "http://127.0.0.1:5174/api/v1/mesh-models/50c7d4f7-c7fe-49c9-a14b-a89e05288320/file",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5174/api/v1/mesh-models/50c7d4f7-c7fe-49c9-a14b-a89e05288320/file",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      }
+    }
+  ]
+}
