@@ -462,6 +462,7 @@ dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pillow" },
+    { name = "plyfile" },
     { name = "psycopg2-binary" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -469,6 +470,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "redis" },
     { name = "sqlalchemy" },
+    { name = "trimesh" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -496,6 +498,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10,<2.0" },
     { name = "numpy", specifier = ">=1.26,<3.0" },
     { name = "pillow", specifier = ">=12.3,<13" },
+    { name = "plyfile", specifier = "==1.1.3" },
     { name = "plyfile", marker = "extra == 'dev'", specifier = "==1.1.3" },
     { name = "psycopg2-binary", specifier = ">=2.9.9,<3.0" },
     { name = "pydantic", specifier = ">=2.7,<3.0" },
@@ -508,6 +511,7 @@ requires-dist = [
     { name = "scipy", marker = "extra == 'recon'", specifier = "==1.16.1" },
     { name = "sqlalchemy", specifier = ">=2.0.30,<3.0" },
     { name = "torch", marker = "extra == 'recon'", specifier = "==2.14.0+cu126", index = "https://download.pytorch.org/whl/cu126" },
+    { name = "trimesh", specifier = "==4.11.4" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<1.0" },
 ]
 provides-extras = ["dev", "recon"]
@@ -2214,6 +2218,19 @@ wheels = [
     { url = "https://download-r2.pytorch.org/whl/cu126/torch-2.14.0%2Bcu126-cp315-cp315t-manylinux_2_28_aarch64.whl", hash = "sha256:c9a5674ca12dc716dcc29df4b3e3ce3ef49c0b743dc28150cfd14669352dbeae", upload-time = "2026-09-02T18:46:35Z" },
     { url = "https://download-r2.pytorch.org/whl/cu126/torch-2.14.0%2Bcu126-cp315-cp315t-manylinux_2_28_x86_64.whl", hash = "sha256:87d84eb53ba20b369d8ef499d5995caed47cf2cc591f3a151c2e8b04652752f3", upload-time = "2026-09-02T18:46:50Z" },
     { url = "https://download-r2.pytorch.org/whl/cu126/torch-2.14.0%2Bcu126-cp315-cp315t-win_amd64.whl", hash = "sha256:9b958b826c2b1b64afd5be9c05fe4409971df09f1e47b937ef74c1dba327cdbc", upload-time = "2026-09-02T18:47:38Z" },
+]
+
+[[package]]
+name = "trimesh"
+version = "4.11.4"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1c/6c/57a77091f42c4fe3246810c8878b1f08c65944432bb856e1b797e960c822/trimesh-4.11.4.tar.gz", hash = "sha256:9c3bf253f8b21978e905c2f2fa361621415a6dfaac6b7fdaa54ef3f7f66b8c79", size = 836069, upload-time = "2026-03-18T22:59:11.357Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/3a/0b9fb22a6c34cff36d70d1eb83bf61540aa2d7ced0f5ee023eb2123c3aa2/trimesh-4.11.4-py3-none-any.whl", hash = "sha256:7606a3be929ced36a3bbda8044d675510c46f83fe675fd9a354b5cf13f7db7ae", size = 740767, upload-time = "2026-03-18T22:59:09.45Z" },
 ]
 
 [[package]]

@@ -60,9 +60,19 @@ class MeshModelService:
     def __init__(self, db: Session, settings: Settings) -> None:
         self.db, self.settings = db, settings
 
-    @staticmethod
-    def output(row: MeshModel, scene: Scene) -> MeshModelOut:
+    def output(self, row: MeshModel, scene: Scene) -> MeshModelOut:
+        from app.db.models.mesh_asset_variant import MeshAssetVariant
+
+        status = self.db.scalar(
+            select(MeshAssetVariant.status)
+            .where(MeshAssetVariant.mesh_model_id == row.id)
+            .order_by(
+                (MeshAssetVariant.status == "READY").desc(), MeshAssetVariant.created_at.desc()
+            )
+            .limit(1)
+        )
         return MeshModelOut(
+            glbStatus=status or ("NEEDS_METRIC_EVIDENCE" if row.units != "m" else "NOT_GENERATED"),
             id=row.id,
             title=row.title,
             sceneId=scene.id,

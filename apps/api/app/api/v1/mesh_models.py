@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 from starlette.responses import FileResponse
 
 from app.core.config import get_settings
-from app.core.identity import RequestIdentity, get_current_user
+from app.core.identity import RequestIdentity, get_current_user, require_csrf
 from app.db.session import get_db_session
+from app.schemas.mesh_asset import CreateMeshAsset
 from app.schemas.mesh_model import MeshModelList, MeshModelOut
 from app.services.mesh_models import MeshModelService
 
@@ -54,5 +55,47 @@ def model_file(
         path,
         media_type="application/octet-stream",
         filename=f"mesh-{model.id}-{suffix}.ply",
+        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.get("/{model_id}/glb")
+def glb_status(
+    model_id: UUID,
+    identity: RequestIdentity = Depends(get_current_user),
+    svc: MeshModelService = Depends(service),
+):
+    from app.services.mesh_assets import MeshAssetService
+
+    return MeshAssetService(svc.db, svc.settings).state(model_id, identity)
+
+
+@router.post("/{model_id}/glb", status_code=202)
+def generate_glb(
+    model_id: UUID,
+    body: CreateMeshAsset,
+    identity: RequestIdentity = Depends(require_csrf),
+    svc: MeshModelService = Depends(service),
+):
+    from app.services.celery_client import send_task
+    from app.services.mesh_assets import MeshAssetService
+
+    return MeshAssetService(svc.db, svc.settings).submit(model_id, body, identity, send_task)
+
+
+@router.get("/{model_id}/files/glb")
+def download_glb(
+    model_id: UUID,
+    variantId: UUID | None = None,
+    identity: RequestIdentity = Depends(get_current_user),
+    svc: MeshModelService = Depends(service),
+):
+    from app.services.mesh_assets import MeshAssetService
+
+    path, row = MeshAssetService(svc.db, svc.settings).glb_file(model_id, identity, variantId)
+    return FileResponse(
+        path,
+        media_type="model/gltf-binary",
+        filename=f"mesh-{model_id}-{row.id}.glb",
         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )

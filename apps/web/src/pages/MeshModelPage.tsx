@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Alert, Button, Descriptions, Space, Tag, Typography } from 'antd';
 import { Link, useParams } from 'react-router-dom';
 import { ErrorState, LoadingState } from '../components/stateViews';
-import { MeshPreview } from '../components/MeshPreview';
+import { MeshGlbPanel } from '../components/MeshGlbPanel';
 import { useDocumentTitle } from '../hooks/useBreakpoints';
 import { downloadMeshModel, fetchMeshModel, type MeshModel } from '../services/meshModelsApi';
 import { toApiError } from '../services/http';
@@ -41,6 +41,6 @@ export default function MeshModelPage() {
       { key: 'size', label: '文件大小', children: `${(model.sizeBytes / 1048576).toFixed(1)} MB` },
       { key: 'version', label: '来源版本', children: <Typography.Text copyable>{model.sourceVersionId}</Typography.Text> },
     ]} />
-    <MeshPreview modelId={model.id} />
+    <MeshGlbPanel key={model.id} model={model} />
   </section>;
 }

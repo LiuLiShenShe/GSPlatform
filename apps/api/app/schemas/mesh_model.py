@@ -25,6 +25,7 @@ class MeshModelOut(BaseModel):
     downloadUrl: str
     previewUrl: str
     jobId: UUID | None = None
+    glbStatus: str = "NOT_GENERATED"
 
 
 class MeshModelList(BaseModel):

@@ -45,6 +45,8 @@ dependencies = [
     "PyYAML>=6.0,<7.0",
     "redis>=5.0,<6.0",
     "numpy>=1.26,<3.0",
+    "trimesh==4.11.4",
+    "plyfile==1.1.3",
     # Used by workers/reconstruction/train_gsplat_script.py (import PIL). It
     # must be in the *main* closure, not the recon extra: production installs
     # apps/api without extras and then adds torch/gsplat.

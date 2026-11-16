@@ -1,0 +1,30 @@
+<!doctype html><html lang="zh"><meta charset="UTF-8"><title>独立 GLB 文件检查</title><style>body{margin:0;background:#202630;color:white;font:16px sans-serif}header{padding:12px}pre{margin:12px;max-height:120px;overflow:auto}canvas{display:block}</style>
+<header>独立 Three.js · 本地 GLB 文件 · Y-up / 米 / Y=0 地面 <input type="file" accept=".glb" id="file"></header><pre id="metadata">请选择合法下载的 GLB；此页不调用资产 API，不修正模型坐标或尺度。</pre><div id="view"></div>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+const scene=new THREE.Scene();scene.background=new THREE.Color('#202630');
+const camera=new THREE.PerspectiveCamera(45,1,.0001,1000);
+const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));document.querySelector('#view').append(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xffffff,0x6b7280,2.3));const light=new THREE.DirectionalLight(0xffffff,2.2);light.position.set(-2,3,4);scene.add(light);
+const resize=()=>{const h=innerHeight-180;renderer.setSize(innerWidth,h);camera.aspect=innerWidth/h;camera.updateProjectionMatrix();};addEventListener('resize',resize);resize();renderer.setAnimationLoop(()=>{controls.update();renderer.render(scene,camera);});
+let previous,ground;
+document.querySelector('#file').addEventListener('change',async event=>{
+ try{
+ const file=event.target.files[0];if(!file)return;
+ if(previous){scene.remove(previous);previous.traverse(o=>{o.geometry?.dispose();if(o.material){const list=Array.isArray(o.material)?o.material:[o.material];list.forEach(m=>m.dispose());}});}
+ if(ground){scene.remove(ground);ground.geometry.dispose();ground.material.dispose();}
+ const object=(await new GLTFLoader().parseAsync(await file.arrayBuffer(),'')).scene;
+ // Loaded local object goes directly into the scene. No model transform.
+ scene.add(object);previous=object;
+ const bounds=new THREE.Box3().setFromObject(object,true),size=bounds.getSize(new THREE.Vector3()),center=bounds.getCenter(new THREE.Vector3()),radius=size.length()/2;
+ camera.position.copy(center).add(new THREE.Vector3(0,0,-radius/Math.sin(THREE.MathUtils.degToRad(22.5))*1.1));camera.near=radius/10000;camera.far=radius*100;camera.updateProjectionMatrix();controls.target.copy(center);controls.update();
+ ground=new THREE.GridHelper(Math.max(size.x,size.z)*1.4,10,0x5ad2ac,0x42645a);scene.add(ground);
+ let vertices=0,faces=0;object.traverse(o=>{if(o.isMesh){vertices+=o.geometry.attributes.position.count;faces+=o.geometry.index?o.geometry.index.count/3:o.geometry.attributes.position.count/3;}});
+ const metadata={file:file.name,bounds:[bounds.min.toArray(),bounds.max.toArray()],dimensions:size.toArray(),vertices,faces,rootMatrix:object.matrix.toArray(),groundY:0};
+ document.querySelector('#metadata').textContent=JSON.stringify(metadata,null,2);document.querySelector('#metadata').dataset.ready='true';window.assetCheck=metadata;
+ }catch(error){document.querySelector('#metadata').textContent=String(error);}
+});
+</script></html>

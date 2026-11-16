@@ -58,7 +58,7 @@ export default function MeshModelsPage() {
         <div className="gs-works-grid">{result.items.map(model => <Card key={model.id} className="gs-mesh-card"
           cover={<Link to={model.previewUrl} aria-label={`预览 ${model.title}`} className="gs-mesh-card__cover"><DeploymentUnitOutlined /><span>{model.algorithm === 'nksr' ? 'NKSR' : '2DGS TSDF'}</span></Link>}>
           <Typography.Title level={5} ellipsis={{ tooltip: model.title }} style={{ marginTop: 0 }}>{model.title}</Typography.Title>
-          <Space wrap><Tag color="success">已完成</Tag><Tag>{model.units === 'm' ? '米制' : '未标定尺度'}</Tag>
+          <Space wrap><Tag color="success">已完成 PLY</Tag><Tag color={model.glbStatus==='READY'?'success':undefined}>{model.glbStatus==='READY'?'GLB 可用':model.glbStatus==='RUNNING'||model.glbStatus==='QUEUED'?'GLB 转换中':model.glbStatus==='FAILED'?'GLB 转换失败':'GLB 待生成'}</Tag><Tag>{model.units === 'm' ? '米制' : '未标定尺度'}</Tag>
             {!model.isCurrentSource && <Tag>历史版本</Tag>}</Space>
           <Typography.Paragraph style={{ marginTop: 12, marginBottom: 4 }}>{model.faces.toLocaleString()} 三角面 · {model.vertices.toLocaleString()} 顶点</Typography.Paragraph>
           <Typography.Paragraph type="secondary">{(model.sizeBytes / 1048576).toFixed(1)} MB · {new Date(model.createdAt).toLocaleString()}</Typography.Paragraph>
