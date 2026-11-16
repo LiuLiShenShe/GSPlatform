@@ -173,6 +173,8 @@ def run_mesh_job(job_id, session_factory, settings):
                 *geometry_args,
                 "--scale",
                 str(parameters["scaleFactor"]),
+                "--units",
+                parameters.get("units", "m"),
             ]
         )
         for index, command in enumerate(commands):

@@ -49,6 +49,7 @@ def register_mesh(
             "reconstructionJobId": job.task_parameters["reconstructionJobId"],
             "scaleFactor": job.task_parameters["scaleFactor"],
             "editedGeometry": job.task_parameters.get("editedGeometry", False),
+            "sourceUnits": metadata["units"],
         },
     )
     db.add(row)
@@ -72,7 +73,9 @@ class MeshModelService:
             .limit(1)
         )
         return MeshModelOut(
-            glbStatus=status or ("NEEDS_METRIC_EVIDENCE" if row.units != "m" else "NOT_GENERATED"),
+            glbStatus=status or (
+                "NOT_GENERATED" if row.units in ("cm", "m") else "NEEDS_METRIC_EVIDENCE"
+            ),
             id=row.id,
             title=row.title,
             sceneId=scene.id,

@@ -145,7 +145,9 @@ def extract_nksr(observations):
     }
 
 
-def save_mesh(mesh, output, scale, metadata):
+def save_mesh(mesh, output, scale, metadata, units="m"):
+    if units not in ("cm", "m"):
+        raise ValueError("Unsupported calibrated mesh unit")
     if (
         not len(mesh.vertices)
         or not len(mesh.triangles)
@@ -168,11 +170,11 @@ def save_mesh(mesh, output, scale, metadata):
         vertices=len(mesh.vertices),
         faces=len(mesh.triangles),
         scaleFactor=scale,
-        units="m",
+        units=units,
         sizeBytes=(output / "mesh.ply").stat().st_size,
         boundsMeters=[
-            np.asarray(mesh.vertices).min(0).tolist(),
-            np.asarray(mesh.vertices).max(0).tolist(),
+            (np.asarray(mesh.vertices).min(0) * (0.01 if units == "cm" else 1)).tolist(),
+            (np.asarray(mesh.vertices).max(0) * (0.01 if units == "cm" else 1)).tolist(),
         ],
         sha256=hashlib.sha256((output / "mesh.ply").read_bytes()).hexdigest(),
     )
@@ -187,6 +189,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--algorithm", choices=("gsplat", "2dgs"), required=True)
     parser.add_argument("--scale", type=float, required=True)
+    parser.add_argument("--units", choices=["cm", "m"], default="m")
     parser.add_argument("--gaussian-ply", type=Path)
     args = parser.parse_args()
     if not np.isfinite(args.scale) or args.scale <= 0:
@@ -198,7 +201,7 @@ def main():
         else extract_nksr(args.output / "observations.npz")
     )
     print("MESHPROGRESS WRITING 95", flush=True)
-    save_mesh(mesh, args.output, args.scale, metadata)
+    save_mesh(mesh, args.output, args.scale, metadata, args.units)
     torch.cuda.synchronize()
     print("MESHPROGRESS SUCCEEDED 100", flush=True)
 

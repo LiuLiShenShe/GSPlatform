@@ -36,7 +36,7 @@ export function MeshGlbPanel({ model }: { model: MeshModel }) {
     {error&&<Alert type="error" title={error}/>}
     {state&&!state.eligible&&<Alert type="info" title={state.reason}/>}
     {state?.eligible&&<Space orientation="vertical" style={{width:'100%',marginBottom:16}}>
-      <Typography.Text>确认源模型哪个方向朝上。这里只旋转和平移，不改变原 Mesh 尺寸；朝向预览以绿色地面表示 Y=0。</Typography.Text>
+      <Typography.Text>确认源模型哪个方向朝上。保留原 Mesh 的实际尺寸；{model.units === 'cm' ? '源 PLY 为厘米，GLB 自动按 0.01 换算为米；' : '源 PLY 已为米，GLB 不再换算；'}朝向预览以绿色地面表示 Y=0。</Typography.Text>
       <Space wrap><Select aria-label="源模型朝上轴" value={axis} style={{width:190}} onChange={v=>{setAxis(v);setConfirmed(false);setPreview('orientation');}}
         options={state.orientations.map(v=>({value:v.upAxis,label:`源 ${v.upAxis} → 资产 +Y`}))}/>
         <Button onClick={()=>setPreview('orientation')}>预览方向与底部</Button>
@@ -52,7 +52,7 @@ export function MeshGlbPanel({ model }: { model: MeshModel }) {
       {key:'pivot',label:'Pivot',children:'包围盒底部中心（0,0,0）'},
       {key:'geometry',label:'完整几何',children:`${metadata.vertices.toLocaleString()} 顶点 / ${metadata.faces.toLocaleString()} 三角面`},
       {key:'validator',label:'glTF 2.0',children:<Tag color="success">Validator {metadata.validator.issues.numErrors} errors</Tag>},
-      {key:'scale',label:'尺寸',children:'继承原始 Mesh；转换不缩放'},
+      {key:'scale',label:'单位换算',children:model.units==='cm'?'厘米 → 米 × 0.01；不重新标定':'米 → 米 × 1；不重新标定'},
     ]}/>}
     {preview==='orientation'&&<Alert type="info" title="朝向确认预览：按所选轴旋转并移动到底部中心，尚未写入资产。" style={{marginBottom:12}}/>}
     <MeshPreview modelId={model.id} format={preview==='glb'?'glb':'ply'} variantId={chosen?.id}

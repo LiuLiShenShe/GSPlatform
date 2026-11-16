@@ -50,7 +50,7 @@ def model_file(
     svc: MeshModelService = Depends(service),
 ) -> FileResponse:
     path, model = svc.file(model_id, identity)
-    suffix = "meters" if model.units == "m" else "scene-units"
+    suffix = {"m": "meters", "cm": "centimeters"}.get(model.units, "scene-units")
     return FileResponse(
         path,
         media_type="application/octet-stream",

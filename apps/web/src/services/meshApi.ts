@@ -26,7 +26,7 @@ export async function downloadMesh(sceneId: string, jobId: string) {
   const url = URL.createObjectURL(response.data);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `${sceneId}-mesh-meters.ply`;
+  anchor.download = `${sceneId}-mesh.ply`;
   anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }

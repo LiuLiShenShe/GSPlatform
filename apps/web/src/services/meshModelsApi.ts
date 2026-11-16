@@ -4,7 +4,7 @@ export interface MeshModel {
   glbStatus?: string;
   id: string; title: string; sceneId: string; sceneSlug: string; sceneTitle: string;
   sourceVersionId: string; isCurrentSource: boolean; algorithm: 'nksr' | '2dgs-tsdf';
-  units: 'm' | 'scene'; vertices: number; faces: number; sizeBytes: number;
+  units: 'cm' | 'm' | 'scene'; vertices: number; faces: number; sizeBytes: number;
   sha256: string; createdAt: string; downloadUrl: string; previewUrl: string; jobId: string | null;
 }
 export interface MeshModelsList { items: MeshModel[]; total: number; page: number; pageSize: number }
@@ -21,11 +21,12 @@ export async function downloadMeshModel(model: MeshModel) {
   const data = await fetchMeshFile(model.id);
   const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
   const anchor = document.createElement('a');
-  anchor.href = url; anchor.download = `${model.title}-${model.units === 'm' ? 'meters' : 'scene-units'}.ply`;
+  anchor.href = url; anchor.download = `${model.title}-${model.units === 'cm' ? 'centimeters' : model.units === 'm' ? 'meters' : 'scene-units'}.ply`;
   anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 export interface GlbMetadata {
+  sourceUnits?: 'cm' | 'm'; unitConversionScale?: number;
   sourceToAssetMatrix: number[][]; sourceBounds: number[][]; assetBounds: number[][];
   dimensionsMeters: number[]; pivotPolicy: string; vertices: number; faces: number;
   validator: { issues: { numErrors: number; numWarnings: number } };

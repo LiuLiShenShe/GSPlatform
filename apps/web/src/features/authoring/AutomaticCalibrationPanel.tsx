@@ -60,7 +60,7 @@ export function AutomaticCalibrationPanel({ sceneId, onCompleted }: {
 
   const running = busy || !!(session && !terminal.has(session.status));
   const blocked = source?.calibrationAvailable === false;
-  const factor = distance && length ? length * { mm: .001, cm: .01, m: 1 }[unit] / distance : null;
+  const factor = distance && length ? length * { mm: .1, cm: 1, m: 100 }[unit] / distance : null;
   const missing = !source ? '正在读取模型…' : blocked ? source.calibrationBlockedReason
     : !referenceName.trim() ? '请填写标定物名称。' : !distance || distance <= 0 ? '请填写模型中测得的长度。'
       : !length || length <= 0 ? '请填写标定物的实际长度。' : null;
@@ -94,7 +94,7 @@ export function AutomaticCalibrationPanel({ sceneId, onCompleted }: {
         value={length} disabled={running || blocked} onChange={setLength} /></label>
       <Select aria-label="标定长度单位" value={unit} disabled={running || blocked} onChange={setUnit}
         options={['mm', 'cm', 'm'].map(value => ({ value, label: value }))} />
-      {factor && <Typography.Text>整个模型等比例缩放倍率：{factor.toPrecision(7)}；缩放后单位为米。</Typography.Text>}
+      {factor && <Typography.Text>整个模型等比例缩放倍率：{factor.toPrecision(7)}；标定后 PLY 和 Mesh 单位为厘米（cm）。导出 GLB 时自动换算为米，实际尺寸不变。</Typography.Text>}
       {missing && !running && <Alert type={blocked ? 'warning' : 'info'} title={missing} />}
       {error && <Alert type="error" title={error} />}
       <Button type="primary" loading={running} disabled={running || blocked || !!missing || !source?.currentVersionId}

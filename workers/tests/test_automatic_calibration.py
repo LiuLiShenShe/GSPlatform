@@ -8,7 +8,8 @@ from workers.pipeline.calibrate_scene import scale_gaussians
 from workers.pipeline.gaussian_quality import read_gaussian_ply
 
 
-def test_real_official_uniform_scaling_preserves_geometry_and_attributes(tmp_path):
+@pytest.mark.parametrize("factor", [0.08, 80])
+def test_real_official_uniform_scaling_preserves_geometry_and_attributes(tmp_path, factor):
     names = [
         "x",
         "y",
@@ -37,13 +38,13 @@ def test_real_official_uniform_scaling_preserves_geometry_and_attributes(tmp_pat
         + struct.pack("<" + "f" * 42, *(value for row in rows for value in row))
     )
     output = tmp_path / "work" / "scaled.ply"
-    receipt = scale_gaussians(source, output, factor=0.08, expected_count=3)
+    receipt = scale_gaussians(source, output, factor=factor, expected_count=3)
     before, after = read_gaussian_ply(source), read_gaussian_ply(output)
     for axis in ("x", "y", "z"):
-        np.testing.assert_allclose(after[axis], before[axis] * 0.08, rtol=1e-6)
+        np.testing.assert_allclose(after[axis], before[axis] * factor, rtol=1e-6)
     for axis in range(3):
         np.testing.assert_allclose(
-            after[f"scale_{axis}"], before[f"scale_{axis}"] + math.log(0.08), rtol=1e-6
+            after[f"scale_{axis}"], before[f"scale_{axis}"] + math.log(factor), rtol=1e-6
         )
     for name in (
         "opacity",
@@ -60,5 +61,5 @@ def test_real_official_uniform_scaling_preserves_geometry_and_attributes(tmp_pat
     assert not (output.parent / "original.ply").exists()
     with pytest.raises(ValueError, match="preserve every Gaussian"):
         scale_gaussians(
-            source, tmp_path / "bad" / "scaled.ply", factor=0.08, expected_count=4
+            source, tmp_path / "bad" / "scaled.ply", factor=factor, expected_count=4
         )

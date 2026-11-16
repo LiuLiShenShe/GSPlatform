@@ -55,9 +55,10 @@ class MeshAssetService(MeshModelService):
             .order_by(MeshAssetVariant.created_at.desc())
         ).all()
         return {
-            "eligible": model.units == "m",
+            "eligible": model.units in ("cm", "m"),
+            "sourceUnits": model.units,
             "reason": None
-            if model.units == "m"
+            if model.units in ("cm", "m")
             else "原始 Mesh 的单位为 scene，缺少米制证据。保留原文件和单位，本次不缩放或冒充米制。",
             "orientationRequired": True,
             "orientations": [
@@ -69,13 +70,13 @@ class MeshAssetService(MeshModelService):
     def submit(self, model_id, body: CreateMeshAsset, identity, send_task):
         self.owned(model_id, identity)
         model = self.db.scalar(select(MeshModel).where(MeshModel.id == model_id).with_for_update())
-        if model.units != "m":
+        if model.units not in ("cm", "m"):
             raise ConflictError("Mesh 尚无米制证据，不能生成标准米制 GLB；原始文件保留。")
         if model.sha256 != body.sourcePlySha256:
             raise ConflictError("源 PLY 校验和已变化，请刷新")
         rotation = ORIENTATIONS[body.upAxis]
         key = hashlib.sha256(
-            (str(model_id) + recipe_key(model.sha256, rotation)).encode()
+            (str(model_id) + recipe_key(model.sha256, rotation, model.units)).encode()
         ).hexdigest()
         row = self.db.scalar(
             select(MeshAssetVariant).where(MeshAssetVariant.recipe_key == key).with_for_update()
@@ -94,6 +95,7 @@ class MeshAssetService(MeshModelService):
                     "upAxis": body.upAxis,
                     "confirmedAt": datetime.now(UTC).isoformat(),
                     "method": "OWNER_AXIS_CONFIRMATION",
+                    "sourceUnits": model.units,
                 },
                 status="QUEUED",
             )

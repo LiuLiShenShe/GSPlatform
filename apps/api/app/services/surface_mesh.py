@@ -109,6 +109,8 @@ class SurfaceMeshService:
             "scaleFactor": factor,
             "mesherVersion": 1,
         }
+        if evidence.get("geometryUnits") == "cm":
+            source["units"] = "cm"
         if visited:
             from app.db.models.scene import SceneVersion
 

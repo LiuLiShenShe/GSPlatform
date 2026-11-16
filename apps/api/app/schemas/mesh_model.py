@@ -16,7 +16,7 @@ class MeshModelOut(BaseModel):
     sourceVersionId: UUID
     isCurrentSource: bool
     algorithm: Literal["nksr", "2dgs-tsdf"]
-    units: Literal["m", "scene"]
+    units: Literal["cm", "m", "scene"]
     vertices: int
     faces: int
     sizeBytes: int

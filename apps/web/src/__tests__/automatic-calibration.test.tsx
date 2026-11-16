@@ -21,6 +21,7 @@ it('enables automatic submission from dimensions alone and refreshes after publi
   fireEvent.change(screen.getByLabelText('原始测量距离'),{target:{value:'.25'}});
   fireEvent.change(screen.getByLabelText('标定物真实长度'),{target:{value:'20'}});
   expect(button).toBeEnabled();
+  expect(screen.getByText(/缩放倍率：8.000000；标定后 PLY 和 Mesh 单位为厘米/)).toBeInTheDocument();
   expect(document.querySelector('input[type=file]')).toBeNull();
   fireEvent.click(button);
   await waitFor(()=>expect(api.calibrateScene).toHaveBeenCalledWith('s',{

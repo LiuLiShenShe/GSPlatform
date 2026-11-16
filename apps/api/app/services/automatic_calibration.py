@@ -79,7 +79,8 @@ def finish_calibration(
         row = SceneProcessingSettings(scene_id=scene.id)
         db.add(row)
     row.calibration_state = "ASSUMED"
-    row.meters_per_scene_unit = 1.0
+    # Old queued calibrations used meter coordinates. Preserve their contract.
+    row.meters_per_scene_unit = 0.01 if request.get("geometryUnits") == "cm" else 1.0
     row.reference_method = "USER_ASSUMPTION"
     row.reference_value = evidence["realLengthMeters"]
     row.calibration_source_version = result.asset_version

@@ -172,3 +172,28 @@ def test_old_execution_cannot_publish(asset, db, monkeypatch):
     db.expire_all()
     row = db.get(MeshAssetVariant, identifier)
     assert row.generation == 2 and row.status != "READY" and row.storage_key is None
+
+
+def test_centimeter_mesh_worker_and_download_preserve_source_unit(asset, db):
+    import numpy as np
+    from workers.meshing.asset_job import run_asset_job
+    from workers.meshing.standard_asset import read_glb
+
+    client, _, model, path, _ = asset
+    model.units = "cm"
+    db.commit()
+    before = path.read_bytes()
+    identifier = submit(asset).json()["id"]
+    run_asset_job(identifier, SessionLocal, settings)
+    db.expire_all()
+    row = db.get(MeshAssetVariant, identifier)
+    assert row.status == "READY", row.error_code
+    assert row.result["sourceUnits"] == "cm"
+    assert row.result["unitConversionScale"] == 0.01
+    _, attrs, _ = read_glb(Path(settings.storage_root) / row.storage_key)
+    assert np.linalg.norm(attrs["POSITION"][1] - attrs["POSITION"][0]) == pytest.approx(0.02)
+    detail = client.get(f"/api/v1/mesh-models/{model.id}").json()
+    assert detail["units"] == "cm" and detail["glbStatus"] == "READY"
+    download = client.get(f"/api/v1/mesh-models/{model.id}/file")
+    assert "centimeters.ply" in download.headers["content-disposition"]
+    assert download.content == before

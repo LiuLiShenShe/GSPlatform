@@ -39,7 +39,7 @@ def run_asset_job(identifier, session_factory, settings):
         scene = db.get(Scene, model.scene_id)
         if (
             scene.deleted_at
-            or model.units != "m"
+            or model.units not in ("cm", "m")
             or model.sha256 != row.source_ply_sha256
         ):
             row.status = "FAILED"
@@ -68,6 +68,7 @@ def run_asset_job(identifier, session_factory, settings):
             "sha256": model.sha256,
             "vertices": model.vertices,
             "faces": model.faces,
+            "sourceUnits": model.units,
         }
         db.commit()
     directory = (
@@ -97,7 +98,7 @@ def run_asset_job(identifier, session_factory, settings):
                 or row.status != "RUNNING"
                 or scene.deleted_at
                 or model.sha256 != request["sha256"]
-                or model.units != "m"
+                or model.units != request["sourceUnits"]
             ):
                 return True
             if time.monotonic() - heartbeat > 10:
@@ -146,7 +147,7 @@ def run_asset_job(identifier, session_factory, settings):
             if (
                 scene.deleted_at
                 or model.sha256 != request["sha256"]
-                or model.units != "m"
+                or model.units != request["sourceUnits"]
             ):
                 raise ValueError("Source changed")
             final = directory / "mesh.glb"

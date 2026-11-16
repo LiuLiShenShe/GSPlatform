@@ -25,7 +25,7 @@ class MeshModel(Base):
     job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("jobs.id"), unique=True)
     title: Mapped[str] = mapped_column(String(240), nullable=False)
     algorithm: Mapped[Literal["nksr", "2dgs-tsdf"]] = mapped_column(String(20), nullable=False)
-    units: Mapped[Literal["m", "scene"]] = mapped_column(String(10), nullable=False)
+    units: Mapped[Literal["cm", "m", "scene"]] = mapped_column(String(10), nullable=False)
     vertices: Mapped[int] = mapped_column(BigInteger, nullable=False)
     faces: Mapped[int] = mapped_column(BigInteger, nullable=False)
     size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
@@ -38,7 +38,7 @@ class MeshModel(Base):
 
     __table_args__ = (
         CheckConstraint("algorithm IN ('nksr','2dgs-tsdf')", name="algorithm_valid"),
-        CheckConstraint("units IN ('m','scene')", name="units_valid"),
+        CheckConstraint("units IN ('cm','m','scene')", name="units_valid"),
         CheckConstraint("vertices > 0 AND faces > 0 AND size_bytes > 0", name="geometry_valid"),
         Index("ix_mesh_models_owner_created", "owner_id", "created_at", "id"),
     )

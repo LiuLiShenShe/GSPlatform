@@ -213,11 +213,11 @@ class EditorSessionService:
         if version is None or version.format not in ("ply", "sog", "streamed-sog"):
             raise ConflictError("此版本没有可标定的 Gaussian 来源")
         factor = (
-            body.realLength * {"mm": 0.001, "cm": 0.01, "m": 1}[body.unit] / body.originalDistance
+            body.realLength * {"mm": 0.1, "cm": 1, "m": 100}[body.unit] / body.originalDistance
         )
         if not math.isfinite(factor) or not 1e-9 <= factor <= 1e9:
             raise ConflictError("缩放倍率超出支持范围（1e-9 至 1e9），请检查单位与测量值")
-        request = {**body.model_dump(mode="json"), "scaleFactor": factor}
+        request = {**body.model_dump(mode="json"), "scaleFactor": factor, "geometryUnits": "cm"}
         prior = self.session.scalars(
             select(SceneEditSession).where(
                 SceneEditSession.scene_id == scene.id,

@@ -60,7 +60,7 @@ export function SurfaceMeshPanel({ sceneId }: { sceneId: string }) {
   return <Card title="表面网格化">
     <Space orientation="vertical" style={{ width: '100%' }}>
       <Typography.Paragraph>高斯重建完成后不会自动生成 Mesh。请先完成尺度标定；如需清理高斯，请先在高级 Gaussian 编辑中提交并等待新版本发布，再回到这里确认。</Typography.Paragraph>
-      <Typography.Paragraph>也可以直接确认当前高斯并生成彩色三角网格。网格自动沿用标定倍率，下载后的长度单位为米。</Typography.Paragraph>
+      <Typography.Paragraph>也可以直接确认当前高斯并生成彩色三角网格。网格沿用已应用的真实尺度，新标定的 PLY 和 Mesh 使用厘米（cm），GLB 导出时换算为米；历史文件保留原有单位。</Typography.Paragraph>
       <Typography.Paragraph>2DGS 使用原生深度融合（TSDF）；通用 3DGS 使用 NKSR。系统根据重建算法自动选择。</Typography.Paragraph>
       {state?.algorithm && <Typography.Text strong>当前方法：{state.algorithm === '2dgs-tsdf' ? '2DGS 原生 TSDF' : '3DGS → NKSR'}</Typography.Text>}
       {state?.reason && <Alert type="info" title={state.reason} />}
@@ -85,7 +85,7 @@ export function SurfaceMeshPanel({ sceneId }: { sceneId: string }) {
           <Button disabled={busy || job.status === 'CANCEL_REQUESTED'} onClick={() => { void cancel(); }}>取消网格生成</Button></>}
         {job.errorMessage && <Alert type={job.status === 'CANCELLED' ? 'info' : 'error'} title={job.errorMessage} />}
         {job.status === 'SUCCEEDED' && job.result && state?.available && <>
-          <Typography.Text>{job.result.vertices.toLocaleString()} 个顶点 · {job.result.faces.toLocaleString()} 个三角面 · 单位：米</Typography.Text>
+          <Typography.Text>{job.result.vertices.toLocaleString()} 个顶点 · {job.result.faces.toLocaleString()} 个三角面 · 单位：{job.result.units === 'cm' ? '厘米（cm）' : job.result.units === 'm' ? '米（m）' : job.result.units}</Typography.Text>
           <Button loading={downloading} onClick={() => { void download(); }}>下载彩色 PLY 网格</Button>
           <Link to={job.result.previewUrl ?? '/meshes'}><Button type="primary">查看 Mesh 模型</Button></Link>
         </>}

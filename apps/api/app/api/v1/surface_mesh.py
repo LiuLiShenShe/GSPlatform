@@ -58,9 +58,11 @@ def download_mesh(
     svc: SurfaceMeshService = Depends(service),
 ) -> FileResponse:
     path = svc.download(slug, job_id, identity)
+    _, job = svc.owned_job(slug, job_id, identity)
+    result = job.task_parameters.get("result", {})
     return FileResponse(
         path,
         media_type="application/octet-stream",
-        filename=f"{slug}-mesh-meters.ply",
+        filename=f"{slug}-mesh-{result.get('units', 'm')}.ply",
         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"},
     )

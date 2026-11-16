@@ -109,6 +109,21 @@ def test_calibration_is_required_before_mesh(owner):
     )
 
 
+def test_mesh_inherits_centimeter_calibration_without_unit_rescaling(mesh_source, db, monkeypatch):
+    _, scene, _, _ = mesh_source
+    calibration = db.get(SceneProcessingSettings, scene.id)
+    calibration.calibration_evidence = {
+        **calibration.calibration_evidence, "geometryUnits": "cm", "scaleFactor": 80,
+    }
+    db.commit()
+    monkeypatch.setattr("app.services.celery_client.send_task", lambda *a, **kw: None)
+    response = post_mesh(mesh_source)
+    assert response.status_code == 202
+    job = db.get(Job, response.json()["job"]["id"])
+    assert job.task_parameters["units"] == "cm"
+    assert job.task_parameters["scaleFactor"] == 80
+
+
 def test_requires_owner_csrf_and_exact_version(mesh_source):
     client, scene, _, _ = mesh_source
     url = f"/api/v1/scenes/{scene.slug}/mesh"
@@ -227,7 +242,8 @@ def test_fenced_worker_applies_durable_input_and_cannot_run_twice(mesh_source, m
         assert not runner._is_cancelled()
         runner._on_progress("MESHPROGRESS RENDERING 45")
         if "workers.meshing.extract" in command:
-            assert command[-1] == "0.08"
+            assert command[command.index("--scale") + 1] == "0.08"
+            assert command[command.index("--units") + 1] == "m"
             output = Path(command[command.index("--output") + 1])
             (output / "mesh.ply").write_text("ply\nmesh\n")
             (output / "result.json").write_text(

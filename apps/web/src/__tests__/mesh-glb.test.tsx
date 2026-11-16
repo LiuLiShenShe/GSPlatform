@@ -37,3 +37,12 @@ it('loads standard GLB directly and retains PLY comparison',async()=>{
  fireEvent.click(screen.getByRole('button',{name:'原始 PLY 预览'}));
  expect(screen.getByTestId('mesh-display')).toHaveTextContent(/^ply$/);
 });
+
+it('explains the cm to m conversion without applying a preview model transform',async()=>{
+ vi.mocked(api.fetchGlbState).mockResolvedValue({...state,variants:[{...pending,status:'READY',metadata:{dimensionsMeters:[.2,.3,.1],sourceUnits:'cm',unitConversionScale:.01,vertices:42,faces:80,validator:{issues:{numErrors:0}}}} as api.GlbVariant]});
+ renderWithRouter(<MeshGlbPanel model={{...model,units:'cm'}}/>);
+ await screen.findByText(/源 PLY 为厘米，GLB 自动按 0.01 换算为米/);
+ expect(screen.getByText('厘米 → 米 × 0.01；不重新标定')).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'标准 GLB 预览'}));
+ expect(screen.getByTestId('mesh-display')).toHaveTextContent(/^glb$/);
+});

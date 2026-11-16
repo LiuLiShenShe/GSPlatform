@@ -1,4 +1,4 @@
-"""Full geometry PLY -> glTF through Trimesh; no calibration or scale input."""
+"""Full geometry PLY -> glTF with explicit unit conversion and no recalibration."""
 
 import argparse
 import hashlib
@@ -16,6 +16,7 @@ from trimesh.visual.texture import TextureVisuals
 
 from workers.meshing.asset_coordinates import (
     CONVERTER_VERSION,
+    SOURCE_UNIT_TO_METERS,
     TRANSFORM_VERSION,
     rotation_matrix,
 )
@@ -61,9 +62,12 @@ def read_glb(path):
     )
 
 
-def convert(source, target, rotation, expected_sha, expected_vertices, expected_faces):
+def convert(source, target, rotation, expected_sha, expected_vertices, expected_faces, source_units="m"):
     if trimesh.__version__ != "4.11.4":
         raise ValueError("Exporter version differs from recipe")
+    if source_units not in SOURCE_UNIT_TO_METERS:
+        raise ValueError("Unsupported source mesh unit")
+    unit_scale = SOURCE_UNIT_TO_METERS[source_units]
     if digest(source) != expected_sha:
         raise ValueError("Source checksum mismatch")
     ply = PlyData.read(source)
@@ -86,7 +90,7 @@ def convert(source, target, rotation, expected_sha, expected_vertices, expected_
         else None
     )
     rotation = rotation_matrix(rotation)
-    rotated = vertices @ rotation.T
+    rotated = (vertices @ rotation.T) * unit_scale
     bounds = np.array([rotated.min(0), rotated.max(0)])
     pivot = np.array(
         [
@@ -96,7 +100,7 @@ def convert(source, target, rotation, expected_sha, expected_vertices, expected_
         ]
     )
     matrix = np.eye(4)
-    matrix[:3, :3] = rotation
+    matrix[:3, :3] = rotation * unit_scale
     matrix[:3, 3] = -pivot
     transformed = rotated - pivot
     mesh = trimesh.Trimesh(vertices=transformed, faces=faces, process=False)
@@ -152,6 +156,8 @@ def convert(source, target, rotation, expected_sha, expected_vertices, expected_
         tree["asset"]["extras"] = {
             "coordinateSystem": "RIGHT_HANDED_Y_UP",
             "units": "m",
+            "sourceUnits": source_units,
+            "unitConversionScale": unit_scale,
             "pivotPolicy": "BOTTOM_CENTER",
             "transformBaked": True,
             "transformVersion": TRANSFORM_VERSION,
@@ -184,7 +190,7 @@ def convert(source, target, rotation, expected_sha, expected_vertices, expected_
     if error > tolerance:
         raise ValueError("Vertex geometry changed")
     # Corresponding pair lengths, using all vertices and a deterministic offset.
-    delta = vertices - np.roll(vertices, 1, axis=0)
+    delta = (vertices - np.roll(vertices, 1, axis=0)) * unit_scale
     actual_delta = actual - np.roll(actual, 1, axis=0)
     distance_error = float(
         np.max(
@@ -220,9 +226,12 @@ def convert(source, target, rotation, expected_sha, expected_vertices, expected_
         "assetBounds": asset_bounds.tolist(),
         "dimensionsMeters": (asset_bounds[1] - asset_bounds[0]).tolist(),
         "pivotPolicy": "BOTTOM_CENTER",
-        "pivotInRotatedSource": pivot.tolist(),
+        "pivotInRotatedSource": (pivot / unit_scale).tolist(),
         "coordinateSystem": "RIGHT_HANDED_Y_UP",
         "units": "m",
+        "sourceUnits": source_units,
+        "unitConversionScale": unit_scale,
+        "calibrationScaleApplied": 1,
         "scaleApplied": 1,
         "vertices": len(vertices),
         "faces": len(faces),
@@ -254,6 +263,7 @@ if __name__ == "__main__":
         request["sha256"],
         request["vertices"],
         request["faces"],
+        request.get("sourceUnits", "m"),
     )
     args.output.with_suffix(".result.json").write_text(
         json.dumps(result, indent=2) + "\n"

@@ -35,7 +35,7 @@ export default function MeshModelPage() {
     <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} style={{ marginBottom: 16 }} items={[
       { key: 'algorithm', label: '算法', children: <Tag>{model.algorithm === 'nksr' ? '3DGS → NKSR' : '2DGS → 原生 TSDF'}</Tag> },
       { key: 'source', label: '来源高斯', children: <Link to={`/model/edit/${encodeURIComponent(model.sceneSlug)}?workspace=mesh`}>{model.sceneTitle}</Link> },
-      { key: 'units', label: '单位', children: model.units === 'm' ? '米（m）' : '重建单位（未标定）' },
+      { key: 'units', label: '原始 PLY 单位', children: model.units === 'cm' ? '厘米（cm）' : model.units === 'm' ? '米（m，历史资产）' : '重建单位（未标定）' },
       { key: 'faces', label: '三角面', children: model.faces.toLocaleString() },
       { key: 'vertices', label: '顶点', children: model.vertices.toLocaleString() },
       { key: 'size', label: '文件大小', children: `${(model.sizeBytes / 1048576).toFixed(1)} MB` },

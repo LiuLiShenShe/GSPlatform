@@ -5,8 +5,9 @@ import json
 
 import numpy as np
 
-TRANSFORM_VERSION = "RH_YUP_BOTTOM_CENTER_V1"
-CONVERTER_VERSION = "trimesh-4.11.4-linear-color-v1"
+TRANSFORM_VERSION = "RH_YUP_BOTTOM_CENTER_UNITS_V2"
+CONVERTER_VERSION = "trimesh-4.11.4-linear-color-v2-units"
+SOURCE_UNIT_TO_METERS = {"cm": 0.01, "m": 1.0}
 # Proper rotations only (determinant +1), row-major, column-vector convention.
 ORIENTATIONS = {
     "+Y": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
@@ -32,10 +33,13 @@ def rotation_matrix(values):
     return rotation
 
 
-def recipe_key(sha, rotation):
+def recipe_key(sha, rotation, source_units="m"):
     rotation_matrix(rotation)
+    if source_units not in SOURCE_UNIT_TO_METERS:
+        raise ValueError("Unsupported source mesh unit")
     return hashlib.sha256(
         json.dumps(
-            [sha, rotation, CONVERTER_VERSION, TRANSFORM_VERSION], separators=(",", ":")
+            [sha, rotation, source_units, CONVERTER_VERSION, TRANSFORM_VERSION],
+            separators=(",", ":"),
         ).encode()
     ).hexdigest()

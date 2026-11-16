@@ -76,3 +76,22 @@ def test_source_checksum_blocks_export(tmp_path):
     source, _, _ = make_mesh(tmp_path)
     with pytest.raises(ValueError, match="checksum"):
         convert(source, tmp_path / "bad.glb", ORIENTATIONS["+Y"], "0" * 64, 4, 4)
+
+
+def test_centimeters_to_meters_preserves_physical_size_without_recalibration(tmp_path):
+    source, _, faces = make_mesh(tmp_path)
+    before = source.read_bytes()
+    out = tmp_path / "cm.glb"
+    result = convert(source, out, ORIENTATIONS["-Y"], digest(source), 4, 4, "cm")
+    tree, attrs, indices = read_glb(out)
+    assert np.linalg.norm(attrs["POSITION"][1] - attrs["POSITION"][0]) == pytest.approx(0.02)
+    assert result["sourceUnits"] == "cm" and result["unitConversionScale"] == 0.01
+    assert result["calibrationScaleApplied"] == 1
+    assert result["pairDistanceMaxErrorMeters"] < 1e-8
+    assert result["sourceBounds"][1] == [2, 3, 1.2]
+    np.testing.assert_allclose(result["dimensionsMeters"], [0.02, 0.03, 0.012], atol=2e-9)
+    np.testing.assert_allclose(np.array(result["sourceToAssetMatrix"])[:3,:3], np.diag([-0.01,-0.01,0.01]))
+    np.testing.assert_array_equal(indices, np.stack(faces["vertex_indices"]))
+    assert source.read_bytes() == before
+    assert result["validator"]["issues"]["numErrors"] == 0
+    assert all(not any(k in node for k in ("scale", "rotation", "translation")) for node in tree['nodes'])

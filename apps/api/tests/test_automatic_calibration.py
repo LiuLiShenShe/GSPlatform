@@ -1,3 +1,5 @@
+import uuid
+
 import pytest
 
 from app.core.config import settings
@@ -36,7 +38,8 @@ def test_automatic_calibration_queues_without_client_file_and_is_idempotent(owne
     assert response.status_code == 202, response.text
     data = response.json()
     assert data["status"] == "QUEUED"
-    assert data["automaticCalibration"]["scaleFactor"] == 0.08
+    assert data["automaticCalibration"]["scaleFactor"] == 8
+    assert data["automaticCalibration"]["geometryUnits"] == "cm"
     assert data["uploadId"] and len(calls) == 1
     assert client.post(url, json=payload(scene), headers=headers).json()["id"] == data["id"]
     assert len(calls) == 1
@@ -51,6 +54,42 @@ def test_automatic_calibration_queues_without_client_file_and_is_idempotent(owne
             scene.slug, scene.owner_id, ScenePresentationUpdateRequest(initialCameraFov=60)
         )
     db.rollback()
+
+
+@pytest.mark.parametrize("length,unit", [(200, "mm"), (20, "cm"), (0.2, "m")])
+def test_calibration_always_bakes_centimeter_geometry(owner, monkeypatch, db, length, unit):
+    from app.db.models.scene import SceneVersion
+    from app.services.automatic_calibration import finish_calibration
+
+    client, scene, headers = owner
+    monkeypatch.setattr("app.services.celery_client.send_task", lambda *a, **kw: None)
+    response = client.post(
+        f"/api/v1/scenes/{scene.slug}/calibrate",
+        json={**payload(scene), "realLength": length, "unit": unit},
+        headers=headers,
+    )
+    assert response.status_code == 202, response.text
+    request = response.json()["automaticCalibration"]
+    # A 0.25-unit reference becomes 20 cm, not 0.2 coordinate units.
+    assert request["scaleFactor"] * 0.25 == pytest.approx(20)
+    edit = db.get(SceneEditSession, response.json()["id"])
+    edit.provenance = {
+        **edit.provenance,
+        "automaticVerification": {"allGaussianAttributesChecked": True},
+    }
+    result = SceneVersion(
+        scene_id=scene.id, asset_version=uuid.uuid4().hex,
+        format="ply", size_bytes=1,
+    )
+    db.add(result)
+    db.flush()
+    scene.current_version_id = result.id
+    finish_calibration(db, scene, result, edit)
+    db.flush()
+    row = db.get(SceneProcessingSettings, scene.id)
+    assert row.meters_per_scene_unit == 0.01
+    assert row.calibration_evidence["geometryUnits"] == "cm"
+    assert row.calibration_evidence["realLengthMeters"] == pytest.approx(0.2)
 
 
 @pytest.mark.parametrize("kind", ["camera", "world", "marker", "completed"])
