@@ -1,20 +1,20 @@
 """Session authorization and CPU conversion lifecycle on isolated database."""
 
 import json
-from pathlib import Path
 import uuid
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from workers.meshing.standard_asset import digest
+from workers.tests.test_standard_mesh_assets import make_mesh
+
 from app.core.config import settings
 from app.core.rate_limit import reset_rate_limits
 from app.db.models.mesh_asset_variant import MeshAssetVariant
-from app.db.models.mesh_model import MeshModel
 from app.db.session import SessionLocal
 from app.main import app
 from tests import test_mesh_models as library
-from workers.tests.test_standard_mesh_assets import make_mesh
-from workers.meshing.standard_asset import digest
 
 owner = library.owner
 mesh_source = library.mesh_source

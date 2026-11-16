@@ -2,6 +2,7 @@
 
 from app.core.config import settings
 from app.db.session import SessionLocal
+
 from workers.celery_app import celery_app
 from workers.meshing.asset_job import run_asset_job
 
